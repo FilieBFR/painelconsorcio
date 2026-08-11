@@ -1389,6 +1389,12 @@ function normalizeDB(){
   DB.proposals.forEach(p=>{
     if(p.status==='Recusada'){ p.statusAntigo = p.statusAntigo || 'Recusada'; p.status = 'Perdida'; }
   });
+  // Defensivo: registros de comissão gerados antes deste ajuste não têm o
+  // campo ajustadaManualmente — garante que ele exista (false), sem afetar
+  // nenhum outro dado da comissão.
+  Object.values(DB.commissionMeta).forEach(cm=>{
+    if(cm.ajustadaManualmente===undefined) cm.ajustadaManualmente = false;
+  });
   // Correção de dados: clientes marcados "Fechado" que ficaram sem data de
   // fechamento por causa do bug em commitSaveLead (o Object.assign gravava o
   // novo status antes de applyStatusChange comparar com o antigo, então o
@@ -7095,14 +7101,20 @@ function viewComissoes(){
   const contratosSemComissao = DB.contracts.filter(c=>!DB.commissionMeta[c.id]);
   if(comissoesFilters.administradora!=='Todas') contratosComComissao = contratosComComissao.filter(c=>DB.commissionMeta[c.id].administradora===comissoesFilters.administradora);
   if(comissoesFilters.assessor!=='Todos') contratosComComissao = contratosComComissao.filter(c=>{ const lead=DB.leads.find(l=>l.id===c.leadId); return lead && lead.responsavel===comissoesFilters.assessor; });
-  let totMes=0,totFuturas=0,totAtrasadas=0,totRecebido=0,totPendente=0,totDivergencia=0;
+  let totMes=0,totFuturas=0,totAtrasadas=0,totRecebido=0,totPendente=0,totAjustadas=0;
   const now = new Date();
   contratosComComissao.forEach(c=>{
-    DB.commissionMeta[c.id].parcelas.forEach(p=>{
+    const cm = DB.commissionMeta[c.id];
+    if(cm.ajustadaManualmente) totAjustadas++;
+    cm.parcelas.forEach(p=>{
       if(comissoesFilters.competencia && p.dataPrevista.slice(0,7)!==comissoesFilters.competencia) return;
       const d=new Date(p.dataPrevista);
       if(d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear()) totMes+=p.valor;
-      if(p.status==='Recebida'){ totRecebido+=(p.valorRecebido||p.valor); if(p.valorRecebido && Math.abs(p.valorRecebido-p.valor)>0.01) totDivergencia++; }
+      // "Divergência" (valor recebido != valor previsto) deixou de ser sinalizada
+      // de propósito: administradoras diferentes pagam em fluxos diferentes, e
+      // agora tanto o valor quanto a data previstos de cada parcela podem ser
+      // ajustados diretamente para refletir a realidade — ver openCommissionForm.
+      if(p.status==='Recebida'){ totRecebido+=(p.valorRecebido||p.valor); }
       else { totPendente+=p.valor; if(p.dataPrevista<todayISO()) totAtrasadas+=p.valor; else totFuturas+=p.valor; }
     });
   });
@@ -7118,9 +7130,9 @@ function viewComissoes(){
     ${kpiCard('Comissões atrasadas', fmtMoney(totAtrasadas),'red')}
     ${kpiCard('Total recebido', fmtMoney(totRecebido),'green')}
     ${kpiCard('Total pendente', fmtMoney(totPendente),'gold')}
-    ${kpiCard('Parcelas com divergência', totDivergencia, totDivergencia?'red':'')}
+    ${kpiCard('Comissões ajustadas manualmente', totAjustadas)}
   </div>
-  <p class="small-note" style="margin-bottom:10px;">As regras de comissão (percentual, parcelas, início) são definidas em Configurações → Comissões e ficam registradas no contrato no momento do fechamento — alterações futuras na regra não afetam comissões já geradas. Cada contrato gera sua própria comissão — um cliente com vários contratos aparece várias vezes aqui, uma por contrato.</p>
+  <p class="small-note" style="margin-bottom:10px;">As regras de comissão (percentual, parcelas, início) são definidas em Configurações → Comissões e ficam registradas no contrato no momento do fechamento — alterações futuras na regra não afetam comissões já geradas. Cada contrato gera sua própria comissão — um cliente com vários contratos aparece várias vezes aqui, uma por contrato. Percentual, número de parcelas, datas e valores previstos podem ser ajustados a qualquer momento em "Ver parcelas", já que administradoras diferentes pagam em fluxos diferentes.</p>
   <div class="table-wrap"><table>
   <thead><tr><th>Cliente</th><th>Contrato</th><th>Administradora</th><th>Assessor</th><th>Valor vendido</th><th>%</th><th>Comissão total</th><th>Recebido</th><th>Próxima parcela</th><th></th></tr></thead>
   <tbody>${contratosComComissao.length? contratosComComissao.map(c=>{
@@ -7206,44 +7218,135 @@ function openAssessorCommissionForm(id, leadId){
   };
   openModal();
 }
+/** Item — permite ajustar uma comissão já configurada: percentual, número de
+ *  parcelas, valor e data previstos de cada parcela individualmente. Parcelas
+ *  já marcadas "Recebida" nunca são sobrescritas por um recálculo — o que já
+ *  foi de fato recebido é histórico e fica intocado. */
 function openCommissionForm(contractId){
   const contract = DB.contracts.find(x=>x.id===contractId);
   const cm = DB.commissionMeta[contractId];
   const l = DB.leads.find(x=>x.id===(cm?cm.leadId:(contract?contract.leadId:null)));
-  document.getElementById('modalBody').innerHTML = `
-    <h2>Comissão — ${l?l.nome:'—'}${contract?` · Contrato ${escapeHtml(contract.numero)}`:''}</h2>
-    <div class="modal-sub">${cm.administradora} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelas.length}x</div>
-    <div class="table-wrap"><table class="parcel-table">
-    <thead><tr><th>#</th><th>Data prevista</th><th>Valor previsto</th><th>Status</th><th>Valor recebido</th><th>Data recebida</th></tr></thead>
-    <tbody>${cm.parcelas.map((p,i)=>{ const divergente = p.status==='Recebida' && p.valorRecebido && Math.abs(p.valorRecebido-p.valor)>0.01;
-      return `<tr>
-        <td>${p.n}</td><td>${fmtDate(p.dataPrevista)}</td><td>${fmtMoney(p.valor)}</td>
-        <td><select data-parcstatus="${i}">${['Pendente','Recebida'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select>${divergente?' <span class="badge b-perdido">Divergência</span>':''}</td>
+  let ajustando = false;
+
+  function recalcularComissao(novoPct, novoNParc, novaData1){
+    const totalPrevisto = Math.round(cm.valorVenda * novoPct/100 * 100) / 100;
+    const valoresParcelas = splitCentsExact(totalPrevisto, novoNParc);
+    const parcelasAntigas = cm.parcelas;
+    const novasParcelas = [];
+    for(let i=1;i<=novoNParc;i++){
+      const antiga = parcelasAntigas.find(p=>p.n===i);
+      if(antiga && antiga.status==='Recebida'){
+        novasParcelas.push(Object.assign({}, antiga)); // preserva o que já foi de fato recebido
+      } else {
+        novasParcelas.push({ n:i, dataPrevista: addMonths(novaData1, i-1), valor: valoresParcelas[i-1], status:'Pendente', dataRecebida:'', valorRecebido:0 });
+      }
+    }
+    cm.percentual = novoPct;
+    cm.parcelasQtd = novoNParc;
+    cm.totalPrevisto = novasParcelas.reduce((s,p)=>s+p.valor,0);
+    cm.parcelas = novasParcelas;
+    cm.ajustadaManualmente = true;
+  }
+
+  function render(){
+    document.getElementById('modalBody').innerHTML = `
+      <h2>Comissão — ${l?l.nome:'—'}${contract?` · Contrato ${escapeHtml(contract.numero)}`:''}</h2>
+      <div class="modal-sub">${escapeHtml(cm.administradora)} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelas.length}x${cm.ajustadaManualmente?' · <b>ajustada manualmente</b>':''}</div>
+      ${ajustando ? `
+      <div class="card" style="padding:14px;margin-bottom:14px;">
+        <h3 style="margin:0 0 10px;font-size:13px;">Ajustar configuração da comissão</h3>
+        <div class="form-grid cols3">
+          <div class="field"><label>% Comissão</label><input type="number" step="0.1" id="cf_pct" value="${cm.percentual}"></div>
+          <div class="field"><label>Nº de parcelas</label><input type="number" id="cf_nparc" value="${cm.parcelasQtd}"></div>
+          <div class="field"><label>Data da 1ª parcela</label><input type="date" id="cf_data1" value="${cm.parcelas[0]?cm.parcelas[0].dataPrevista:todayISO()}"></div>
+        </div>
+        <div class="small-note" style="margin:8px 0 0;">Recalcula as parcelas ainda Pendentes a partir da data da 1ª parcela informada acima, uma por mês. Parcelas já marcadas "Recebida" nunca são alteradas.</div>
+        <div class="modal-actions" style="margin-top:10px;">
+          <button class="pill-btn ghost sm" id="cf_cancelar_ajuste">Cancelar</button>
+          <button class="pill-btn sm" id="cf_aplicar_ajuste">Recalcular parcelas</button>
+        </div>
+      </div>
+      ` : `<button class="pill-btn sm ghost" id="cf_ajustar" style="margin-bottom:12px;">Ajustar comissão</button>`}
+      <div class="table-wrap"><table class="parcel-table">
+      <thead><tr><th>#</th><th>Data prevista</th><th>Valor previsto</th><th>Status</th><th>Valor recebido</th><th>Data recebida</th></tr></thead>
+      <tbody>${cm.parcelas.map((p,i)=>`<tr>
+        <td>${p.n}</td>
+        <td><input type="date" data-parcdataprev="${i}" value="${p.dataPrevista||''}"></td>
+        <td><input type="text" data-money data-parcvalorprevisto="${i}" value="${moneyStr(p.valor)}"></td>
+        <td><select data-parcstatus="${i}">${['Pendente','Recebida'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
         <td><input type="text" data-money data-parcvalor="${i}" value="${moneyStr(p.valorRecebido||p.valor)}"></td>
         <td><input type="date" data-parcdata="${i}" value="${p.dataRecebida||''}"></td>
-      </tr>`; }).join('')}
-    </tbody></table></div>
-    <div class="modal-actions"><button class="pill-btn ghost" id="closeModal">Fechar</button><button class="pill-btn" id="saveParcBtn">Salvar parcelas</button></div>
-  `;
-  document.getElementById('closeModal').onclick = closeModalFn;
-  document.getElementById('saveParcBtn').onclick = ()=>{
-    let novasRecebidas = 0;
-    for(const [i,p] of cm.parcelas.entries()){
-      const valInput = document.querySelector(`[data-parcvalor="${i}"]`);
-      const parsed = parseMoneyBR(valInput.value);
-      if(!parsed.conflict && parsed.value<0){ showToast(`Parcela ${p.n}: valor recebido não pode ser negativo.`); return; }
-    }
-    cm.parcelas.forEach((p,i)=>{
-      const newStatus = document.querySelector(`[data-parcstatus="${i}"]`).value;
-      if(newStatus==='Recebida' && p.status!=='Recebida') novasRecebidas++;
-      p.status = newStatus;
-      p.dataRecebida = document.querySelector(`[data-parcdata="${i}"]`).value;
-      const valInput = document.querySelector(`[data-parcvalor="${i}"]`);
-      p.valorRecebido = parseMoneyBR(valInput.value).conflict ? p.valor : parseMoneyBR(valInput.value).value;
-    });
-    if(novasRecebidas>0 && l) addTimeline(l, `${novasRecebidas} parcela(s) de comissão marcada(s) como recebida(s)${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
-    saveDB(); closeModalFn(); renderView(); showToast('Parcelas atualizadas');
-  };
+      </tr>`).join('')}
+      </tbody></table></div>
+      <div class="toolbar" style="justify-content:flex-start;margin-top:8px;"><button class="pill-btn sm ghost" id="btnRecalcularDatas">Recalcular datas a partir da 1ª parcela (mensal)</button></div>
+      <p class="small-note" style="margin-top:8px;">O valor e a data previstos de cada parcela podem ser ajustados livremente — administradoras diferentes pagam em fluxos diferentes (mesmo mês, mês seguinte, etc.), então o sistema nunca exige que o valor recebido "bata" com um cálculo padrão.</p>
+      <div class="modal-actions"><button class="pill-btn ghost" id="closeModal">Fechar</button><button class="pill-btn" id="saveParcBtn">Salvar parcelas</button></div>
+    `;
+    wire();
+  }
+
+  function wire(){
+    document.getElementById('closeModal').onclick = closeModalFn;
+    const ajustarBtn = document.getElementById('cf_ajustar');
+    if(ajustarBtn) ajustarBtn.onclick = ()=>{ ajustando = true; render(); };
+    const cancelarAjusteBtn = document.getElementById('cf_cancelar_ajuste');
+    if(cancelarAjusteBtn) cancelarAjusteBtn.onclick = ()=>{ ajustando = false; render(); };
+    const aplicarAjusteBtn = document.getElementById('cf_aplicar_ajuste');
+    if(aplicarAjusteBtn) aplicarAjusteBtn.onclick = ()=>{
+      const novoPct = Number(document.getElementById('cf_pct').value);
+      const novoNParc = Math.round(Number(document.getElementById('cf_nparc').value));
+      const novaData1 = document.getElementById('cf_data1').value;
+      if(!(novoPct>=0)){ showToast('Percentual inválido.'); return; }
+      if(!(novoNParc>0) || !Number.isInteger(novoNParc)){ showToast('Número de parcelas deve ser um inteiro maior que zero.'); return; }
+      if(!novaData1){ showToast('Informe a data da 1ª parcela.'); return; }
+      const parcelasRecebidas = cm.parcelas.filter(p=>p.status==='Recebida').length;
+      if(parcelasRecebidas > novoNParc){ showToast(`Já existem ${parcelasRecebidas} parcela(s) marcada(s) como Recebida — o número de parcelas não pode ser menor que isso.`); return; }
+      recalcularComissao(novoPct, novoNParc, novaData1);
+      ajustando = false;
+      render();
+      showToast('Comissão recalculada — parcelas pendentes atualizadas, parcelas já recebidas preservadas.');
+    };
+    const recalcDatasBtn = document.getElementById('btnRecalcularDatas');
+    if(recalcDatasBtn) recalcDatasBtn.onclick = ()=>{
+      const data1El = document.querySelector('[data-parcdataprev="0"]');
+      const data1 = data1El ? data1El.value : (cm.parcelas[0] ? cm.parcelas[0].dataPrevista : '');
+      if(!data1){ showToast('Informe a data prevista da 1ª parcela antes de recalcular.'); return; }
+      cm.parcelas.forEach((p,idx)=>{ p.dataPrevista = addMonths(data1, idx); });
+      render();
+      showToast('Datas recalculadas a partir da 1ª parcela, uma por mês.');
+    };
+    document.getElementById('saveParcBtn').onclick = ()=>{
+      for(const [i,p] of cm.parcelas.entries()){
+        const valInput = document.querySelector(`[data-parcvalor="${i}"]`);
+        const parsed = parseMoneyBR(valInput.value);
+        if(!parsed.conflict && parsed.value<0){ showToast(`Parcela ${p.n}: valor recebido não pode ser negativo.`); return; }
+        const valPrevInput = document.querySelector(`[data-parcvalorprevisto="${i}"]`);
+        const parsedPrev = parseMoneyBR(valPrevInput.value);
+        if(!parsedPrev.conflict && parsedPrev.value<0){ showToast(`Parcela ${p.n}: valor previsto não pode ser negativo.`); return; }
+        const dataPrevInput = document.querySelector(`[data-parcdataprev="${i}"]`);
+        if(!dataPrevInput.value){ showToast(`Parcela ${p.n}: informe a data prevista.`); return; }
+      }
+      let novasRecebidas = 0;
+      cm.parcelas.forEach((p,i)=>{
+        const newStatus = document.querySelector(`[data-parcstatus="${i}"]`).value;
+        if(newStatus==='Recebida' && p.status!=='Recebida') novasRecebidas++;
+        p.status = newStatus;
+        p.dataPrevista = document.querySelector(`[data-parcdataprev="${i}"]`).value;
+        const valPrevInput = document.querySelector(`[data-parcvalorprevisto="${i}"]`);
+        p.valor = parseMoneyBR(valPrevInput.value).conflict ? p.valor : parseMoneyBR(valPrevInput.value).value;
+        p.dataRecebida = document.querySelector(`[data-parcdata="${i}"]`).value;
+        const valInput = document.querySelector(`[data-parcvalor="${i}"]`);
+        p.valorRecebido = parseMoneyBR(valInput.value).conflict ? p.valor : parseMoneyBR(valInput.value).value;
+      });
+      // Recalcula o total previsto a partir dos valores efetivamente salvos —
+      // podem ter sido ajustados parcela a parcela, não só via "Ajustar comissão".
+      cm.totalPrevisto = cm.parcelas.reduce((s,p)=>s+p.valor, 0);
+      if(novasRecebidas>0 && l) addTimeline(l, `${novasRecebidas} parcela(s) de comissão marcada(s) como recebida(s)${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
+      saveDB(); closeModalFn(); renderView(); showToast('Parcelas atualizadas');
+    };
+  }
+
+  render();
   openModal();
 }
 function openManualCommissionForm(contractId){
