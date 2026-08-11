@@ -116,7 +116,7 @@ h1,h2,h3,h4{font-family:var(--font-main);}
 .kpi{display:flex;flex-direction:column;justify-content:center;min-height:86px;padding:var(--sp-4) var(--sp-5);cursor:pointer;transition:transform .15s, box-shadow .15s;min-width:0;}
 .kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);}
 .kpi-label{font-size:11.5px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px;font-weight:600;overflow-wrap:anywhere;word-break:break-word;}
-.kpi-value{font-size:clamp(14px,1.8vw,23px);font-weight:700;color:var(--brand-navy);letter-spacing:-.01em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"lnum" 1;overflow-wrap:anywhere;word-break:break-word;white-space:normal;line-height:1.22;hyphens:auto;}
+.kpi-value{font-size:clamp(14px,1.8vw,23px);font-weight:700;color:var(--brand-navy);letter-spacing:-.01em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"lnum" 1;white-space:nowrap;overflow:visible;line-height:1.22;min-width:0;max-width:100%;}
 .kpi-value.gold{color:var(--gold);} .kpi-value.green{color:var(--green);} .kpi-value.red{color:var(--red);}
 .kpi-sub{font-size:11.5px;color:var(--text-secondary);margin-top:4px;}
 .two-col{display:grid;grid-template-columns:1.3fr .9fr;gap:var(--sp-4);margin-top:var(--sp-4);}
@@ -269,7 +269,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .dash-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--sp-3);align-items:stretch;}
 .dash-kpi{display:flex;flex-direction:column;justify-content:center;min-height:96px;background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);padding:var(--sp-4) var(--sp-5);min-width:0;}
 .dash-kpi .dk-label{font-size:11.5px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:9px;font-weight:700;overflow-wrap:anywhere;word-break:break-word;}
-.dash-kpi .dk-value{font-size:clamp(15px,1.9vw,23px);font-weight:700;color:var(--brand-navy);line-height:1.22;letter-spacing:-.01em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"lnum" 1;overflow-wrap:anywhere;word-break:break-word;white-space:normal;hyphens:auto;}
+.dash-kpi .dk-value{font-size:clamp(15px,1.9vw,23px);font-weight:700;color:var(--brand-navy);line-height:1.22;letter-spacing:-.01em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"lnum" 1;white-space:nowrap;overflow:visible;min-width:0;max-width:100%;}
 .dash-pill{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:20px;margin-top:9px;}
 .dash-pill.up{background:var(--green-soft);color:var(--green);}
 .dash-pill.down{background:var(--red-soft);color:var(--red);}
@@ -1388,6 +1388,26 @@ function normalizeDB(){
   // próprio de versionamento).
   DB.proposals.forEach(p=>{
     if(p.status==='Recusada'){ p.statusAntigo = p.statusAntigo || 'Recusada'; p.status = 'Perdida'; }
+  });
+  // Correção de dados: clientes marcados "Fechado" que ficaram sem data de
+  // fechamento por causa do bug em commitSaveLead (o Object.assign gravava o
+  // novo status antes de applyStatusChange comparar com o antigo, então o
+  // preenchimento automático da data — e o registro no histórico — nunca
+  // rodavam). Sem essa migração, esses clientes ficam invisíveis em QUALQUER
+  // filtro de período (inclusive "Todo o período") e também não aparecem
+  // corretamente no funil comercial, que depende do histórico para saber se
+  // o cliente já passou pelo estágio "Fechado".
+  DB.leads.forEach(l=>{
+    if(l.status==='Fechado' && !l.dataFechamento){
+      const evFechado = (l.history||[]).slice().reverse().find(h=>h.status==='Fechado');
+      l.dataFechamento = (evFechado && evFechado.when ? evFechado.when.slice(0,10) : '') || l.dataEntrada || todayISO();
+    }
+    if(l.status==='Fechado'){
+      l.history = l.history || [];
+      if(!l.history.some(h=>h.status==='Fechado')){
+        l.history.push({status:'Fechado', when: l.dataFechamento ? l.dataFechamento+'T12:00:00.000Z' : new Date().toISOString()});
+      }
+    }
   });
   // Assessor vira entidade de verdade (nome, contato, % padrão, ativo/inativo) — migração
   // não destrutiva: cria um registro por nome já usado em settings.assessores OU em
@@ -2957,6 +2977,11 @@ function isInPeriod(iso, period){
   return true; // 'tudo'
 }
 function periodMatchRange(iso, range){
+  // "Todo o período" (tudo) nunca deveria depender de a data existir — um
+  // registro com data ausente (por falha de dados antiga) ainda deve aparecer
+  // quando o filtro é "sem restrição de período". Só os modos que realmente
+  // comparam uma janela de tempo (mês/trimestre/ano/custom) exigem data válida.
+  if(range.mode==='tudo') return true;
   if(!iso) return false;
   if(range.mode==='custom'){ if(!range.from && !range.to) return true; if(range.from && iso<range.from) return false; if(range.to && iso>range.to) return false; return true; }
   return isInPeriod(iso, range.mode);
@@ -3105,6 +3130,29 @@ function renderView(){
   };
   c.innerHTML = (routes[currentView] || viewInicio)();
   attachViewHandlers();
+  shrinkKpiValuesToFit();
+}
+/** Encolhe a fonte de cada valor de card (KPI do dashboard e de comissões) até
+ *  caber numa linha só dentro do espaço disponível, em vez de quebrar linha —
+ *  mede a largura real do texto renderizado (scrollWidth vs clientWidth), não
+ *  uma estimativa por viewport. Nunca deixa o texto sair do card nem usa
+ *  overflow:hidden para escondê-lo — se algo muito extremo não couber nem no
+ *  tamanho mínimo, ele permanece visível (apenas não encolhe mais). */
+function shrinkKpiValuesToFit(){
+  document.querySelectorAll('.kpi-value, .dk-value').forEach(el=>{
+    el.style.fontSize = '';
+    const maxPx = parseFloat(getComputedStyle(el).fontSize);
+    if(!maxPx) return;
+    const minPx = 11;
+    if(el.scrollWidth <= el.clientWidth) return; // já cabe no tamanho máximo — nada a fazer
+    let size = maxPx;
+    let guard = 0;
+    while(el.scrollWidth > el.clientWidth && size > minPx && guard < 40){
+      size -= 1;
+      el.style.fontSize = size+'px';
+      guard++;
+    }
+  });
 }
 
 /* ================= KPIs COMERCIAIS (usam dataFechamento, não dataEntrada) =================
@@ -3436,7 +3484,7 @@ function newChart(id, type, labels, datasets, opts){
         }
       },
       scales: type==='doughnut' ? {} : {
-        x:{ grid:{display: horizontal, color:CHART_PALETTE.grid, drawTicks:false}, border:{display:false}, ticks:{ font:{size:10.5,family:"'Inter','Segoe UI',sans-serif"}, color:CHART_PALETTE.tick, callback: horizontal ? tickFmt : undefined, maxRotation:0, autoSkipPadding:8 } },
+        x:{ grid:{display: horizontal, color:CHART_PALETTE.grid, drawTicks:false}, border:{display:false}, ticks:{ font:{size:10.5,family:"'Inter','Segoe UI',sans-serif"}, color:CHART_PALETTE.tick, callback: horizontal ? tickFmt : undefined, maxRotation:0, autoSkipPadding:8, maxTicksLimit: horizontal ? undefined : 12 } },
         y:{ grid:{display: !horizontal, color:CHART_PALETTE.grid, drawTicks:false}, border:{display:false}, ticks:{ font:{size:10.5,family:"'Inter','Segoe UI',sans-serif"}, color:CHART_PALETTE.tick, callback: horizontal ? undefined : tickFmt, maxTicksLimit:6 } }
       }
     }
@@ -3462,7 +3510,10 @@ function renderDashboardCharts(){
   const funnelData = funnelStages.map(s=> base.filter(l=>reachedStage(l,s)).length);
   newChart('chartFunnel','bar', funnelStages, [{label:'Clientes', data: funnelData, backgroundColor:CHART_PALETTE.gold, borderRadius:5, maxBarThickness:26}], {horizontal:true});
 
-  // Evolução das vendas: diária quando o período selecionado é "Este mês", mensal (últimos 6 meses) nos demais casos
+  // Evolução das vendas: diária quando o período selecionado é "Este mês", mensal
+  // nos demais casos — respeitando o filtro selecionado (mês do ano corrente para
+  // "Este ano", meses do trimestre corrente para "Trimestre"), não sempre
+  // "últimos 6 meses a partir de hoje" independente do filtro escolhido.
   if(filterBar.mode==='mes'){
     const now = new Date();
     const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
@@ -3474,9 +3525,38 @@ function renderDashboardCharts(){
     }
     newChart('chartEvo','bar', labels, [{label:'Vendido no dia', data, backgroundColor:CHART_PALETTE.blue, borderRadius:4, maxBarThickness:22}], {money:true});
   } else {
-    const months = [];
-    for(let i=5;i>=0;i--){ const d=new Date(); d.setMonth(d.getMonth()-i); months.push({y:d.getFullYear(),m:d.getMonth(),label:d.toLocaleDateString('pt-BR',{month:'short'})}); }
-    const evoData = months.map(mo=> base.filter(l=>l.status==='Fechado' && l.dataFechamento && new Date(l.dataFechamento).getMonth()===mo.m && new Date(l.dataFechamento).getFullYear()===mo.y).reduce((s,l)=>s+Number(l.valor||0),0));
+    // Constrói a lista de meses SEM usar Date.setMonth em cima de uma data com
+    // dia > 28 (bug real corrigido: setMonth "estoura" para o mês seguinte
+    // quando o mês de destino tem menos dias que o dia atual — ex.: 31 de
+    // agosto menos 6 meses podia cair em março em vez de fevereiro). Constrói
+    // cada mês diretamente com dia 1, que nunca estoura.
+    const now = new Date();
+    let monthsList; // array de {y, m} (m = 0-indexado)
+    if(filterBar.mode==='ano'){
+      const y = now.getFullYear();
+      monthsList = Array.from({length:12}, (_,m)=>({y, m}));
+    } else if(filterBar.mode==='trimestre'){
+      const y = now.getFullYear();
+      const q = Math.floor(now.getMonth()/3);
+      monthsList = [q*3, q*3+1, q*3+2].map(m=>({y, m}));
+    } else {
+      // 'tudo' / 'custom' / qualquer outro: últimos 6 meses terminando no mês atual.
+      monthsList = [];
+      for(let i=5;i>=0;i--){
+        let mm = now.getMonth()-i, yy = now.getFullYear();
+        while(mm<0){ mm+=12; yy--; }
+        monthsList.push({y:yy, m:mm});
+      }
+    }
+    // Mostra o ano no rótulo quando os meses exibidos cruzam mais de um ano
+    // (só acontece no caso "últimos 6 meses"), para nunca ficar ambíguo qual
+    // mês/ano cada rótulo representa.
+    const cruzaAno = monthsList.some(mo=>mo.y!==monthsList[0].y);
+    const months = monthsList.map(mo=>({
+      y: mo.y, m: mo.m,
+      label: new Date(mo.y, mo.m, 1).toLocaleDateString('pt-BR', {month:'short'}) + (cruzaAno ? '/' + String(mo.y).slice(2) : '')
+    }));
+    const evoData = months.map(mo=> base.filter(l=>l.status==='Fechado' && l.dataFechamento && new Date(l.dataFechamento+'T00:00:00').getMonth()===mo.m && new Date(l.dataFechamento+'T00:00:00').getFullYear()===mo.y).reduce((s,l)=>s+Number(l.valor||0),0));
     newChart('chartEvo','line', months.map(m=>m.label), [{label:'Vendido', data:evoData, borderColor:CHART_PALETTE.blue, backgroundColor:CHART_PALETTE.blueSoft, fill:true, tension:.35, pointRadius:3, pointBackgroundColor:CHART_PALETTE.blue, pointBorderColor:'#fff', pointBorderWidth:1.5, borderWidth:2.5}], {money:true});
   }
 
@@ -3881,13 +3961,24 @@ function commitSaveLead(existingLead, data){
   if(existingLead){
     const newStatus = data.status;
     const oldResp = existingLead.responsavel;
-    Object.assign(existingLead, data);
+    // BUG CORRIGIDO: Object.assign(existingLead, data) grava data.status em
+    // existingLead.status ANTES de applyStatusChange comparar "mudou ou não" —
+    // como os dois já ficavam iguais, applyStatusChange nunca detectava a
+    // mudança e pulava TODOS os efeitos da transição (data de fechamento,
+    // histórico, timeline de status, tarefas automáticas). Isso é
+    // especificamente o que fazia um cliente virar "Fechado" pela tela de
+    // edição e não ganhar data de fechamento — e por tabela, sumir dos
+    // relatórios que dependem dessa data. Agora o status é excluído do
+    // Object.assign e só é aplicado via applyStatusChange, que compara
+    // corretamente contra o valor ANTIGO.
+    const { status, ...dataSemStatus } = data;
+    Object.assign(existingLead, dataSemStatus);
     if(oldResp && data.responsavel && oldResp!==data.responsavel){
       addTimeline(existingLead, `Responsável alterado de "${oldResp}" para "${data.responsavel}"`);
     } else {
       addTimeline(existingLead, 'Dados do cliente atualizados');
     }
-    applyStatusChange(existingLead, newStatus); // não faz nada se o status não mudou
+    applyStatusChange(existingLead, newStatus); // agora compara corretamente com o status anterior
     // A data de última interação agora vem do formulário — mas addTimeline()
     // (chamada acima, dentro deste fluxo e de vários outros pelo sistema)
     // sempre bate lastInteraction para "hoje" automaticamente, pois reflete
