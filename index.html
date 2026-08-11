@@ -3786,7 +3786,11 @@ function openLeadForm(id){
       <div class="field"><label>CPF/CNPJ</label><input id="f_cpf" value="${escapeHtml(l?.cpfCnpj||'')}" placeholder="Opcional"></div>
       <div class="field"><label>Assessor do cliente</label>${selectHTML('f_resp', st.assessores, l?.responsavel)}</div>
       <div class="field"><label>Origem do contato</label>${selectHTML('f_origem', st.origens, l?.origem)}</div>
+      <div class="field"><label>Data de inclusão</label><input type="date" id="f_dataEntrada" value="${l?.dataEntrada || todayISO()}"></div>
+      <div class="field"><label>Data de fechamento</label><input type="date" id="f_dataFechamento" value="${l?.dataFechamento || ''}"></div>
+      <div class="field"><label>Última interação</label><input type="date" id="f_lastInteraction" value="${l?.lastInteraction || todayISO()}"></div>
     </div>
+    <div class="small-note" style="margin:-8px 0 14px;">Use estes campos ao cadastrar clientes antigos, para que a data de inclusão, de fechamento e de última interação reflitam quando isso aconteceu de verdade — não o dia do cadastro no sistema.</div>
     <div class="section-title" style="margin:18px 0 8px;font-size:13.5px;">Interesse comercial</div>
     <div class="form-grid">
       <div class="field"><label>Segmento</label>${selectHTML('f_tipo', st.segmentos, l?.tipoConsorcio)}</div>
@@ -3815,12 +3819,23 @@ function openLeadForm(id){
     const novoStatus = document.getElementById('f_status').value;
     const assessorNoForm = document.getElementById('f_resp').value;
     if(novoStatus==='Fechado' && !assessorNoForm){ showToast('Defina o assessor do cliente antes de marcar como Fechado.'); return; }
+    const dataEntrada = document.getElementById('f_dataEntrada').value;
+    const dataFechamento = document.getElementById('f_dataFechamento').value;
+    const lastInteraction = document.getElementById('f_lastInteraction').value;
+    // Validação das datas — sobretudo relevante para cadastro de clientes
+    // antigos, onde essas datas são digitadas manualmente, não geradas
+    // automaticamente pelo sistema.
+    if(!dataEntrada){ showToast('Informe a data de inclusão do cliente.'); return; }
+    if(dataEntrada > todayISO()){ showToast('A data de inclusão não pode ser no futuro.'); return; }
+    if(dataFechamento && dataFechamento < dataEntrada){ showToast('A data de fechamento não pode ser anterior à data de inclusão.'); return; }
+    if(dataFechamento && dataFechamento > todayISO()){ showToast('A data de fechamento não pode ser no futuro.'); return; }
     const data = {
       nome, telefone, codigoCliente:document.getElementById('f_codigo').value, cpfCnpj:document.getElementById('f_cpf').value,
       responsavel:document.getElementById('f_resp').value, origem:document.getElementById('f_origem').value,
       tipoConsorcio:document.getElementById('f_tipo').value, administradora:document.getElementById('f_admin').value,
       valor: moneyVal('f_valor'), recursoLance: moneyVal('f_recurso'), parcelaDesejada: moneyVal('f_parcela'),
-      status:document.getElementById('f_status').value, observacoes:document.getElementById('f_obs').value
+      status:document.getElementById('f_status').value, observacoes:document.getElementById('f_obs').value,
+      dataEntrada, dataFechamento: dataFechamento||'', lastInteraction: lastInteraction||todayISO()
     };
     if(!l){
       const dups = findPossibleDuplicates(data);
@@ -3873,9 +3888,20 @@ function commitSaveLead(existingLead, data){
       addTimeline(existingLead, 'Dados do cliente atualizados');
     }
     applyStatusChange(existingLead, newStatus); // não faz nada se o status não mudou
-    existingLead.lastInteraction = todayISO();
+    // A data de última interação agora vem do formulário — mas addTimeline()
+    // (chamada acima, dentro deste fluxo e de vários outros pelo sistema)
+    // sempre bate lastInteraction para "hoje" automaticamente, pois reflete
+    // uma interação real detectada pelo sistema. Aqui, o valor do formulário é
+    // uma escolha explícita do analista (essencial para cadastro de clientes
+    // antigos) e prevalece sobre esse comportamento automático.
+    existingLead.lastInteraction = data.lastInteraction || todayISO();
     showToast('Cliente atualizado');
   } else {
+    // Se o cliente já nasce como "Fechado" (às vezes usado para digitar
+    // cadastros antigos direto no status final) e a data de fechamento não
+    // foi informada, usa a data de inclusão como melhor estimativa — nunca
+    // deixa um cliente Fechado sem nenhuma data de fechamento registrada.
+    if(data.status==='Fechado' && !data.dataFechamento){ data.dataFechamento = data.dataEntrada || todayISO(); }
     const newLead = Object.assign({
       id: uid('lead'), dataEntrada: todayISO(), lastInteraction: todayISO(), motivoPerda:'', motivoPerdaDetalhe:'',
       dataFechamento:'', nextAction:null,
@@ -4375,6 +4401,8 @@ function openProposalForm(id, presetLeadId){
           <div class="field"><label>Segmento</label><select data-field="segmento">${DB.settings.segmentos.map(s=>`<option ${draft.segmento===s?'selected':''}>${s}</option>`).join('')}</select></div>
           <div class="field"><label>Grupo</label><input data-field="grupo" value="${draft.grupo||''}"></div>
           <div class="field"><label>Nº da proposta</label><input data-field="numeroProposta" value="${draft.numeroProposta||''}"></div>
+          <div class="field"><label>Data de criação</label><input type="date" data-field="dataCriacao" value="${draft.dataCriacao||''}"></div>
+          <div class="field"><label>Data de envio</label><input type="date" data-field="dataEnvio" value="${draft.dataEnvio||''}"></div>
           <div class="field"><label>Validade</label><input type="date" data-field="validade" value="${draft.validade||''}"></div>
         </div>
         <div class="base-tag">Base do percentual do lance: ${rule.baseLabel}</div>
