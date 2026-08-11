@@ -2996,6 +2996,40 @@ function leadMatchesFilterBarDims(l, excludeDims){
   if(!excludeDims.includes('status') && filterBar.status!=='Todos' && l.status!==filterBar.status) return false;
   return true;
 }
+/** Fonte única de verdade para "vendas" no dashboard a partir desta correção:
+ *  contract.dataContratacao + contract.valorContratado — nunca mais
+ *  lead.dataFechamento/lead.valor. Um cliente pode ter mais de um contrato ao
+ *  longo do tempo; cada um conta separadamente pela sua própria data e valor,
+ *  em vez de depender de um único campo na ficha do cliente (que divergiria
+ *  assim que existisse um segundo contrato). Respeita os mesmos filtros de
+ *  assessor/segmento/administradora/origem já usados no resto do painel —
+ *  "status" não se aplica aqui (um contrato já é uma venda concluída,
+ *  independente do estágio comercial atual do cliente, que pode já estar em
+ *  Pós-venda). excludeDims segue o mesmo padrão de leadMatchesFilterBarDims,
+ *  para uso nos agrupamentos por dimensão (ex.: "vendas por administradora"
+ *  não deve se autofiltrar pela própria administradora). */
+function filteredSoldContracts(range, excludeDims){
+  range = range || filterBar;
+  excludeDims = excludeDims || [];
+  return DB.contracts.filter(c=>{
+    if(!periodMatchRange(c.dataContratacao, range)) return false;
+    const lead = DB.leads.find(l=>l.id===c.leadId);
+    if(!lead) return false;
+    if(!excludeDims.includes('assessor') && filterBar.assessor!=='Todos' && lead.responsavel!==filterBar.assessor) return false;
+    if(!excludeDims.includes('segmento') && filterBar.segmento!=='Todos' && lead.tipoConsorcio!==filterBar.segmento) return false;
+    if(!excludeDims.includes('administradora') && filterBar.administradora!=='Todos' && c.administradora!==filterBar.administradora) return false;
+    if(!excludeDims.includes('origem') && filterBar.origem!=='Todos' && lead.origem!==filterBar.origem) return false;
+    return true;
+  });
+}
+/** Soma o valor efetivamente contratado (contract.valorContratado) de todos
+ *  os contratos pertencentes aos leads informados — usado onde antes se somava
+ *  lead.valor condicionado a status==='Fechado'. Não filtra por período nem
+ *  por dimensão; quem chama já deve ter filtrado os leadIds como quiser. */
+function soldValueForLeadIds(leadIds){
+  const idSet = new Set(leadIds);
+  return DB.contracts.filter(c=>idSet.has(c.leadId)).reduce((s,c)=>s+Number(c.valorContratado||0),0);
+}
 function filteredBaseLeads(excludeDims){ return DB.leads.filter(l=>leadMatchesFilterBarDims(l, excludeDims)); }
 function itemMatchesFilterBar(clientId){
   if(!clientId) return true;
@@ -3163,9 +3197,13 @@ function shrinkKpiValuesToFit(){
 function computeCoreKPIs(range){
   range = range || filterBar;
   const base = filteredBaseLeads([]);
-  const fechados = base.filter(l=>l.status==='Fechado' && periodMatchRange(l.dataFechamento, range));
-  const vendido = fechados.reduce((s,l)=>s+Number(l.valor||0),0);
-  const qtdVendas = fechados.length;
+  // "Vendido"/"Quantidade de vendas"/"Ticket médio" agora vêm dos CONTRATOS
+  // (data de contratação + valor contratado), nunca mais de
+  // lead.dataFechamento/lead.valor — um cliente pode ter mais de um contrato,
+  // e cada um deve contar separadamente pela sua própria data.
+  const contratosVendidos = filteredSoldContracts(range);
+  const vendido = contratosVendidos.reduce((s,c)=>s+Number(c.valorContratado||0),0);
+  const qtdVendas = contratosVendidos.length;
   const ticket = qtdVendas ? vendido/qtdVendas : 0;
   const novosLeads = base.filter(l=>periodMatchRange(l.dataEntrada, range));
   const conversao = novosLeads.length ? Math.round((novosLeads.filter(l=>l.status==='Fechado').length/novosLeads.length)*100) : 0;
@@ -3417,10 +3455,16 @@ function viewDashboard(){
   `;
 }
 function dimSalesBreakdown(dimKey, excludeKey){
-  const base = filteredBaseLeads([excludeKey]);
-  const fechados = base.filter(l=>l.status==='Fechado' && filterBarPeriodMatch(l.dataFechamento));
+  // Agrupa por CONTRATO (data de contratação + valor contratado), não mais
+  // por lead.dataFechamento/lead.valor — mesmo motivo do restante do
+  // dashboard: um cliente pode ter vários contratos.
+  const contratosVendidos = filteredSoldContracts(filterBar, excludeKey?[excludeKey]:[]);
   const groups = {};
-  fechados.forEach(l=>{ const g=l[dimKey]||'—'; groups[g]=(groups[g]||0)+Number(l.valor||0); });
+  contratosVendidos.forEach(c=>{
+    const lead = DB.leads.find(l=>l.id===c.leadId);
+    const g = (dimKey==='administradora' ? c.administradora : (lead && lead[dimKey])) || '—';
+    groups[g] = (groups[g]||0) + Number(c.valorContratado||0);
+  });
   return groups;
 }
 function dimConversionBreakdown(dimKey, excludeKey){
@@ -3514,6 +3558,9 @@ function renderDashboardCharts(){
   // nos demais casos — respeitando o filtro selecionado (mês do ano corrente para
   // "Este ano", meses do trimestre corrente para "Trimestre"), não sempre
   // "últimos 6 meses a partir de hoje" independente do filtro escolhido.
+  // Usa CONTRATOS (data de contratação + valor contratado), nunca mais
+  // lead.dataFechamento/lead.valor — evita divergência quando um cliente tem
+  // mais de um contrato.
   if(filterBar.mode==='mes'){
     const now = new Date();
     const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
@@ -3521,7 +3568,7 @@ function renderDashboardCharts(){
     for(let d=1; d<=daysInMonth; d++){
       const iso = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       labels.push(String(d));
-      data.push(base.filter(l=>l.status==='Fechado' && l.dataFechamento===iso).reduce((s,l)=>s+Number(l.valor||0),0));
+      data.push(filteredSoldContracts({mode:'custom', from:iso, to:iso}).reduce((s,c)=>s+Number(c.valorContratado||0),0));
     }
     newChart('chartEvo','bar', labels, [{label:'Vendido no dia', data, backgroundColor:CHART_PALETTE.blue, borderRadius:4, maxBarThickness:22}], {money:true});
   } else {
@@ -3556,7 +3603,14 @@ function renderDashboardCharts(){
       y: mo.y, m: mo.m,
       label: new Date(mo.y, mo.m, 1).toLocaleDateString('pt-BR', {month:'short'}) + (cruzaAno ? '/' + String(mo.y).slice(2) : '')
     }));
-    const evoData = months.map(mo=> base.filter(l=>l.status==='Fechado' && l.dataFechamento && new Date(l.dataFechamento+'T00:00:00').getMonth()===mo.m && new Date(l.dataFechamento+'T00:00:00').getFullYear()===mo.y).reduce((s,l)=>s+Number(l.valor||0),0));
+    // Comparação por string (from/to) evita qualquer risco de fuso horário —
+    // nunca faz new Date(iso).getMonth() em cima de string sem horário.
+    const evoData = months.map(mo=>{
+      const from = `${mo.y}-${String(mo.m+1).padStart(2,'0')}-01`;
+      const lastDay = new Date(mo.y, mo.m+1, 0).getDate();
+      const to = `${mo.y}-${String(mo.m+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+      return filteredSoldContracts({mode:'custom', from, to}).reduce((s,c)=>s+Number(c.valorContratado||0),0);
+    });
     newChart('chartEvo','line', months.map(m=>m.label), [{label:'Vendido', data:evoData, borderColor:CHART_PALETTE.blue, backgroundColor:CHART_PALETTE.blueSoft, fill:true, tension:.35, pointRadius:3, pointBackgroundColor:CHART_PALETTE.blue, pointBorderColor:'#fff', pointBorderWidth:1.5, borderWidth:2.5}], {money:true});
   }
 
@@ -3867,10 +3921,8 @@ function openLeadForm(id){
       <div class="field"><label>Assessor do cliente</label>${selectHTML('f_resp', st.assessores, l?.responsavel)}</div>
       <div class="field"><label>Origem do contato</label>${selectHTML('f_origem', st.origens, l?.origem)}</div>
       <div class="field"><label>Data de inclusão</label><input type="date" id="f_dataEntrada" value="${l?.dataEntrada || todayISO()}"></div>
-      <div class="field"><label>Data de fechamento</label><input type="date" id="f_dataFechamento" value="${l?.dataFechamento || ''}"></div>
       <div class="field"><label>Última interação</label><input type="date" id="f_lastInteraction" value="${l?.lastInteraction || todayISO()}"></div>
     </div>
-    <div class="small-note" style="margin:-8px 0 14px;">Use estes campos ao cadastrar clientes antigos, para que a data de inclusão, de fechamento e de última interação reflitam quando isso aconteceu de verdade — não o dia do cadastro no sistema.</div>
     <div class="section-title" style="margin:18px 0 8px;font-size:13.5px;">Interesse comercial</div>
     <div class="form-grid">
       <div class="field"><label>Segmento</label>${selectHTML('f_tipo', st.segmentos, l?.tipoConsorcio)}</div>
@@ -3900,22 +3952,23 @@ function openLeadForm(id){
     const assessorNoForm = document.getElementById('f_resp').value;
     if(novoStatus==='Fechado' && !assessorNoForm){ showToast('Defina o assessor do cliente antes de marcar como Fechado.'); return; }
     const dataEntrada = document.getElementById('f_dataEntrada').value;
-    const dataFechamento = document.getElementById('f_dataFechamento').value;
     const lastInteraction = document.getElementById('f_lastInteraction').value;
-    // Validação das datas — sobretudo relevante para cadastro de clientes
-    // antigos, onde essas datas são digitadas manualmente, não geradas
-    // automaticamente pelo sistema.
+    // Validação de data — sobretudo relevante para cadastro de clientes
+    // antigos, onde essa data é digitada manualmente, não gerada
+    // automaticamente pelo sistema. "Data de fechamento" saiu da ficha — o
+    // dashboard agora usa a data do CONTRATO (não mais um campo único no
+    // cliente, que divergiria se houver mais de um contrato no futuro). O
+    // campo continua existindo internamente (preenchido automaticamente ao
+    // mudar o status para "Fechado"), só não é mais editável aqui.
     if(!dataEntrada){ showToast('Informe a data de inclusão do cliente.'); return; }
     if(dataEntrada > todayISO()){ showToast('A data de inclusão não pode ser no futuro.'); return; }
-    if(dataFechamento && dataFechamento < dataEntrada){ showToast('A data de fechamento não pode ser anterior à data de inclusão.'); return; }
-    if(dataFechamento && dataFechamento > todayISO()){ showToast('A data de fechamento não pode ser no futuro.'); return; }
     const data = {
       nome, telefone, codigoCliente:document.getElementById('f_codigo').value, cpfCnpj:document.getElementById('f_cpf').value,
       responsavel:document.getElementById('f_resp').value, origem:document.getElementById('f_origem').value,
       tipoConsorcio:document.getElementById('f_tipo').value, administradora:document.getElementById('f_admin').value,
       valor: moneyVal('f_valor'), recursoLance: moneyVal('f_recurso'), parcelaDesejada: moneyVal('f_parcela'),
       status:document.getElementById('f_status').value, observacoes:document.getElementById('f_obs').value,
-      dataEntrada, dataFechamento: dataFechamento||'', lastInteraction: lastInteraction||todayISO()
+      dataEntrada, lastInteraction: lastInteraction||todayISO()
     };
     if(!l){
       const dups = findPossibleDuplicates(data);
@@ -4094,7 +4147,6 @@ function renderResumoTab(l){
           <div class="field"><label>Crédito desejado</label><div>${fmtMoney(l.valor)}</div></div>
           <div class="field"><label>Recurso para lance</label><div>${fmtMoney(l.recursoLance)}</div></div>
           <div class="field"><label>Parcela máxima</label><div>${fmtMoney(l.parcelaDesejada)}</div></div>
-          <div class="field"><label>Data de fechamento</label><div>${l.dataFechamento?fmtDate(l.dataFechamento):'—'}</div></div>
           <div class="field full"><label>Observação</label><div>${l.observacoes||'—'}</div></div>
           ${l.status==='Perdido'?`<div class="field full"><label>Motivo da perda</label><div>${l.motivoPerda}${l.motivoPerdaDetalhe?' — '+l.motivoPerdaDetalhe:''}</div></div>`:''}
         </div>
@@ -7303,7 +7355,10 @@ function computeAssessorStats(assessor){
   const fechados = leads.filter(l=>l.status==='Fechado');
   const perdidos = leads.filter(l=>l.status==='Perdido').length;
   const volumeIndicado = leads.reduce((s,l)=>s+Number(l.valor||0),0);
-  const volumeVendido = fechados.reduce((s,l)=>s+Number(l.valor||0),0);
+  // Volume vendido agora soma o valor efetivamente CONTRATADO (pode ser mais
+  // de um contrato por cliente), não mais lead.valor — o "valor desejado"
+  // digitado na entrada do lead pode divergir do que foi de fato fechado.
+  const volumeVendido = soldValueForLeadIds(fechados.map(l=>l.id));
   const ticket = fechados.length ? volumeVendido/fechados.length : 0;
   const conversao = leads.length ? Math.round((fechados.length/leads.length)*100) : 0;
   return {assessor, clientes:leads.length, propostas:propostas.length, negociacoes, fechados:fechados.length, perdidos, volumeIndicado, volumeVendido, ticket, conversao};
@@ -7348,8 +7403,16 @@ function viewRelatorios(){
 function relPorAssessor(){
   const rows = DB.assessores.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(a=>{
     const clientesDoAssessor = DB.leads.filter(l=>l.responsavel===a.nome);
-    const vendas = clientesDoAssessor.filter(l=>l.status==='Fechado' && filterBarPeriodMatch(l.dataFechamento));
-    const creditoVendido = vendas.reduce((s,l)=>s+Number(l.valor||0),0);
+    const leadIds = new Set(clientesDoAssessor.map(l=>l.id));
+    // "Crédito vendido"/"Nº vendas" agora vêm dos CONTRATOS (data de
+    // contratação + valor contratado), não mais de
+    // lead.status==='Fechado'/lead.dataFechamento/lead.valor — um cliente
+    // pode ter mais de um contrato, e cada um conta separadamente. Mantém o
+    // comportamento original de só filtrar por período (não pelas outras
+    // dimensões do filtro), já que esta tabela compara todos os assessores
+    // lado a lado.
+    const vendas = DB.contracts.filter(c => leadIds.has(c.leadId) && periodMatchRange(c.dataContratacao, filterBar));
+    const creditoVendido = vendas.reduce((s,c)=>s+Number(c.valorContratado||0),0);
     const clientesAtivos = clientesDoAssessor.filter(l=>!['Fechado','Perdido'].includes(l.status)).length;
     const propostasAndamento = DB.proposals.filter(p=> clientesDoAssessor.some(l=>l.id===p.leadId) && !['Recusada','Aceita'].includes(p.status)).length;
     const comissoesDoAssessor = DB.assessorCommissions.filter(ac=>ac.assessorId===a.id);
@@ -7363,14 +7426,17 @@ function relPorAssessor(){
   return `<div class="toolbar" style="justify-content:space-between;"><span class="small-note">${rows.length} assessor(es) cadastrado(s)</span><button class="pill-btn ghost sm" data-relexport="porassessor">Exportar CSV</button></div>
   <div class="table-wrap"><table><thead><tr><th>Assessor</th><th>Status</th><th>Crédito vendido</th><th>Nº vendas</th><th>Comissão gerada</th><th>Paga</th><th>A pagar</th><th>Vencida</th><th>Clientes ativos</th><th>Propostas em andamento</th></tr></thead>
   <tbody>${rows.length? rows.map(r=>`<tr><td>${escapeHtml(r.assessor.nome)}</td><td><span class="badge ${r.assessor.ativo?'b-fechado':'b-perdido'}">${r.assessor.ativo?'Ativo':'Inativo'}</span></td><td>${fmtMoney(r.creditoVendido)}</td><td>${r.numVendas}</td><td>${fmtMoney(r.comissaoGerada)}</td><td>${fmtMoney(r.comissaoPaga)}</td><td>${fmtMoney(r.comissaoAPagar)}</td><td>${fmtMoney(r.comissaoVencida)}</td><td>${r.clientesAtivos}</td><td>${r.propostasAndamento}</td></tr>`).join('') : '<tr><td colspan=10 class="empty">Nenhum assessor cadastrado</td></tr>'}</tbody></table></div>
-  <p class="small-note" style="margin-top:10px;">"Crédito vendido" e "Nº vendas" respeitam o período selecionado no filtro; os demais indicadores são uma foto do momento atual.</p>`;
+  <p class="small-note" style="margin-top:10px;">"Crédito vendido" e "Nº vendas" contam os contratos (não os clientes) do assessor com data de contratação dentro do período selecionado; os demais indicadores são uma foto do momento atual.</p>`;
 }
 function relVendas(){
-  const fechados = filteredBaseLeads([]).filter(l=>l.status==='Fechado' && filterBarPeriodMatch(l.dataFechamento)).sort((a,b)=>a.dataFechamento.localeCompare(b.dataFechamento));
-  const total = fechados.reduce((s,l)=>s+Number(l.valor||0),0);
-  return `<div class="toolbar" style="justify-content:space-between;"><span class="small-note">${fechados.length} venda(s) · ${fmtMoney(total)}</span><button class="pill-btn ghost sm" data-relexport="vendas">Exportar CSV</button></div>
-  <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Assessor</th><th>Administradora</th><th>Segmento</th><th>Valor</th><th>Data de fechamento</th></tr></thead>
-  <tbody>${fechados.length? fechados.map(l=>`<tr><td>${l.nome}</td><td>${l.responsavel||'—'}</td><td>${l.administradora||'—'}</td><td>${l.tipoConsorcio||'—'}</td><td>${fmtMoney(l.valor)}</td><td>${fmtDate(l.dataFechamento)}</td></tr>`).join('') : '<tr><td colspan=6 class="empty">Nenhuma venda no período</td></tr>'}</tbody></table></div>`;
+  // Lista por CONTRATO (data de contratação + valor contratado), não mais por
+  // cliente/lead.dataFechamento — um cliente com mais de um contrato aparece
+  // em mais de uma linha, cada uma com seu próprio valor e data.
+  const vendas = filteredSoldContracts(filterBar).slice().sort((a,b)=>a.dataContratacao.localeCompare(b.dataContratacao));
+  const total = vendas.reduce((s,c)=>s+Number(c.valorContratado||0),0);
+  return `<div class="toolbar" style="justify-content:space-between;"><span class="small-note">${vendas.length} venda(s) · ${fmtMoney(total)}</span><button class="pill-btn ghost sm" data-relexport="vendas">Exportar CSV</button></div>
+  <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Contrato</th><th>Assessor</th><th>Administradora</th><th>Segmento</th><th>Valor</th><th>Data do contrato</th></tr></thead>
+  <tbody>${vendas.length? vendas.map(c=>{ const lead=DB.leads.find(l=>l.id===c.leadId); return `<tr><td>${lead?escapeHtml(lead.nome):'—'}</td><td>${escapeHtml(c.numero||'—')}</td><td>${lead?(lead.responsavel||'—'):'—'}</td><td>${c.administradora||'—'}</td><td>${lead?(lead.tipoConsorcio||'—'):'—'}</td><td>${fmtMoney(c.valorContratado)}</td><td>${fmtDate(c.dataContratacao)}</td></tr>`; }).join('') : '<tr><td colspan=7 class="empty">Nenhuma venda no período</td></tr>'}</tbody></table></div>`;
 }
 function relPipeline(){
   const open = filteredBaseLeads([]).filter(l=>!['Fechado','Perdido'].includes(l.status));
@@ -7451,7 +7517,7 @@ function relInadimplencia(){
   <div class="table-wrap"><table><thead><tr><th>Status</th><th>Quantidade</th></tr></thead><tbody>${byStatus.map(r=>`<tr><td>${r.status}</td><td>${r.count}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function runReportExport(tab){
-  if(tab==='vendas'){ const fechados=filteredBaseLeads([]).filter(l=>l.status==='Fechado'&&filterBarPeriodMatch(l.dataFechamento)); exportCSV('vendas.csv',['Cliente','Assessor','Administradora','Segmento','Valor','Data fechamento'], fechados.map(l=>[l.nome,l.responsavel,l.administradora,l.tipoConsorcio,l.valor,l.dataFechamento])); }
+  if(tab==='vendas'){ const vendas=filteredSoldContracts(filterBar); exportCSV('vendas.csv',['Cliente','Contrato','Assessor','Administradora','Segmento','Valor','Data do contrato'], vendas.map(c=>{ const lead=DB.leads.find(l=>l.id===c.leadId); return [lead?lead.nome:'', c.numero, lead?lead.responsavel:'', c.administradora, lead?lead.tipoConsorcio:'', c.valorContratado, c.dataContratacao]; })); }
   else if(tab==='pipeline'){ const open=filteredBaseLeads([]).filter(l=>!['Fechado','Perdido'].includes(l.status)); const rows=OPEN_STAGES.map(s=>{ const ls=open.filter(l=>l.status===s); return [s, ls.length, ls.reduce((a,l)=>a+Number(l.valor||0),0)]; }); exportCSV('pipeline.csv',['Estágio','Clientes','Valor'], rows); }
   else if(tab==='propostas'){ const props=DB.proposals.filter(p=>filterBarPeriodMatch(p.dataCriacao) && itemMatchesFilterBar(p.leadId)); exportCSV('propostas.csv',['Cliente','Administradora','Segmento','Valor total','Status','Criada em'], props.map(p=>{ const lead=DB.leads.find(l=>l.id===p.leadId); return [lead?lead.nome:'',p.administradora,p.segmento,p.valorTotal,p.status,p.dataCriacao]; })); }
   else if(tab==='conversao'){ const leads=filteredBaseLeads([]).filter(l=>filterBarPeriodMatch(l.dataEntrada)); const g={}; leads.forEach(l=>{ const k=l[relConversaoGroupBy]||'—'; if(!g[k])g[k]={total:0,fechados:0}; g[k].total++; if(l.status==='Fechado')g[k].fechados++; }); exportCSV('conversao.csv',['Grupo','Total','Fechados','Conversão %'], Object.entries(g).map(([k,v])=>[k,v.total,v.fechados,v.total?Math.round((v.fechados/v.total)*100):0])); }
@@ -7462,10 +7528,11 @@ function runReportExport(tab){
   else if(tab==='porassessor'){
     const rows = DB.assessores.map(a=>{
       const clientesDoAssessor = DB.leads.filter(l=>l.responsavel===a.nome);
-      const vendas = clientesDoAssessor.filter(l=>l.status==='Fechado' && filterBarPeriodMatch(l.dataFechamento));
+      const leadIds = new Set(clientesDoAssessor.map(l=>l.id));
+      const vendas = DB.contracts.filter(c => leadIds.has(c.leadId) && periodMatchRange(c.dataContratacao, filterBar));
       const comissoesDoAssessor = DB.assessorCommissions.filter(ac=>ac.assessorId===a.id);
       const todasParcelas = comissoesDoAssessor.flatMap(ac=>ac.parcelas);
-      return [a.nome, a.ativo?'Ativo':'Inativo', vendas.reduce((s,l)=>s+Number(l.valor||0),0), vendas.length,
+      return [a.nome, a.ativo?'Ativo':'Inativo', vendas.reduce((s,c)=>s+Number(c.valorContratado||0),0), vendas.length,
         comissoesDoAssessor.reduce((s,ac)=>s+ac.valorTotal,0), todasParcelas.filter(p=>p.status==='Paga').reduce((s,p)=>s+(p.valorPago||p.valor),0),
         todasParcelas.filter(p=>['A pagar','Prevista'].includes(p.status)).reduce((s,p)=>s+p.valor,0), todasParcelas.filter(p=>p.status==='Vencida').reduce((s,p)=>s+p.valor,0)];
     });
