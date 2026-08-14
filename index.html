@@ -238,8 +238,10 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .icon-btn{background:none;border:1px solid var(--line);width:27px;height:27px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--ink-soft);}
 .icon-btn:hover{background:var(--paper);}
 .small-note{font-size:11.5px;color:var(--ink-soft);margin-top:6px;}
-.toast{position:fixed;bottom:20px;right:20px;background:var(--navy-950);color:#fff;padding:11px 17px;border-radius:8px;font-size:12.5px;box-shadow:var(--shadow);z-index:200;opacity:0;transform:translateY(10px);transition:all .25s;max-width:340px;}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--navy-950);color:#fff;padding:11px 17px;border-radius:8px;font-size:12.5px;box-shadow:var(--shadow);z-index:200;opacity:0;transform:translateY(10px);transition:all .25s;max-width:340px;display:flex;align-items:center;gap:12px;}
 .toast.show{opacity:1;transform:translateY(0);}
+.toast-action{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:4px 10px;font-size:11.5px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;}
+.toast-action:hover{background:rgba(255,255,255,.12);}
 .parcel-table td, .parcel-table th{padding:6px 8px;font-size:11.5px;}
 .priority-card{display:flex;justify-content:space-between;align-items:flex-start;padding:12px 15px;border-bottom:1px solid var(--line);gap:10px;}
 .priority-card:last-child{border-bottom:none;}
@@ -1303,8 +1305,21 @@ const PROPOSAL_STATUS = ['Rascunho','Enviada','Visualizada','Em negociação','A
  *  esse ponto, o caminho é converter para proposta completa e fechar por lá —
  *  "Aceita" já sinaliza "cliente topou, falta só formalizar". */
 const PROPOSAL_STATUS_SIMPLES = ['Rascunho','Enviada','Visualizada','Em negociação','Aceita','Perdida','Substituída'];
-const STATUS_LIST = ['Novo Lead','Primeiro Contato','Em Atendimento','Em Simulação','Proposta Enviada','Aguardando Resposta','Em Negociação','Fechado','Perdido','Pós-venda'];
-const STATUS_BADGE = {'Novo Lead':'b-novo','Primeiro Contato':'b-contato','Em Atendimento':'b-atend','Em Simulação':'b-sim','Proposta Enviada':'b-prop','Aguardando Resposta':'b-prop','Em Negociação':'b-neg','Fechado':'b-fechado','Perdido':'b-perdido','Pós-venda':'b-pos'};
+// v24: status do CLIENTE simplificado para 4 valores — sempre DERIVADO de
+// propostas/contratos/cotas por recomputeClientCommercialStatus, nunca editado
+// diretamente (nem por formulário, nem por drag-and-drop no Kanban). Os
+// status internos de PROPOSTA (PROPOSAL_STATUS_SIMPLES / Rascunho, Enviada,
+// Visualizada, Em negociação, Aceita, Perdida, Substituída, Fechado) e os
+// estágios de pós-venda de COTA (POSVENDA_STAGES) continuam existindo e
+// granulares — são conceitos separados, só o rótulo exibido no CLIENTE foi
+// simplificado.
+const STATUS_LIST = ['Novo Lead','Em Negociação','Fechado','Perdido'];
+const STATUS_BADGE = {'Novo Lead':'b-novo','Em Negociação':'b-neg','Fechado':'b-fechado','Perdido':'b-perdido',
+  // Compatibilidade: dados antigos (ainda não recalculados) podem carregar
+  // temporariamente um status pré-v24 até a primeira passagem de
+  // recomputeClientCommercialStatus — mapeados para uma badge razoável para
+  // nunca ficar sem estilo.
+  'Primeiro Contato':'b-contato','Em Atendimento':'b-atend','Em Simulação':'b-sim','Proposta Enviada':'b-prop','Aguardando Resposta':'b-prop','Pós-venda':'b-fechado'};
 const POSVENDA_STAGES_HISTORICO = ['Contrato assinado','Cota ativa','Estratégia definida','Assembleia','Lance registrado','Contemplado','Documentação','Crédito liberado','Bem adquirido','Concluído'];
 /** Estágio "Documentação" descontinuado — não é mais oferecido em novos cadastros, mas
  *  cotas antigas que já estavam nesse estágio continuam existindo e visíveis (não é
@@ -1466,6 +1481,30 @@ const StorageAdapter = (function(){
   return { get, set, get backend(){ return backendInUse(); }, get available(){ return !!backendInUse(); } };
 })();
 
+/** v24 — corrige o cadastro de administradoras (bug: nova administradora
+ *  aparecendo como "undefined"). Formato canônico compatível com todo o
+ *  sistema: DB.settings.administradoras é sempre uma lista de NOMES em
+ *  texto (strings), nunca de objetos. Converte registros antigos guardados
+ *  como objeto ({nome:...} ou {name:...}) para a string correspondente,
+ *  remove valores vazios/undefined e duplicados (comparação sem acento e
+ *  sem diferenciar maiúsculas/minúsculas, via normalizeStr), preservando a
+ *  ordem e todas as administradoras já cadastradas de verdade. */
+function normalizeAdministradorasList(){
+  const raw = Array.isArray(DB.settings.administradoras) ? DB.settings.administradoras : [];
+  const seen = new Set();
+  const limpa = [];
+  raw.forEach(item=>{
+    let nome = item;
+    if(item && typeof item==='object') nome = item.nome || item.name || '';
+    nome = (nome===undefined || nome===null) ? '' : String(nome).trim();
+    if(!nome) return;
+    const key = normalizeStr(nome);
+    if(seen.has(key)) return;
+    seen.add(key);
+    limpa.push(nome);
+  });
+  DB.settings.administradoras = limpa;
+}
 function normalizeDB(){
   // Defensivo: garante que módulos novos existam mesmo em bases antigas.
   const base = defaultDB();
@@ -1565,7 +1604,15 @@ function normalizeDB(){
       else a.taskId = null;
     }
   });
-  DB.tasks.forEach(t=>{ if(t.assemblyId===undefined) t.assemblyId = null; });
+  DB.tasks.forEach(t=>{
+    if(t.assemblyId===undefined) t.assemblyId = null;
+    // Compatibilidade: tarefa antiga já concluída (antes de completedAt/completedBy
+    // existirem) ganha os campos com valor neutro (null), sem inventar um horário
+    // de conclusão que nunca existiu de verdade. Tarefa não concluída não precisa
+    // desses campos.
+    if(t.done && t.completedAt===undefined) t.completedAt = null;
+    if(t.done && t.completedBy===undefined) t.completedBy = null;
+  });
   // Séries de assembleia de versões anteriores não tinham âncora explícita, o que causava
   // deriva de data ao completar o horizonte (ex.: 31/01 virava 28/02, depois 28/03, 28/04...
   // em vez de respeitar o dia 31 sempre que existir no mês). Preenche retroativamente a
@@ -1659,6 +1706,15 @@ function normalizeDB(){
   // segmento, status, motivo de perda, próxima ação) para uma proposta
   // SIMPLES vinculada a ele. Idempotente por design — ver a função abaixo.
   migrarInteresseComercialParaPropostaSimples();
+  // v24: normaliza a lista de administradoras para o formato canônico
+  // (lista de nomes em texto), antes de qualquer tela usá-la.
+  normalizeAdministradorasList();
+  // v24: status do cliente sempre derivado — recalcula para TODOS os
+  // clientes a cada carregamento da base, garantindo que qualquer edição
+  // feita fora da UI (import, restauração de backup, dado legado com status
+  // pré-v24 como "Pós-venda"/"Proposta Enviada" etc.) convirja para um dos 4
+  // status atuais antes de qualquer tela ser desenhada.
+  DB.leads.forEach(l=> recomputeClientCommercialStatus(l.id));
 }
 /** Mapeia o status ANTIGO do cliente (STATUS_LIST) para o status de proposta
  *  equivalente (PROPOSAL_STATUS) — usado só pela migração, para dar à
@@ -1989,8 +2045,23 @@ function sanitizeFields(obj, fields){
   return obj;
 }
 function showToast(msg){
-  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 2800);
+  const t=document.getElementById('toast'); t.innerHTML=''; t.textContent=msg; t.classList.remove('with-action'); t.classList.add('show');
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(()=>t.classList.remove('show'), 2800);
+}
+/** Toast com botão de ação (usado para "Desfazer" ao concluir uma tarefa) —
+ *  fica visível um pouco mais que o toast comum, para dar tempo de clicar. */
+function showToastWithAction(msg, actionLabel, onAction){
+  const t=document.getElementById('toast');
+  clearTimeout(showToast._timer);
+  t.innerHTML = `<span class="toast-msg"></span> <button type="button" class="toast-action" id="toastActionBtn">${escapeHtml(actionLabel)}</button>`;
+  t.querySelector('.toast-msg').textContent = msg;
+  t.classList.add('show','with-action');
+  document.getElementById('toastActionBtn').onclick = ()=>{
+    t.classList.remove('show','with-action');
+    onAction();
+  };
+  showToast._timer = setTimeout(()=>t.classList.remove('show','with-action'), 6000);
 }
 // máscara de moeda (vírgula decimal) em qualquer input com [data-money]
 document.addEventListener('input', function(e){
@@ -2961,6 +3032,58 @@ function ensureAutoTask(clientId, regraAuto, factory){
   DB.tasks.push(t);
   return t;
 }
+/** ÚNICA função para concluir uma tarefa — usada em TODO lugar onde uma
+ *  tarefa pode ser marcada como concluída (Início: atrasadas/hoje/próximas;
+ *  Agenda: lista e calendário; ficha do cliente; assembleias/lances). Sempre
+ *  opera sobre o MESMO registro de DB.tasks, identificado por id — nunca cria
+ *  cópia nem duplica. Idempotente: chamar de novo numa tarefa já concluída
+ *  não sobrescreve completedAt/completedBy nem duplica a entrada na timeline
+ *  (protege contra cliques repetidos/duplo clique acidental). Concluir uma
+ *  ocorrência de uma série recorrente (assembleia/lance) afeta só ESSA
+ *  tarefa — cada ocorrência tem seu próprio registro em DB.tasks desde a
+ *  geração (createAssemblyTask/generateRecurringOccurrences), então a
+ *  recorrência nunca é quebrada nem duplicada por esta função. */
+function completeTask(taskId){
+  const t = DB.tasks.find(x=>x.id===taskId);
+  if(!t) return null;
+  if(t.done) return t; // idempotente — já concluída, não repete efeitos colaterais
+  t.done = true;
+  t.completedAt = new Date().toISOString();
+  t.completedBy = currentUser ? (currentUser.email||currentUser.id||'Você') : 'Você';
+  const lead = t.clientId ? DB.leads.find(l=>l.id===t.clientId) : null;
+  if(lead) addTimeline(lead, `Tarefa concluída: ${t.titulo}`, '', t.completedBy);
+  saveDB();
+  return t;
+}
+/** Desfaz a conclusão de uma tarefa — usado pelo botão "Desfazer" da
+ *  confirmação visual (showToastWithAction). Idempotente: chamar numa tarefa
+ *  que já não está concluída não faz nada. */
+function undoCompleteTask(taskId){
+  const t = DB.tasks.find(x=>x.id===taskId);
+  if(!t || !t.done) return null;
+  t.done = false;
+  delete t.completedAt;
+  delete t.completedBy;
+  const lead = t.clientId ? DB.leads.find(l=>l.id===t.clientId) : null;
+  if(lead) addTimeline(lead, `Conclusão desfeita: ${t.titulo}`);
+  saveDB();
+  return t;
+}
+/** Fio condutor entre "marcar como concluída" (checkbox/botão) e a função
+ *  central completeTask — sempre re-renderiza a tela atual e mostra a
+ *  confirmação com "Desfazer" depois de concluir. Chamado de todo lugar da UI
+ *  que oferece a ação "Concluir", para o comportamento (toast, timeline,
+ *  atualização de tela) ser idêntico em qualquer lugar. */
+function completeTaskFromUI(taskId, rerenderFn){
+  const t = completeTask(taskId);
+  if(!t) return;
+  if(rerenderFn) rerenderFn();
+  showToastWithAction('Tarefa concluída', 'Desfazer', ()=>{
+    undoCompleteTask(taskId);
+    if(rerenderFn) rerenderFn();
+    showToast('Conclusão desfeita');
+  });
+}
 function addTimeline(lead, acao, obs, usuario){
   lead.timeline = lead.timeline || [];
   lead.timeline.push({when:new Date().toISOString(), acao, obs:obs||'', usuario:usuario||'Você'});
@@ -2995,11 +3118,11 @@ function applyStatusChange(lead, newStatus, motivoCategoria, motivoDetalhe){
     ensureAutoTask(lead.id, 'followup_semresposta', ()=>({id:uid('task'), kind:'Lembrete', tipo:'Retorno', titulo:'Follow-up: sem resposta do cliente', prioridade:'Alta', data:addDays(todayISO(),fd.semResposta), hora:'09:00', clientId:lead.id, done:false, obs:'', regraAuto:'followup_semresposta'}));
   }
 }
-/** Mapeia o status de uma PROPOSTA (Rascunho/Enviada/Visualizada/Em
- *  negociação/Aceita) para o estágio de funil do CLIENTE (STATUS_LIST) — usado
- *  só pela regra 3 de recomputeClientCommercialStatus, para não precisar
- *  espalhar os valores de PROPOSAL_STATUS por toda a UI que já depende de
- *  STATUS_LIST (kanban, filtros, badges). */
+/** DESUSO a partir da v24: com o status do cliente simplificado para 4
+ *  valores, qualquer proposta ativa mapeia direto para 'Em Negociação' (ver
+ *  regra 3 de recomputeClientCommercialStatus) — não precisa mais traduzir
+ *  estágio a estágio. Mantida apenas por compatibilidade com quem eventualmente
+ *  a referencie externamente; não é mais chamada em nenhum ponto do sistema. */
 function mapProposalStatusToLeadStage(propStatus){
   switch(propStatus){
     case 'Rascunho': return 'Em Simulação';
@@ -3010,22 +3133,27 @@ function mapProposalStatusToLeadStage(propStatus){
 }
 /** ÚNICA fonte de verdade para o status comercial de um cliente. Nunca defina
  *  lead.status diretamente — sempre chame recomputeClientCommercialStatus(leadId)
- *  depois de qualquer criação, edição, exclusão ou mudança de status de
- *  proposta (simples ou completa) ou contrato/cota/assembleia.
+ *  depois de qualquer criação, edição ou exclusão de proposta, contrato ou
+ *  cota (e também é chamada em massa ao carregar a base, dentro de normalizeDB()).
  *
- *  Precedência (da mais forte para a mais fraca), conforme especificado:
- *  1. Contrato/cota ativa ou em pós-venda → 'Pós-venda' (cota já contemplada
- *     ou além do estágio inicial) ou 'Fechado' (contrato recém-gerado, cota
- *     ainda no estágio inicial "Contrato assinado").
- *  2. Proposta com status 'Fechado' (sempre implica contrato, por definição —
- *     proteção defensiva para dados legados sem cota/contrato local).
- *  3. Proposta ATIVA (Rascunho/Enviada/Visualizada/Em negociação/Aceita) →
- *     usa o status da proposta ativa ATUALIZADA MAIS RECENTEMENTE
- *     (dataUltimaAlteracao), mapeado para o estágio de funil correspondente.
- *  4. Todas as propostas do cliente estão encerradas sem fechamento
- *     (Perdida/Substituída) → 'Perdido'. Nunca marca Perdido se existir
- *     contrato, cota ativa, proposta fechada ou outra proposta em andamento.
- *  5. Nenhuma proposta → 'Novo Lead'. */
+ *  v24 — status do cliente simplificado para 4 valores (Novo Lead / Em
+ *  Negociação / Fechado / Perdido), sempre derivado. Precedência (da mais
+ *  forte para a mais fraca):
+ *  1. Cliente com contrato ativo (ou proposta 'Fechado' vinculada a contrato)
+ *     → 'Fechado'. Contrato ativo SEMPRE prevalece sobre propostas perdidas —
+ *     um cliente com uma proposta perdida e outra ainda ativa, mas que já tem
+ *     contrato, continua 'Fechado' (a cota/pós-venda em si continua com seu
+ *     próprio estágio granular em POSVENDA_STAGES; aqui só cabe o rótulo do
+ *     cliente).
+ *  2. Proposta com status 'Fechado' sem contrato local (proteção defensiva
+ *     para dados legados).
+ *  3. Sem contrato, mas com ao menos uma proposta ATIVA (Rascunho/Enviada/
+ *     Visualizada/Em negociação/Aceita) → 'Em Negociação'. Precede a regra 4:
+ *     uma proposta perdida ao lado de outra ainda ativa NÃO torna o cliente
+ *     'Perdido'.
+ *  4. Sem contrato e com TODAS as propostas encerradas como perdidas/
+ *     recusadas (Perdida/Substituída) → 'Perdido'.
+ *  5. Sem propostas nem contratos → 'Novo Lead'. */
 function recomputeClientCommercialStatus(leadId){
   const lead = DB.leads.find(l=>l.id===leadId);
   if(!lead) return;
@@ -3037,8 +3165,8 @@ function recomputeClientCommercialStatus(leadId){
   // aqui. Um contrato só é considerado ativo se tiver pelo menos uma cota não
   // cancelada, OU se ainda não tiver nenhuma cota cadastrada (contrato recém
   // gerado, cota ainda por criar). Um contrato cujas cotas foram TODAS
-  // canceladas não sustenta mais "Fechado"/"Pós-venda" — a regra 4, abaixo,
-  // pode então corretamente levar o cliente a "Perdido" se for o caso.
+  // canceladas não sustenta mais "Fechado" — a regra 4, abaixo, pode então
+  // corretamente levar o cliente a "Perdido" se for o caso.
   const cotasAtivas = cotas.filter(q=>!q.cancelada);
   const contratosAtivos = contratos.filter(c=>{
     const cotasDoContrato = cotas.filter(q=>q.contractId===c.id);
@@ -3046,9 +3174,7 @@ function recomputeClientCommercialStatus(leadId){
     return cotasDoContrato.some(q=>!q.cancelada);
   });
   if(contratosAtivos.length || cotasAtivas.length){
-    const temPosVenda = cotasAtivas.some(q=> q.contemplado || (q.posVendaStage && q.posVendaStage!=='Contrato assinado'));
-    const alvo = temPosVenda ? 'Pós-venda' : 'Fechado';
-    if(lead.status !== alvo) applyStatusChange(lead, alvo);
+    if(lead.status !== 'Fechado') applyStatusChange(lead, 'Fechado');
     return;
   }
 
@@ -3056,22 +3182,19 @@ function recomputeClientCommercialStatus(leadId){
   // existe NENHUM contrato local (nem ativo, nem com cotas canceladas) — só
   // dispara quando contratos.length===0. Se já existe um contrato (mesmo que
   // todas as cotas dele tenham sido canceladas), a decisão já foi tomada
-  // corretamente pela regra 1 acima — não deixa essa proteção "reabrir" um
-  // Fechado que a cota cancelada já invalidou.
+  // corretamente pela regra 1 acima.
   if(!contratos.length && propostas.some(p=>p.status==='Fechado')){
     if(lead.status !== 'Fechado') applyStatusChange(lead, 'Fechado');
     return;
   }
 
-  // 3. Proposta ativa ATUALIZADA MAIS RECENTEMENTE — cada cliente pode ter
-  // várias propostas com status diferentes; usamos a que mudou por último
-  // para refletir o que está realmente em andamento agora, não a mais antiga
-  // nem qualquer uma "por acaso" encontrada primeiro no array.
+  // 3. Sem contrato, mas com ao menos uma proposta ATIVA → 'Em Negociação',
+  // independentemente do estágio granular específico da(s) proposta(s) ativa(s)
+  // (Rascunho/Enviada/Visualizada/Em negociação/Aceita) e mesmo que existam
+  // outras propostas já perdidas ao lado dela.
   const propostasAtivas = propostas.filter(p=> ['Rascunho','Enviada','Visualizada','Em negociação','Aceita'].includes(p.status));
   if(propostasAtivas.length){
-    propostasAtivas.sort((a,b)=> new Date(b.dataUltimaAlteracao||b.dataCriacao||0) - new Date(a.dataUltimaAlteracao||a.dataCriacao||0));
-    const alvo = mapProposalStatusToLeadStage(propostasAtivas[0].status);
-    if(lead.status !== alvo) applyStatusChange(lead, alvo);
+    if(lead.status !== 'Em Negociação') applyStatusChange(lead, 'Em Negociação');
     return;
   }
 
@@ -3177,6 +3300,7 @@ let leadsPageLimit = 50; // carregamento progressivo — evita renderizar milhar
 let searchTerm = '';
 let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let agendaMode = 'calendar';
+let agendaShowDone = false; // "Mostrar concluídas" — desligado por padrão na Agenda
 let agendaModeUserChosen = false; // true assim que o usuário clicar explicitamente em Calendário/Lista
 let assembleiasTab = 'proximas';
 let comissoesFilters = { administradora:'Todas', assessor:'Todos', competencia:'' };
@@ -3627,6 +3751,24 @@ function viewInicio(){
     <button class="shortcut-btn" id="scOpenLeads"><span class="sb-icon">☰</span>Abrir clientes</button>
   </div>
 
+  ${pend.tarefasAtrasadas.length? `
+  <div class="section-title">Tarefas atrasadas</div>
+  <div class="card" style="padding:0;">
+    ${pend.tarefasAtrasadas.slice().sort((a,b)=>(a.data+a.hora).localeCompare(b.data+b.hora)).map(t=>{
+      const lead = DB.leads.find(l=>l.id===t.clientId);
+      return `<div class="task-row">
+        <div class="tr-hora" style="color:var(--red);font-weight:700;">${fmtDate(t.data)}</div>
+        <div>${lead?lead.nome:'—'}</div>
+        <div>${t.kind}${t.tipo?' · '+t.tipo:''}</div>
+        <div><button class="link-btn" data-opentask="${t.id}">${escapeHtml(t.titulo)}</button></div>
+        <div>${lead?.responsavel||'—'}</div>
+        <div><span class="badge b-perdido">Atrasada</span></div>
+        <div>${lead?`<button class="link-btn" data-openlead="${lead.id}">Abrir cliente</button>`:''}</div>
+        <div><button class="pill-btn sm ghost" data-completetask="${t.id}">Concluir</button></div>
+      </div>`;
+    }).join('')}
+  </div>` : ''}
+
   <div class="section-title">Tarefas do dia</div>
   <div class="card" style="padding:0;">
     ${tarefasHoje.length? tarefasHoje.map(t=>{
@@ -3639,15 +3781,15 @@ function viewInicio(){
         <div>${lead?.responsavel||'—'}</div>
         <div><span class="badge ${t.done?'b-fechado':'b-novo'}">${t.done?'Concluída':'Pendente'}</span></div>
         <div>${lead?`<button class="link-btn" data-openlead="${lead.id}">Abrir cliente</button>`:''}</div>
-        <div><input type="checkbox" data-donetask="${t.id}" ${t.done?'checked':''}></div>
+        <div>${t.done? '<span class="small-note">✓ Concluída</span>' : `<button class="pill-btn sm ghost" data-completetask="${t.id}">Concluir</button>`}</div>
       </div>`;
     }).join('') : '<div class="empty" style="padding:24px;"><b>Nenhuma tarefa para hoje</b>Aproveite para prospectar novos clientes.</div>'}
   </div>
 
   <div class="section-title">Próximas tarefas (30 dias)</div>
   <div class="card" style="padding:0;">
-    ${proximas.length? `<div class="table-wrap" style="border:none;"><table><thead><tr><th>Data</th><th>Hora</th><th>Cliente</th><th>Tipo</th><th>Título</th></tr></thead>
-    <tbody>${proximas.map(t=>{ const lead=DB.leads.find(l=>l.id===t.clientId); return `<tr><td>${fmtDate(t.data)}</td><td>${t.hora||'—'}</td><td>${lead?lead.nome:'—'}</td><td>${t.kind}</td><td>${t.titulo}</td></tr>`; }).join('')}</tbody></table></div>`
+    ${proximas.length? `<div class="table-wrap" style="border:none;"><table><thead><tr><th>Data</th><th>Hora</th><th>Cliente</th><th>Tipo</th><th>Título</th><th></th></tr></thead>
+    <tbody>${proximas.map(t=>{ const lead=DB.leads.find(l=>l.id===t.clientId); return `<tr><td>${fmtDate(t.data)}</td><td>${t.hora||'—'}</td><td>${lead?lead.nome:'—'}</td><td>${t.kind}</td><td>${escapeHtml(t.titulo)}</td><td><button class="pill-btn sm ghost" data-completetask="${t.id}">Concluir</button></td></tr>`; }).join('')}</tbody></table></div>`
     : '<div class="empty" style="padding:20px;">Nenhuma tarefa futura agendada</div>'}
   </div>
 
@@ -4851,7 +4993,7 @@ function renderClientProposalsTab(l){
       <td><span class="badge ${simples?'b-novo':'b-prop'}">${simples?'Simples':'Completa'}</span></td>
       <td>${escapeHtml(p.administradora||'—')}</td><td>${escapeHtml(p.segmento||'—')}</td><td>${fmtMoney(credito)}</td>
       <td><span class="badge b-prop">${escapeHtml(p.status)}</span></td><td>${fmtDate(p.dataCriacao)}</td>
-      <td><button class="link-btn" data-editproposal="${p.id}">Abrir</button>${(simples && !p.contratoGeradoId)?` · <button class="link-btn" data-convertproposal="${p.id}">Converter em completa</button>`:''}</td>
+      <td><button class="link-btn" data-editproposal="${p.id}">Abrir</button>${(simples && !p.contratoGeradoId)?` · <button class="link-btn" data-convertproposal="${p.id}">Converter em completa</button>`:''} · <button class="link-btn" data-deleteproposal="${p.id}" style="color:var(--red);">Excluir</button></td>
     </tr>`;
   }).join('')}</tbody></table></div>`
   : '<div class="empty">Nenhuma proposta cadastrada para este cliente</div>'}`;
@@ -4910,9 +5052,9 @@ function renderClientAgendaTab(l){
   </div>
   <div class="toolbar"><button class="pill-btn sm ghost" id="tabNewTask">+ Compromisso/lembrete</button><button class="pill-btn sm ghost" id="tabNewAssembly">+ Lance/assembleia</button></div>
   <div class="section-title" style="font-size:13px;margin:10px 0 6px;">Compromissos e lembretes</div>
-  ${tasks.length? `<div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Título</th><th></th></tr></thead><tbody>${tasks.map(t=>`<tr style="${t.done?'opacity:.5':''}"><td>${fmtDate(t.data)} ${t.hora}</td><td>${escapeHtml(t.kind)}</td><td><button class="link-btn" data-opentask="${t.id}">${escapeHtml(t.titulo)}</button></td><td><input type="checkbox" data-donetask="${t.id}" ${t.done?'checked':''}></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nenhum item de agenda</div>'}
+  ${tasks.length? `<div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Título</th><th></th></tr></thead><tbody>${tasks.map(t=>`<tr style="${t.done?'opacity:.5':''}"><td>${fmtDate(t.data)} ${t.hora}</td><td>${escapeHtml(t.kind)}</td><td><button class="link-btn" data-opentask="${t.id}" style="${t.done?'text-decoration:line-through;':''}">${escapeHtml(t.titulo)}</button></td><td>${t.done? '<span class="small-note">✓ Concluída</span>' : `<button class="pill-btn sm ghost" data-completetask="${t.id}">Concluir</button>`}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nenhum item de agenda</div>'}
   <div class="section-title" style="font-size:13px;margin:16px 0 6px;">Assembleias / lances</div>
-  ${asms.length? `<div class="table-wrap"><table><thead><tr><th>Data</th><th>Grupo/Cota</th><th>Observação</th></tr></thead><tbody>${asms.map(a=>`<tr><td>${fmtDate(a.data)}</td><td>${escapeHtml(a.grupo||'')}/${escapeHtml(a.cota||'')}</td><td>${escapeHtml((a.observacao||'').slice(0,50))||'—'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nenhuma assembleia vinculada</div>'}`;
+  ${asms.length? `<div class="table-wrap"><table><thead><tr><th>Data</th><th>Grupo/Cota</th><th>Observação</th><th>Aviso de lance</th></tr></thead><tbody>${asms.map(a=>{ const tk=a.taskId?DB.tasks.find(x=>x.id===a.taskId):null; return `<tr><td>${fmtDate(a.data)}</td><td>${escapeHtml(a.grupo||'')}/${escapeHtml(a.cota||'')}</td><td>${escapeHtml((a.observacao||'').slice(0,50))||'—'}</td><td>${tk? (tk.done? '<span class="small-note">✓ Concluído</span>' : `<button class="pill-btn sm ghost" data-completetask="${tk.id}">Concluir aviso</button>`) : '—'}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">Nenhuma assembleia vinculada</div>'}`;
 }
 function renderClientCommissionsTab(l){
   // Um cliente pode ter vários contratos, cada um com sua própria comissão
@@ -4921,7 +5063,8 @@ function renderClientCommissionsTab(l){
   const comissoesDoCliente = contratosDoCliente.map(c=>({contract:c, cm:DB.commissionMeta[c.id]})).filter(x=>x.cm);
   const admBlock = !comissoesDoCliente.length ? '<div class="empty">Este cliente ainda não possui comissão da administradora gerada (disponível após o fechamento de um contrato).</div>' : comissoesDoCliente.map(({contract,cm})=>{
     const recebido = cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
-    return `<div class="small-note" style="margin-bottom:10px;"><b>Contrato ${escapeHtml(contract.numero)}</b> · ${escapeHtml(cm.administradora)} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelasQtd}x · Recebido até agora: ${fmtMoney(recebido)}</div>
+    const divergente = Math.abs(Number(contract.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
+    return `<div class="small-note" style="margin-bottom:10px;"><b>Contrato ${escapeHtml(contract.numero)}</b> · ${escapeHtml(cm.administradora)} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelasQtd}x · Recebido até agora: ${fmtMoney(recebido)}${divergente?' <span class="badge b-perdido">⚠ divergência de crédito</span>':''}</div>
     <button class="pill-btn sm" data-managecomm="${contract.id}" style="margin-bottom:10px;">Gerenciar parcelas — contrato ${escapeHtml(contract.numero)}</button>`;
   }).join('');
   const assessorComms = DB.assessorCommissions.filter(c=>c.leadId===l.id);
@@ -4952,6 +5095,7 @@ function wireClientSubTabHandlers(t, l, renderTab){
       const p = convertSimpleProposalToComplete(btn.dataset.convertproposal);
       if(p){ showToast('Proposta convertida para completa'); openProposalForm(p.id, l.id); }
     });
+    document.querySelectorAll('[data-deleteproposal]').forEach(btn=> btn.onclick=()=>{ if(deleteProposal(btn.dataset.deleteproposal)) renderTab('propostas'); });
   }
   if(t==='contratos'){
     const b=document.getElementById('tabNewContract'); if(b) b.onclick=()=>openContractForm(null, l.id);
@@ -4966,7 +5110,7 @@ function wireClientSubTabHandlers(t, l, renderTab){
   if(t==='agenda'){
     const b1=document.getElementById('tabNewTask'); if(b1) b1.onclick=()=>openTaskForm(null, l.id);
     const b2=document.getElementById('tabNewAssembly'); if(b2) b2.onclick=()=>openAssemblyForm(null, null, l.id);
-    document.querySelectorAll('[data-donetask]').forEach(cb=> cb.onchange=()=>{ const tk=DB.tasks.find(x=>x.id===cb.dataset.donetask); tk.done=cb.checked; saveDB(); renderTab('agenda'); });
+    document.querySelectorAll('[data-completetask]').forEach(btn=> btn.onclick=()=> completeTaskFromUI(btn.dataset.completetask, ()=>renderTab('agenda')));
     document.querySelectorAll('[data-opentask]').forEach(btn=> btn.onclick=()=>openTaskForm(btn.dataset.opentask));
     const en=document.getElementById('editNextActionBtn'); if(en) en.onclick=()=>{
       const box=document.getElementById('nextActionForm'); box.style.display='block';
@@ -5008,7 +5152,7 @@ function viewPropostas(){
     <td>${p.numeroProposta||'—'}</td><td><b>${lead?lead.nome:'—'}</b></td><td>v${p.versao}</td><td>${p.administradora}</td><td>${p.segmento}</td>
     <td class="num">${fmtMoney(p.valorTotal)}</td><td><span class="badge ${proposalBadgeClass(p.status)}">${p.status}</span></td>
     <td>${fmtDate(p.dataCriacao)}</td><td>${p.dataEnvio?fmtDate(p.dataEnvio):'—'}</td>
-    <td><button class="link-btn" data-editproposal="${p.id}" data-leadctx="${p.leadId}">Abrir</button></td>
+    <td><button class="link-btn" data-editproposal="${p.id}" data-leadctx="${p.leadId}">Abrir</button> · <button class="link-btn" data-deleteproposal="${p.id}" style="color:var(--red);">Excluir</button></td>
   </tr>`; }).join('')}</tbody></table></div>` : emptyState('Nenhuma proposta cadastrada','Crie propostas a partir da ficha do cliente ou pelo botão acima.')}`;
 }
 
@@ -5234,6 +5378,7 @@ function openSimpleProposalForm(id, presetLeadId){
       <div class="modal-actions">
         <button class="pill-btn ghost" id="cancelForm">Cancelar</button>
         ${p?`<button class="pill-btn ghost" id="convertBtn">Converter em completa</button>`:''}
+        ${p?`<button class="pill-btn ghost" id="deleteProposalBtn" style="color:var(--red);border-color:var(--red);">Excluir proposta</button>`:''}
         <button class="pill-btn" id="saveSimpleBtn">${p?'Salvar alterações':'Criar proposta'}</button>
       </div>
     `;
@@ -5241,6 +5386,12 @@ function openSimpleProposalForm(id, presetLeadId){
   }
 
   function wire(){
+    const deleteBtn = document.getElementById('deleteProposalBtn');
+    if(deleteBtn) deleteBtn.onclick = ()=>{
+      if(deleteProposal(p.id)){
+        if(selectedClientId===p.leadId) closeNestedFormAndReturn(); else { closeModalFn(); renderView(); }
+      }
+    };
     const statusSelEl = document.getElementById('sp_status');
     const motivoWrapEl = document.getElementById('sp_motivoWrap');
     const toggleMotivo = ()=>{ motivoWrapEl.style.display = statusSelEl.value==='Perdida' ? 'block' : 'none'; };
@@ -5379,22 +5530,10 @@ function openSimpleProposalForm(id, presetLeadId){
   render();
   openModal();
 }
-/** Exclui uma proposta (simples ou completa) que ainda não gerou contrato —
- *  nunca exclui uma proposta já efetivada (protegida, como o resto do
- *  sistema já faz com contratos). Sempre recalcula o status do cliente. */
-function deleteProposal(id){
-  const p = DB.proposals.find(x=>x.id===id);
-  if(!p) return;
-  if(p.contratoGeradoId){ showToast('Esta proposta já gerou um contrato — não pode ser excluída. Exclua o contrato primeiro, se for o caso.'); return; }
-  if(!window.confirm(`Excluir a proposta ${p.numeroProposta}? Esta ação não pode ser desfeita.`)) return;
-  const lead = DB.leads.find(l=>l.id===p.leadId);
-  DB.proposals = DB.proposals.filter(x=>x.id!==id);
-  if(lead){
-    addTimeline(lead, `Proposta ${p.numeroProposta} excluída`);
-    recomputeClientCommercialStatus(lead.id);
-  }
-  saveDB(); renderView(); showToast('Proposta excluída');
-}
+// v24: a função deleteProposal (exclusão de proposta — bloqueio quando há
+// contrato/cota/comissão vinculados, confirmação com cliente/administradora/
+// valor, timeline e recálculo de status) está definida mais abaixo, junto de
+// deleteContract, reaproveitando o mesmo padrão já usado para contratos.
 function openProposalForm(id, presetLeadId){
   let p = id ? DB.proposals.find(x=>x.id===id) : null;
   let draft = p ? cloneDraftFromProposal(p) : newProposalDraft(presetLeadId);
@@ -5431,6 +5570,7 @@ function openProposalForm(id, presetLeadId){
           <button class="pill-btn ghost sm" id="pBtnWhatsCopy">Copiar resumo</button>
           <button class="pill-btn ghost sm" id="pBtnWhatsOpen">Abrir WhatsApp</button>
           ${p? '<button class="pill-btn ghost sm" id="pBtnDuplicate">Duplicar</button>' : ''}
+          ${p? '<button class="pill-btn ghost sm" id="pBtnDeleteProposal" style="color:var(--red);border-color:var(--red);">Excluir proposta</button>' : ''}
         </div>
         <div class="pmf-primary">
           <button class="pill-btn ghost" id="cancelForm">Fechar</button>
@@ -5447,6 +5587,13 @@ function openProposalForm(id, presetLeadId){
     document.getElementById('pBtnWhatsCopy').onclick = doWhatsCopy;
     document.getElementById('pBtnWhatsOpen').onclick = doWhatsOpen;
     const dupBtn = document.getElementById('pBtnDuplicate'); if(dupBtn) dupBtn.onclick = doDuplicate;
+    const delBtn = document.getElementById('pBtnDeleteProposal');
+    if(delBtn) delBtn.onclick = ()=>{
+      if(deleteProposal(p.id)){
+        if(openedFromClientId){ selectedClientTab = 'propostas'; closeNestedFormAndReturn(); }
+        else { closeModalFn(); renderView(); }
+      }
+    };
     document.getElementById('pBtnSaveDraft').onclick = ()=>doSave({statusOverride:'Rascunho'});
     const nvBtn = document.getElementById('pBtnNewVersion'); if(nvBtn) nvBtn.onclick = ()=>doSave({asNewVersion:true});
     document.getElementById('pBtnSend').onclick = ()=>doSave({statusOverride:'Enviada'});
@@ -7479,6 +7626,43 @@ function renderContractsList(){
  *  pode gerar um novo contrato depois, se for o caso. Sempre recalcula o
  *  status comercial do cliente ao final (pode deixar de ser Fechado se este
  *  era o único contrato/cota ativo). */
+/** v24 — Exclusão de proposta (listagem geral, aba Propostas do cliente e
+ *  formulário de edição). Se a proposta já gerou contrato (p.contratoGeradoId),
+ *  a exclusão é BLOQUEADA — nunca há exclusão em cascata de contrato, cota ou
+ *  comissão a partir daqui; o vínculo é explicado para o usuário, que pode
+ *  excluir o contrato pela aba Contratos se realmente quiser desfazer o
+ *  fechamento. Para propostas sem vínculo: exclui só a proposta selecionada,
+ *  registra a ação na timeline do cliente, recalcula o status comercial e
+ *  retorna true (chamador é quem atualiza a tela). Buscar a proposta de novo
+ *  em DB.proposals a cada chamada (em vez de guardar a referência) garante
+ *  que um segundo clique — repetido ou parcial — não tenha mais o que excluir. */
+function deleteProposal(proposalId){
+  const p = DB.proposals.find(x=>x.id===proposalId);
+  if(!p){ showToast('Esta proposta já foi excluída.'); return false; }
+  const lead = DB.leads.find(l=>l.id===p.leadId);
+  if(p.contratoGeradoId){
+    const contract = DB.contracts.find(c=>c.id===p.contratoGeradoId);
+    const cm = contract ? DB.commissionMeta[contract.id] : null;
+    const cotas = contract ? DB.quotas.filter(q=>q.contractId===contract.id) : [];
+    const partes = [];
+    if(contract) partes.push(`o contrato ${contract.numero}`);
+    if(cotas.length) partes.push(`${cotas.length} cota(s)`);
+    if(cm) partes.push('a comissão já gerada');
+    window.alert(`Não é possível excluir esta proposta: ela está vinculada a ${partes.length?partes.join(', '):'um contrato já gerado'}.\n\nA exclusão nunca é feita em cascata — se quiser desfazer o fechamento, exclua o contrato primeiro (aba Contratos do cliente).`);
+    return false;
+  }
+  const credito = p.tipoProposta==='simples' ? (p.creditoPretendido||0) : (p.valorTotal||0);
+  const msg = `Excluir a proposta ${p.numeroProposta?p.numeroProposta+' — ':''}de ${lead?lead.nome:'—'}?\n\nAdministradora: ${p.administradora||'—'}\nValor: ${fmtMoney(credito)}\n\nEsta ação não pode ser desfeita.`;
+  if(!window.confirm(msg)) return false;
+  DB.proposals = DB.proposals.filter(x=>x.id!==proposalId);
+  if(lead){
+    addTimeline(lead, `Proposta ${p.numeroProposta||''} excluída (${p.administradora||'—'}, ${fmtMoney(credito)})`);
+    recomputeClientCommercialStatus(lead.id);
+  }
+  saveDB();
+  showToast('Proposta excluída');
+  return true;
+}
 function deleteContract(contractId){
   const contract = DB.contracts.find(c=>c.id===contractId);
   if(!contract) return;
@@ -7671,14 +7855,18 @@ function openQuotaForm(id, presetContractId, presetLeadId){
   openModal();
 }
 /* ================= AGENDA (tasks unificadas: lembretes + compromissos) ================= */
-function collectAgendaItems(){
+/** includeDone: quando true, inclui tarefas já concluídas (usado pela opção
+ *  "Mostrar concluídas" no calendário e na lista da Agenda) — por padrão
+ *  ficam ocultas, igual à lista. Cada item carrega id+type para permitir
+ *  abrir/concluir/editar/excluir a partir do calendário (openDayModal). */
+function collectAgendaItems(includeDone){
   const items = [];
-  DB.tasks.filter(t=>!t.done).forEach(t=> items.push({date:t.data, hora:t.hora, label:t.titulo, cls:t.kind==='Compromisso'?'evt':'rem', kind:t.kind}));
+  DB.tasks.filter(t=> includeDone || !t.done).forEach(t=> items.push({id:t.id, type:'task', date:t.data, hora:t.hora, label:t.titulo, cls:t.kind==='Compromisso'?'evt':'rem', kind:t.kind, done:!!t.done}));
   // O dia da própria assembleia precisa ter um rótulo claramente diferente do
   // lembrete de aviso (criado em createAssemblyTask, alguns dias ANTES) — antes
   // os dois textos eram quase idênticos ("Lance da assembleia — Grupo X/Cota Y"
   // vs "Lance — Grupo X/Cota Y · cliente") e pareciam o mesmo item duplicado.
-  DB.assemblies.forEach(a=>{ const lead=DB.leads.find(l=>l.id===a.leadId); items.push({date:a.data, hora:'', label:`Assembleia — ${lead?lead.nome:'Cliente'} (Grupo ${a.grupo||'—'}/Cota ${a.cota||'—'})`, cls:'asm', kind:'Assembleia'}); });
+  DB.assemblies.forEach(a=>{ const lead=DB.leads.find(l=>l.id===a.leadId); items.push({id:a.id, type:'assembly', date:a.data, hora:'', label:`Assembleia — ${lead?lead.nome:'Cliente'} (Grupo ${a.grupo||'—'}/Cota ${a.cota||'—'})`, cls:'asm', kind:'Assembleia', done:false}); });
   return items;
 }
 function viewAgenda(){
@@ -7697,7 +7885,7 @@ function renderCalendar(){
   const y = calMonth.getFullYear(), m = calMonth.getMonth();
   const first = new Date(y,m,1); const startWeekday = first.getDay();
   const daysInMonth = new Date(y,m+1,0).getDate();
-  const items = collectAgendaItems();
+  const items = collectAgendaItems(agendaShowDone);
   const cells = [];
   for(let i=startWeekday-1;i>=0;i--){ const d=new Date(y,m,-i); cells.push({date:d, out:true}); }
   for(let dd=1; dd<=daysInMonth; dd++){ cells.push({date:new Date(y,m,dd), out:false}); }
@@ -7705,7 +7893,11 @@ function renderCalendar(){
   const monthLabel = first.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
   const dow = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
   return `<div class="card" style="padding:17px;">
-    <div class="cal-header"><button class="icon-btn" id="calPrev">‹</button><h3>${monthLabel}</h3><button class="icon-btn" id="calNext">›</button></div>
+    <div class="cal-header"><button class="icon-btn" id="calPrev">‹</button><h3>${monthLabel}</h3><button class="icon-btn" id="calNext">›</button>
+      <label class="small-note" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-left:auto;">
+        <input type="checkbox" id="agendaShowDoneToggle" ${agendaShowDone?'checked':''}> Mostrar concluídas
+      </label>
+    </div>
     <div class="cal-grid">
       ${dow.map(d=>`<div class="cal-dow">${d}</div>`).join('')}
       ${cells.map(c=>{
@@ -7714,7 +7906,7 @@ function renderCalendar(){
         const isToday = iso===todayISO();
         return `<div class="cal-cell ${c.out?'out':''} ${isToday?'today':''}" data-day="${iso}">
           <div class="cal-daynum">${c.date.getDate()}</div>
-          ${dayItems.slice(0,3).map(it=>`<div class="cal-chip ${it.cls}">${it.hora?it.hora+' ':''}${it.label}</div>`).join('')}
+          ${dayItems.slice(0,3).map(it=>`<div class="cal-chip ${it.cls}" style="${it.done?'text-decoration:line-through;opacity:.6;':''}">${it.hora?it.hora+' ':''}${it.done?'✓ ':''}${it.label}</div>`).join('')}
           ${dayItems.length>3?`<div class="cal-more">+${dayItems.length-3} mais</div>`:''}
         </div>`;
       }).join('')}
@@ -7722,29 +7914,72 @@ function renderCalendar(){
   </div>`;
 }
 function renderAgendaList(){
-  const list = DB.tasks.slice().sort((a,b)=>(a.done-b.done) || (a.data+a.hora).localeCompare(b.data+b.hora));
-  return `<div class="table-wrap"><table><thead><tr><th></th><th>Data</th><th>Tipo</th><th>Título</th><th>Cliente</th><th></th></tr></thead>
+  const todas = DB.tasks.slice().sort((a,b)=>(a.done-b.done) || (a.data+a.hora).localeCompare(b.data+b.hora));
+  const list = agendaShowDone ? todas : todas.filter(t=>!t.done);
+  const concluidasOcultas = todas.length - list.length;
+  return `
+  <div class="toolbar" style="justify-content:flex-end;margin-bottom:8px;">
+    <label class="small-note" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+      <input type="checkbox" id="agendaShowDoneToggle" ${agendaShowDone?'checked':''}> Mostrar concluídas${!agendaShowDone && concluidasOcultas>0 ? ` (${concluidasOcultas} ocultas)` : ''}
+    </label>
+  </div>
+  <div class="table-wrap"><table><thead><tr><th></th><th>Data</th><th>Tipo</th><th>Título</th><th>Cliente</th><th></th></tr></thead>
   <tbody>${list.length? list.map(t=>{ const lead=DB.leads.find(l=>l.id===t.clientId); const late=!t.done && t.data<todayISO();
-    return `<tr style="${t.done?'opacity:.5':''}"><td><input type="checkbox" data-donetask="${t.id}" ${t.done?'checked':''}></td>
+    return `<tr style="${t.done?'opacity:.55':''}"><td>${t.done? '<span class="badge b-fechado" style="font-size:10px;">✓ Concluída</span>' : `<button class="pill-btn sm ghost" data-completetask="${t.id}">Concluir</button>`}</td>
     <td style="${late?'color:var(--red);font-weight:600':''}">${fmtDate(t.data)} ${t.hora}${late?' (atrasado)':''}</td>
-    <td>${t.kind} · ${t.tipo||''}</td><td><button class="link-btn" data-opentask="${t.id}">${escapeHtml(t.titulo)}</button></td><td>${lead?lead.nome:'—'}</td>
+    <td>${t.kind} · ${t.tipo||''}</td><td><button class="link-btn" data-opentask="${t.id}" style="${t.done?'text-decoration:line-through;color:var(--text-secondary);':''}">${escapeHtml(t.titulo)}</button></td><td>${lead?lead.nome:'—'}</td>
     <td><button class="icon-btn" data-deltask="${t.id}">✕</button></td></tr>`;
-  }).join('') : '<tr><td colspan=6 class="empty">Nenhum item de agenda cadastrado</td></tr>'}</tbody></table></div>`;
+  }).join('') : `<tr><td colspan=6 class="empty">${agendaShowDone ? 'Nenhum item de agenda cadastrado' : 'Nenhum item pendente — tudo em dia!'}</td></tr>`}</tbody></table></div>`;
 }
+/** Modal do dia no calendário — cada item agora é interativo: abrir (edita),
+ *  concluir (só tarefas) e excluir (só tarefas — assembleias usam as regras
+ *  próprias já existentes dentro de openAssemblyForm, que trata recorrência
+ *  corretamente). Reaproveita completeTaskFromUI para o comportamento de
+ *  concluir ser idêntico ao resto do sistema (timeline, toast com desfazer). */
 function openDayModal(iso){
-  const items = collectAgendaItems().filter(it=>it.date===iso).sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
-  document.getElementById('modalBody').innerHTML = `
-    <h2>${fmtDate(iso)}</h2><div class="modal-sub">Compromissos do dia</div>
-    <div class="timeline">${items.length? items.map(it=>`<div class="timeline-item"><div class="timeline-dot"></div><div><div class="t-when">${it.hora?it.hora+' · ':''}${it.kind}</div><div class="t-body">${it.label}</div></div></div>`).join('') : '<div class="empty">Nenhum compromisso neste dia</div>'}</div>
-    <div class="modal-actions" style="justify-content:flex-start;">
-      <button class="pill-btn ghost" id="dayAddTask">+ Compromisso/lembrete</button>
-      <button class="pill-btn ghost" id="dayAddAssembly">+ Lance/Assembleia</button>
-    </div>
-    <div class="modal-actions"><button class="pill-btn ghost" id="closeModal">Fechar</button></div>
-  `;
-  document.getElementById('closeModal').onclick = closeModalFn;
-  document.getElementById('dayAddTask').onclick = ()=>openTaskForm(null, null, iso);
-  document.getElementById('dayAddAssembly').onclick = ()=>openAssemblyForm(null, iso, null);
+  function render(){
+    const items = collectAgendaItems(agendaShowDone).filter(it=>it.date===iso).sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+    document.getElementById('modalBody').innerHTML = `
+      <h2>${fmtDate(iso)}</h2><div class="modal-sub">Compromissos do dia</div>
+      <div class="timeline">${items.length? items.map(it=>`<div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div style="flex:1;min-width:0;">
+            <div class="t-when">${it.hora?it.hora+' · ':''}${it.kind}</div>
+            <div class="t-body" style="${it.done?'text-decoration:line-through;color:var(--text-secondary);':''}">${it.done?'✓ ':''}${escapeHtml(it.label)}</div>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+              <button class="link-btn" data-dayopen="${it.type}:${it.id}">Abrir</button>
+              ${it.type==='task' && !it.done ? `<button class="link-btn" data-daycomplete="${it.id}">Concluir</button>` : ''}
+              ${it.type==='task' ? `<button class="link-btn" data-daydelete="${it.id}" style="color:var(--red);">Excluir</button>` : ''}
+            </div>
+          </div>
+        </div>`).join('') : '<div class="empty">Nenhum compromisso neste dia</div>'}</div>
+      <div class="modal-actions" style="justify-content:flex-start;">
+        <button class="pill-btn ghost" id="dayAddTask">+ Compromisso/lembrete</button>
+        <button class="pill-btn ghost" id="dayAddAssembly">+ Lance/Assembleia</button>
+      </div>
+      <div class="modal-actions"><button class="pill-btn ghost" id="closeModal">Fechar</button></div>
+    `;
+    wire();
+  }
+  function wire(){
+    document.getElementById('closeModal').onclick = closeModalFn;
+    document.getElementById('dayAddTask').onclick = ()=>openTaskForm(null, null, iso);
+    document.getElementById('dayAddAssembly').onclick = ()=>openAssemblyForm(null, iso, null);
+    document.querySelectorAll('[data-dayopen]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const [type,id] = btn.dataset.dayopen.split(':');
+        if(type==='task') openTaskForm(id);
+        else openAssemblyForm(id);
+      };
+    });
+    document.querySelectorAll('[data-daycomplete]').forEach(btn=> btn.onclick=()=> completeTaskFromUI(btn.dataset.daycomplete, render));
+    document.querySelectorAll('[data-daydelete]').forEach(btn=> btn.onclick=()=>{
+      if(!window.confirm('Excluir este item da agenda? Esta ação não pode ser desfeita.')) return;
+      DB.tasks = DB.tasks.filter(t=>t.id!==btn.dataset.daydelete);
+      saveDB(); render();
+    });
+  }
+  render();
   openModal();
 }
 function openTaskForm(id, presetLeadId, presetDate){
@@ -8370,7 +8605,8 @@ function viewComissoes(){
     const lead = DB.leads.find(l=>l.id===c.leadId);
     const recebido = cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
     const proxima = cm.parcelas.find(p=>p.status!=='Recebida');
-    return `<tr><td><b>${lead?lead.nome:'—'}</b></td><td>${escapeHtml(c.numero)}</td><td>${cm.administradora}</td><td>${lead?(lead.responsavel||'—'):'—'}</td><td>${fmtMoney(cm.valorVenda)}</td><td>${cm.percentual}%</td>
+    const divergente = Math.abs(Number(c.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
+    return `<tr><td><b>${lead?lead.nome:'—'}</b></td><td>${escapeHtml(c.numero)}</td><td>${cm.administradora}</td><td>${lead?(lead.responsavel||'—'):'—'}</td><td>${fmtMoney(cm.valorVenda)}${divergente?' <span class="badge b-perdido">⚠</span>':''}</td><td>${cm.percentual}%</td>
       <td>${fmtMoney(cm.totalPrevisto)}</td><td>${fmtMoney(recebido)}</td><td>${proxima?fmtDate(proxima.dataPrevista):'Todas recebidas'}</td>
       <td><button class="link-btn" data-editcomm="${c.id}">Ver parcelas</button></td></tr>`;
   }).join('') : '<tr><td colspan=10 class="empty">Nenhuma comissão gerada com os filtros atuais</td></tr>'}</tbody></table></div>
@@ -8448,55 +8684,123 @@ function openAssessorCommissionForm(id, leadId){
   };
   openModal();
 }
-/** Item — permite ajustar uma comissão já configurada: percentual, número de
- *  parcelas, valor e data previstos de cada parcela individualmente. Parcelas
- *  já marcadas "Recebida" nunca são sobrescritas por um recálculo — o que já
- *  foi de fato recebido é histórico e fica intocado. */
+/** v24 — Redistribui o TOTAL PREVISTO de uma comissão entre suas parcelas,
+ *  preservando integralmente qualquer parcela já marcada "Recebida" (nunca
+ *  sobrescrita). O saldo pendente (total novo menos o que já foi efetivamente
+ *  recebido nas parcelas "Recebida") é o único valor redistribuído entre as
+ *  parcelas ainda não recebidas, com fechamento exato de centavos
+ *  (splitCentsExact). `dateForIndex(n)` decide a data prevista de cada
+ *  parcela pendente pelo número absoluto da parcela (1-based) — parcelas já
+ *  recebidas mantêm sua própria data, nunca recalculada aqui. */
+function redistributePendingCommission(parcelasAntigas, novoNParc, novoTotalPrevisto, dateForIndex){
+  const recebidas = parcelasAntigas.filter(p=>p.status==='Recebida');
+  const recebidoTotal = recebidas.reduce((s,p)=> s + Number(p.valorRecebido!=null && p.valorRecebido!=='' ? p.valorRecebido : p.valor), 0);
+  const pendentesQtd = Math.max(novoNParc - recebidas.length, 0);
+  const saldoPendente = Math.max(Math.round((novoTotalPrevisto - recebidoTotal) * 100) / 100, 0);
+  const valoresPendentes = pendentesQtd>0 ? splitCentsExact(saldoPendente, pendentesQtd) : [];
+  const novasParcelas = [];
+  let pendIdx = 0;
+  for(let i=1;i<=novoNParc;i++){
+    const antiga = parcelasAntigas.find(p=>p.n===i);
+    if(antiga && antiga.status==='Recebida'){
+      novasParcelas.push(Object.assign({}, antiga)); // preserva integralmente o que já foi de fato recebido
+    } else {
+      novasParcelas.push({ n:i, dataPrevista: dateForIndex(i), valor: valoresPendentes[pendIdx]!==undefined?valoresPendentes[pendIdx]:0, status:'Pendente', dataRecebida:'', valorRecebido:0 });
+      pendIdx++;
+    }
+  }
+  return novasParcelas;
+}
+/** Item — permite ajustar uma comissão já configurada: crédito/base de
+ *  cálculo, percentual, número de parcelas, valor e data previstos de cada
+ *  parcela individualmente, além de status/valor/data recebida. Parcelas já
+ *  marcadas "Recebida" nunca são sobrescritas por um recálculo — o que já
+ *  foi de fato recebido é histórico e fica intocado; qualquer recálculo
+ *  redistribui somente o saldo ainda pendente. */
 function openCommissionForm(contractId){
   const contract = DB.contracts.find(x=>x.id===contractId);
   const cm = DB.commissionMeta[contractId];
   const l = DB.leads.find(x=>x.id===(cm?cm.leadId:(contract?contract.leadId:null)));
   let ajustando = false;
 
-  function recalcularComissao(novoPct, novoNParc, novaData1){
-    const totalPrevisto = Math.round(cm.valorVenda * novoPct/100 * 100) / 100;
-    const valoresParcelas = splitCentsExact(totalPrevisto, novoNParc);
-    const parcelasAntigas = cm.parcelas;
-    const novasParcelas = [];
-    for(let i=1;i<=novoNParc;i++){
-      const antiga = parcelasAntigas.find(p=>p.n===i);
-      if(antiga && antiga.status==='Recebida'){
-        novasParcelas.push(Object.assign({}, antiga)); // preserva o que já foi de fato recebido
-      } else {
-        novasParcelas.push({ n:i, dataPrevista: addMonths(novaData1, i-1), valor: valoresParcelas[i-1], status:'Pendente', dataRecebida:'', valorRecebido:0 });
-      }
-    }
+  function voltar(){
+    // v24: se esta tela foi aberta de dentro da ficha do cliente (aba
+    // Comissões), volta para lá, na mesma aba — nunca fecha para a lista
+    // geral sozinha. Se foi aberta do módulo global Comissões, cai no
+    // comportamento padrão (fechar modal + renderizar a view atual).
+    selectedClientTab = 'comissoes';
+    closeNestedFormAndReturn();
+  }
+
+  function recalcularComissao(novoPct, novoNParc, novoValorVenda, novaData1){
+    const totalPrevisto = Math.round(novoValorVenda * novoPct/100 * 100) / 100;
+    const novasParcelas = redistributePendingCommission(cm.parcelas, novoNParc, totalPrevisto, i=>addMonths(novaData1, i-1));
+    cm.valorVenda = novoValorVenda;
     cm.percentual = novoPct;
     cm.parcelasQtd = novoNParc;
-    cm.totalPrevisto = novasParcelas.reduce((s,p)=>s+p.valor,0);
+    cm.totalPrevisto = totalPrevisto;
     cm.parcelas = novasParcelas;
     cm.ajustadaManualmente = true;
   }
 
+  /** Botão "Recalcular pela regra atual": usa o CRÉDITO e a ADMINISTRADORA
+   *  ATUAIS do contrato (não os que a comissão tinha quando foi gerada),
+   *  pede confirmação explícita e nunca duplica — sempre atualiza o mesmo
+   *  registro DB.commissionMeta[contractId], a única fonte compartilhada
+   *  pela ficha do cliente, pelo módulo global e pelo contrato. */
+  function recalcularPelaRegraAtual(){
+    if(!contract){ showToast('Contrato não encontrado — não é possível recalcular pela regra.'); return; }
+    const administradora = contract.administradora;
+    const rule = administradora ? DB.settings.commissionRules[administradora] : null;
+    if(!rule){ showToast(`Nenhuma regra de comissão configurada para "${administradora||'—'}" em Configurações → Comissões.`); return; }
+    if(!(Number(contract.valorContratado)>0)){ showToast('Este contrato não tem um valor contratado positivo.'); return; }
+    const parcelasRecebidas = cm.parcelas.filter(p=>p.status==='Recebida').length;
+    if(parcelasRecebidas > rule.parcelas){ showToast(`Já existem ${parcelasRecebidas} parcela(s) marcada(s) como Recebida — a regra atual (${rule.parcelas}x) tem menos parcelas que isso. Ajuste manualmente o número de parcelas antes.`); return; }
+    const ok = window.confirm(`Recalcular esta comissão pela regra atual de ${administradora} (${rule.pct}% em ${rule.parcelas}x, sobre ${fmtMoney(contract.valorContratado)})?\n\nParcelas já recebidas serão preservadas — só o saldo ainda pendente é redistribuído.`);
+    if(!ok) return;
+    const totalPrevisto = Math.round(Number(contract.valorContratado) * rule.pct/100 * 100) / 100;
+    const novasParcelas = redistributePendingCommission(cm.parcelas, rule.parcelas, totalPrevisto, i=>addMonths(contract.dataContratacao||todayISO(), rule.inicioMesesApos + (i-1)));
+    cm.administradora = administradora;
+    cm.percentual = rule.pct;
+    cm.parcelasQtd = rule.parcelas;
+    cm.valorVenda = Number(contract.valorContratado);
+    cm.totalPrevisto = totalPrevisto;
+    cm.parcelas = novasParcelas;
+    cm.regraOrigem = {pct:rule.pct, parcelas:rule.parcelas, inicioMesesApos:rule.inicioMesesApos};
+    cm.ajustadaManualmente = false; // recalculada pela regra padrão vigente, não é mais um ajuste manual
+    if(l) addTimeline(l, `Comissão recalculada pela regra atual de ${administradora}${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
+    saveDB();
+    ajustando = false;
+    render();
+    showToast('Comissão recalculada pela regra atual — parcelas já recebidas foram preservadas.');
+  }
+
   function render(){
+    const divergente = contract && Math.abs(Number(contract.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
     document.getElementById('modalBody').innerHTML = `
       <h2>Comissão — ${l?l.nome:'—'}${contract?` · Contrato ${escapeHtml(contract.numero)}`:''}</h2>
       <div class="modal-sub">${escapeHtml(cm.administradora)} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelas.length}x${cm.ajustadaManualmente?' · <b>ajustada manualmente</b>':''}</div>
+      ${divergente ? `<div class="dup-warning" style="margin-bottom:12px;">⚠ O valor contratado atual (${fmtMoney(contract.valorContratado)}) é diferente da base de cálculo desta comissão (${fmtMoney(cm.valorVenda)}). Nada foi recalculado automaticamente — use "Recalcular pela regra atual" abaixo (ou "Ajustar comissão") para atualizar; parcelas já recebidas são preservadas.</div>` : ''}
+      <div class="toolbar" style="justify-content:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        ${!ajustando? `<button class="pill-btn sm ghost" id="cf_ajustar">Ajustar comissão</button>` : ''}
+        <button class="pill-btn sm ghost" id="cf_recalc_regra">Recalcular pela regra atual</button>
+      </div>
       ${ajustando ? `
       <div class="card" style="padding:14px;margin-bottom:14px;">
         <h3 style="margin:0 0 10px;font-size:13px;">Ajustar configuração da comissão</h3>
         <div class="form-grid cols3">
+          <div class="field"><label>Crédito / base de cálculo (R$)</label><input data-money id="cf_valorvenda" value="${moneyStr(cm.valorVenda)}"></div>
           <div class="field"><label>% Comissão</label><input type="number" step="0.1" id="cf_pct" value="${cm.percentual}"></div>
           <div class="field"><label>Nº de parcelas</label><input type="number" id="cf_nparc" value="${cm.parcelasQtd}"></div>
           <div class="field"><label>Data da 1ª parcela</label><input type="date" id="cf_data1" value="${cm.parcelas[0]?cm.parcelas[0].dataPrevista:todayISO()}"></div>
         </div>
-        <div class="small-note" style="margin:8px 0 0;">Recalcula as parcelas ainda Pendentes a partir da data da 1ª parcela informada acima, uma por mês. Parcelas já marcadas "Recebida" nunca são alteradas.</div>
+        <div class="small-note" style="margin:8px 0 0;">Recalcula o total previsto (crédito × percentual) e redistribui somente o saldo ainda PENDENTE entre as parcelas ainda não recebidas, a partir da data da 1ª parcela informada acima, uma por mês. Parcelas já marcadas "Recebida" nunca são alteradas.</div>
         <div class="modal-actions" style="margin-top:10px;">
           <button class="pill-btn ghost sm" id="cf_cancelar_ajuste">Cancelar</button>
           <button class="pill-btn sm" id="cf_aplicar_ajuste">Recalcular parcelas</button>
         </div>
       </div>
-      ` : `<button class="pill-btn sm ghost" id="cf_ajustar" style="margin-bottom:12px;">Ajustar comissão</button>`}
+      ` : ''}
       <div class="table-wrap"><table class="parcel-table">
       <thead><tr><th>#</th><th>Data prevista</th><th>Valor previsto</th><th>Status</th><th>Valor recebido</th><th>Data recebida</th></tr></thead>
       <tbody>${cm.parcelas.map((p,i)=>`<tr>
@@ -8516,25 +8820,30 @@ function openCommissionForm(contractId){
   }
 
   function wire(){
-    document.getElementById('closeModal').onclick = closeModalFn;
+    document.getElementById('closeModal').onclick = voltar;
     const ajustarBtn = document.getElementById('cf_ajustar');
     if(ajustarBtn) ajustarBtn.onclick = ()=>{ ajustando = true; render(); };
+    const recalcRegraBtn = document.getElementById('cf_recalc_regra');
+    if(recalcRegraBtn) recalcRegraBtn.onclick = recalcularPelaRegraAtual;
     const cancelarAjusteBtn = document.getElementById('cf_cancelar_ajuste');
     if(cancelarAjusteBtn) cancelarAjusteBtn.onclick = ()=>{ ajustando = false; render(); };
     const aplicarAjusteBtn = document.getElementById('cf_aplicar_ajuste');
     if(aplicarAjusteBtn) aplicarAjusteBtn.onclick = ()=>{
+      const novoValorVenda = moneyVal('cf_valorvenda');
       const novoPct = Number(document.getElementById('cf_pct').value);
       const novoNParc = Math.round(Number(document.getElementById('cf_nparc').value));
       const novaData1 = document.getElementById('cf_data1').value;
+      if(!(novoValorVenda>0)){ showToast('Informe um crédito/base de cálculo maior que zero.'); return; }
       if(!(novoPct>=0)){ showToast('Percentual inválido.'); return; }
       if(!(novoNParc>0) || !Number.isInteger(novoNParc)){ showToast('Número de parcelas deve ser um inteiro maior que zero.'); return; }
       if(!novaData1){ showToast('Informe a data da 1ª parcela.'); return; }
       const parcelasRecebidas = cm.parcelas.filter(p=>p.status==='Recebida').length;
       if(parcelasRecebidas > novoNParc){ showToast(`Já existem ${parcelasRecebidas} parcela(s) marcada(s) como Recebida — o número de parcelas não pode ser menor que isso.`); return; }
-      recalcularComissao(novoPct, novoNParc, novaData1);
+      recalcularComissao(novoPct, novoNParc, novoValorVenda, novaData1);
+      saveDB();
       ajustando = false;
       render();
-      showToast('Comissão recalculada — parcelas pendentes atualizadas, parcelas já recebidas preservadas.');
+      showToast('Comissão recalculada — saldo pendente redistribuído, parcelas já recebidas preservadas.');
     };
     const recalcDatasBtn = document.getElementById('btnRecalcularDatas');
     if(recalcDatasBtn) recalcDatasBtn.onclick = ()=>{
@@ -8572,7 +8881,9 @@ function openCommissionForm(contractId){
       // podem ter sido ajustados parcela a parcela, não só via "Ajustar comissão".
       cm.totalPrevisto = cm.parcelas.reduce((s,p)=>s+p.valor, 0);
       if(novasRecebidas>0 && l) addTimeline(l, `${novasRecebidas} parcela(s) de comissão marcada(s) como recebida(s)${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
-      saveDB(); closeModalFn(); renderView(); showToast('Parcelas atualizadas');
+      saveDB();
+      showToast('Parcelas atualizadas');
+      voltar();
     };
   }
 
@@ -9362,9 +9673,14 @@ function attachViewHandlers(){
   const btnReceivedQueue=document.getElementById('btnReceivedQueue'); if(btnReceivedQueue) btnReceivedQueue.onclick = openReceivedLeadsQueue;
   c.querySelectorAll('[data-mode]').forEach(btn=> btn.onclick=()=>{ leadsViewMode=btn.dataset.mode; renderView(); });
   if(currentView==='leads' && leadsViewMode==='kanban'){
+    // v24: o status do cliente é sempre DERIVADO de propostas/contratos/cotas
+    // (recomputeClientCommercialStatus) — arrastar o card não altera mais o
+    // status diretamente, pois isso ficaria inconsistente assim que a base
+    // fosse recalculada. O Kanban aqui é só uma visualização; para mudar o
+    // rumo do cliente, edite a proposta (ou registre a perda por lá).
     attachGenericKanbanDnD((kid,newStatus)=>{
       const lead=DB.leads.find(l=>l.id===kid);
-      if(lead && lead.status!==newStatus){ if(newStatus==='Perdido'){ openQuickLossForm(lead); } else { applyStatusChange(lead,newStatus); saveDB(); renderView(); } }
+      if(lead && lead.status!==newStatus){ showToast('O status do cliente agora é calculado automaticamente a partir das propostas e contratos — edite a proposta correspondente para mudar o estágio.'); renderView(); }
     });
   }
 
@@ -9386,12 +9702,15 @@ function attachViewHandlers(){
   const calPrev=document.getElementById('calPrev'); if(calPrev) calPrev.onclick=()=>{ calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()-1,1); renderView(); };
   const calNext=document.getElementById('calNext'); if(calNext) calNext.onclick=()=>{ calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+1,1); renderView(); };
   c.querySelectorAll('[data-day]').forEach(cell=> cell.onclick=()=>openDayModal(cell.dataset.day));
-  c.querySelectorAll('[data-donetask]').forEach(cb=> cb.onchange=()=>{ const tk=DB.tasks.find(t=>t.id===cb.dataset.donetask); tk.done=cb.checked; saveDB(); renderView(); });
+  c.querySelectorAll('[data-completetask]').forEach(btn=> btn.onclick=()=> completeTaskFromUI(btn.dataset.completetask, renderView));
+  const agendaToggle = document.getElementById('agendaShowDoneToggle');
+  if(agendaToggle) agendaToggle.onchange = ()=>{ agendaShowDone = agendaToggle.checked; renderView(); };
   c.querySelectorAll('[data-opentask]').forEach(btn=> btn.onclick=()=>openTaskForm(btn.dataset.opentask));
   c.querySelectorAll('[data-deltask]').forEach(btn=> btn.onclick=()=>{ DB.tasks = DB.tasks.filter(t=>t.id!==btn.dataset.deltask); saveDB(); renderView(); });
 
   const bnp=document.getElementById('btnNewProposalTop'); if(bnp) bnp.onclick=()=>openNewProposalChooser(null);
   c.querySelectorAll('[data-editproposal]').forEach(btn=> btn.onclick=()=>openProposalByIdSmart(btn.dataset.editproposal, btn.dataset.leadctx));
+  c.querySelectorAll('[data-deleteproposal]').forEach(btn=> btn.onclick=()=>{ if(deleteProposal(btn.dataset.deleteproposal)) renderView(); });
 
   const bnpromo=document.getElementById('btnNewPromo'); if(bnpromo) bnpromo.onclick=()=>openPromoForm(null);
   c.querySelectorAll('[data-editpromo]').forEach(btn=> btn.onclick=()=>openPromoForm(btn.dataset.editpromo));
@@ -9578,7 +9897,14 @@ function wireConfigHandlers(c){
     DB.groupRules.splice(Number(btn.dataset.delgrouprule),1); saveDB(); renderView();
   });
   c.querySelectorAll('[data-removechip]').forEach(btn=> btn.onclick=()=>{ const [listKey,idx]=btn.dataset.removechip.split('::'); DB.settings[listKey].splice(Number(idx),1); saveDB(); renderView(); });
-  c.querySelectorAll('[data-addchip]').forEach(btn=> btn.onclick=()=>{ const listKey=btn.dataset.addchip; const input=document.getElementById('add_'+listKey); const val=input.value.trim(); if(!val) return; DB.settings[listKey].push(val); saveDB(); renderView(); });
+  c.querySelectorAll('[data-addchip]').forEach(btn=> btn.onclick=()=>{
+    const listKey=btn.dataset.addchip; const input=document.getElementById('add_'+listKey); const val=(input.value||'').trim(); if(!val) return;
+    const jaExiste = DB.settings[listKey].some(v=> normalizeStr(typeof v==='object'?(v&&(v.nome||v.name))||'':v) === normalizeStr(val));
+    if(jaExiste){ showToast('Este item já está cadastrado.'); return; }
+    DB.settings[listKey].push(val);
+    if(listKey==='administradoras') normalizeAdministradorasList(); // garante formato canônico (string) mesmo em bases antigas
+    saveDB(); renderView();
+  });
   const saveMetaBtn=document.getElementById('saveMetaBtn'); if(saveMetaBtn) saveMetaBtn.onclick=()=>{ DB.settings.monthGoal=moneyVal('cfg_meta'); saveDB(); showToast('Meta salva'); renderView(); };
   const saveNomeBtn=document.getElementById('saveNomeBtn'); if(saveNomeBtn) saveNomeBtn.onclick=()=>{
     const nome = stripDangerousChars(document.getElementById('cfg_nome').value.trim()) || 'Analista de Consórcios';
