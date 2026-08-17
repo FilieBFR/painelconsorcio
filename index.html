@@ -1367,8 +1367,33 @@ function defaultSettings(){
       'Mapfre':       {pct:4,   parcelas:12, inicioMesesApos:1}
     },
     followupDays: { propostaEnviada:2, semResposta:5 },
-    alertDays: { alerta:7, esfriando:15, reativacao:30 }
+    alertDays: { alerta:7, esfriando:15, reativacao:30 },
+    // v29 — calendários OFICIAIS de assembleia por ano+administradora+segmento
+    // (ver defaultAssemblyCalendars). Editável em Configurações; nunca
+    // reescrito por cima de edições do usuário depois do primeiro carregamento
+    // (ver normalizeDB — só preenche quando a chave não existe de jeito nenhum).
+    assemblyCalendars: defaultAssemblyCalendars()
   };
+}
+/** v29 — Calendários oficiais de assembleia cadastrados para 2026, exatamente
+ *  como publicados pelas administradoras (nunca por addMonths/dia fixo — a
+ *  recorrência oficial usa só estas datas). "Todos" em segmento significa
+ *  que a mesma data vale para qualquer segmento daquela administradora
+ *  (caso Porto Seguro). Mapfre e qualquer administradora/segmento/ano sem
+ *  registro aqui permanecem em cadastro manual — nunca inventamos datas. */
+function defaultAssemblyCalendars(){
+  return [
+    { id:'cal_cnp_imovel_2026', ano:2026, administradora:'CNP', segmento:'Imóvel', horario:'15:00',
+      datas:['2026-01-19','2026-02-19','2026-03-16','2026-04-20','2026-05-18','2026-06-15','2026-07-20','2026-08-17','2026-09-21','2026-10-19','2026-11-16','2026-12-21'] },
+    { id:'cal_cnp_veiculo_2026', ano:2026, administradora:'CNP', segmento:'Veículo', horario:'15:00',
+      datas:['2026-01-26','2026-02-26','2026-03-23','2026-04-27','2026-05-25','2026-06-22','2026-07-27','2026-08-24','2026-09-28','2026-10-26','2026-11-23','2026-12-28'] },
+    { id:'cal_porto_todos_2026', ano:2026, administradora:'Porto Seguro', segmento:'Todos', horario:'',
+      datas:['2026-01-21','2026-02-23','2026-03-20','2026-04-22','2026-05-21','2026-06-19','2026-07-21','2026-08-21','2026-09-21','2026-10-21','2026-11-23','2026-12-21'] },
+    { id:'cal_embracon_imovel_2026', ano:2026, administradora:'Embracon', segmento:'Imóvel', horario:'',
+      datas:['2026-01-20','2026-02-24','2026-03-20','2026-04-20','2026-05-20','2026-06-19','2026-07-21','2026-08-21','2026-09-18','2026-10-20','2026-11-19','2026-12-18'] },
+    { id:'cal_embracon_veiculo_2026', ano:2026, administradora:'Embracon', segmento:'Veículo', horario:'',
+      datas:['2026-01-23','2026-02-25','2026-03-25','2026-04-24','2026-05-25','2026-06-25','2026-07-23','2026-08-25','2026-09-24','2026-10-23','2026-11-26','2026-12-28'] }
+  ];
 }
 const defaultDB = () => ({
   leads: [],          // clientes/leads (entidade principal)
@@ -1560,6 +1585,26 @@ function resolveContractAdministradora(contract){
   if(adminsUnicas.length===1) return adminsUnicas[0];
   return '';
 }
+/** v29/v30 — Segmento (Imóvel/Veículo/Serviços/Pesados) de um CONTRATO,
+ *  para localizar o calendário oficial de assembleia correto. Precedência:
+ *   1. contract.segmento, se gravado (contrato manual, a partir da v30);
+ *   2. proposta vinculada por contract.proposalId;
+ *   3. proposta geradora (contratoGeradoId === contract.id).
+ *  Cotas não guardam segmento próprio nesta base, então nunca é consultado
+ *  aqui. Retorna sempre uma STRING (nunca undefined/null) — "" quando não
+ *  identificável (contrato antigo sem segmento e sem proposta associada). */
+function resolveContractSegmento(contract){
+  if(!contract) return '';
+  const direto = (contract.segmento||'').trim();
+  if(direto) return direto;
+  if(contract.proposalId){
+    const p = DB.proposals.find(x=>x.id===contract.proposalId);
+    if(p && p.segmento) return String(p.segmento).trim();
+  }
+  const propostaGeradora = DB.proposals.find(p=>p.contratoGeradoId===contract.id);
+  if(propostaGeradora && propostaGeradora.segmento) return String(propostaGeradora.segmento).trim();
+  return '';
+}
 /** v28 — Fonte única da administradora de uma COMISSÃO
  *  (DB.commissionMeta[contractId]). PRIORIDADE INVERTIDA em relação à v26:
  *  quando o CONTRATO tem uma administradora válida (resolvida por
@@ -1608,20 +1653,27 @@ function resolveCommissionAdministradora(cm, contract){
  *  segunda passagem cm.administradora já bate com o contrato, então nem o
  *  preenchimento nem a sinalização de divergência disparam de novo.
  *
- *  Retorna `true` quando pelo menos um contrato ou comissão teve sua
- *  administradora EFETIVAMENTE corrigida (preenchida ou sincronizada com o
- *  contrato) — inclusive quando o que mudou foi só a sinalização de
- *  divergência (regraDesatualizada) pela primeira vez. `false` quando nada
- *  mudou de verdade (inclusive limpeza de lixo bruto tipo "undefined" que
- *  não resolveu para nada). Esse retorno é o que permite loadDB() decidir
- *  se vale a pena chamar saveDB() — nunca é a própria função quem salva. */
+ *  v30 — a limpeza de lixo bruto (ex.: string literal "undefined"/"null")
+ *  TAMBÉM conta como alteração real para fins de persistência, mesmo
+ *  quando o resultado semântico continua vazio (sem administradora
+ *  identificável): o valor armazenado mudou de fato (de uma string
+ *  corrompida para "" — nunca mais "undefined"/"null" no storage), e isso
+ *  precisa ser persistido uma única vez, com o segundo carregamento
+ *  permanecendo idempotente (na 2ª passagem o valor bruto já é igual ao
+ *  novo, então nada é escrito e alterou fica false).
+ *
+ *  Retorna `true` quando pelo menos um contrato ou comissão teve seu campo
+ *  administradora EFETIVAMENTE reescrito (preenchido, sincronizado com o
+ *  contrato, ou só limpo de lixo bruto) — `false` quando nada mudou de
+ *  verdade. Esse retorno é o que permite loadDB() decidir se vale a pena
+ *  chamar saveDB() — nunca é a própria função quem salva. */
 function migrarAdministradorasDeContratosEComissoes(){
   let alterou = false;
   DB.contracts.forEach(c=>{
     const antes = safeAdminString(c.administradora);
     const novo = antes || resolveContractAdministradora(c);
-    if(novo !== antes) alterou = true; // correção real: o valor semântico mudou
-    if(c.administradora !== novo) c.administradora = novo; // também limpa lixo bruto (ex.: string "undefined") mesmo sem contar como correção
+    if(c.administradora !== novo) alterou = true; // qualquer escrita real conta — inclui limpar "undefined"/"null" brutos
+    c.administradora = novo;
   });
   Object.values(DB.commissionMeta).forEach(cm=>{
     const contract = cm.contractId ? DB.contracts.find(c=>c.id===cm.contractId) : null;
@@ -1638,8 +1690,8 @@ function migrarAdministradorasDeContratosEComissoes(){
         cm.regraDesatualizada = true;
       }
     }
-    if(novo !== antes) alterou = true; // preenchimento simples (comissão antes vazia) ou correção de divergência
-    if(cm.administradora !== novo) cm.administradora = novo;
+    if(cm.administradora !== novo) alterou = true; // qualquer escrita real conta — inclui limpar "undefined"/"null" brutos
+    cm.administradora = novo;
   });
   return alterou;
 }
@@ -5232,7 +5284,8 @@ function renderClientCommissionsTab(l){
     }
     const recebido = cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
     const divergente = Math.abs(Number(contract.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
-    return `<div class="small-note" style="margin-bottom:10px;"><b>Contrato ${escapeHtml(contract.numero)}</b> · ${displayAdmin(resolveCommissionAdministradora(cm, contract))} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelasQtd}x · Recebido até agora: ${fmtMoney(recebido)}${divergente?' <span class="badge b-perdido">⚠ divergência de crédito</span>':''}</div>
+    const prestamistaTxt = (cm.prestamista && cm.prestamista.ativo) ? ` · Prestamista: ${cm.prestamista.percentual}% sobre ${fmtMoney(cm.prestamista.baseCalculo)} = ${fmtMoney(cm.prestamista.totalPrevisto)} em ${cm.prestamista.parcelasQtd}x` : '';
+    return `<div class="small-note" style="margin-bottom:10px;"><b>Contrato ${escapeHtml(contract.numero)}</b> · ${displayAdmin(resolveCommissionAdministradora(cm, contract))} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelasQtd}x · Recebido até agora: ${fmtMoney(recebido)}${divergente?' <span class="badge b-perdido">⚠ divergência de crédito</span>':''}${prestamistaTxt}</div>
     <button class="pill-btn sm" data-managecomm="${contract.id}" style="margin-bottom:10px;">Gerenciar parcelas — contrato ${escapeHtml(contract.numero)}</button>`;
   }).join('');
   const assessorComms = DB.assessorCommissions.filter(c=>c.leadId===l.id);
@@ -7885,14 +7938,23 @@ function deleteContract(contractId){
   const assembleias = DB.assemblies.filter(a=>a.contractId===contractId);
   const parcelasRecebidas = cm ? cm.parcelas.filter(p=>p.status==='Recebida') : [];
   const valorRecebido = parcelasRecebidas.reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
+  // v29 — prestamista tem seu próprio alerta de parcelas recebidas (nunca
+  // misturado ao total da comissão principal acima).
+  const temPrestamista = !!(cm && cm.prestamista && cm.prestamista.ativo);
+  const parcelasRecebidasPrestamista = temPrestamista ? cm.prestamista.parcelas.filter(p=>p.status==='Recebida') : [];
+  const valorRecebidoPrestamista = parcelasRecebidasPrestamista.reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
 
   const partes = [`o contrato ${contract.numero}`];
   if(quotas.length) partes.push(`${quotas.length} cota(s)`);
   if(cm) partes.push(`a comissão deste contrato (${fmtMoney(cm.totalPrevisto)})`);
+  if(temPrestamista) partes.push(`a comissão de prestamista deste contrato (${fmtMoney(cm.prestamista.totalPrevisto)})`);
   if(assembleias.length) partes.push(`${assembleias.length} assembleia(s) vinculada(s)`);
   let msg = `Excluir ${partes.join(', ')}?\n\nEsta ação não pode ser desfeita.`;
   if(parcelasRecebidas.length){
     msg = `ATENÇÃO: este contrato já tem ${parcelasRecebidas.length} parcela(s) de comissão marcada(s) como RECEBIDA (${fmtMoney(valorRecebido)}). Excluir o contrato apaga também esse registro.\n\n` + msg;
+  }
+  if(parcelasRecebidasPrestamista.length){
+    msg = `ATENÇÃO: este contrato também tem ${parcelasRecebidasPrestamista.length} parcela(s) de PRESTAMISTA já marcada(s) como RECEBIDA (${fmtMoney(valorRecebidoPrestamista)}). Excluir o contrato apaga também esse registro.\n\n` + msg;
   }
   if(!window.confirm(msg)) return;
 
@@ -7910,7 +7972,7 @@ function deleteContract(contractId){
   }
   DB.contracts = DB.contracts.filter(c=>c.id!==contractId);
   if(lead){
-    addTimeline(lead, `Contrato ${contract.numero} excluído${parcelasRecebidas.length?` (havia ${parcelasRecebidas.length} parcela(s) de comissão já recebida(s), totalizando ${fmtMoney(valorRecebido)})`:''}`);
+    addTimeline(lead, `Contrato ${contract.numero} excluído${parcelasRecebidas.length?` (havia ${parcelasRecebidas.length} parcela(s) de comissão já recebida(s), totalizando ${fmtMoney(valorRecebido)})`:''}${parcelasRecebidasPrestamista.length?` (e ${parcelasRecebidasPrestamista.length} parcela(s) de prestamista já recebida(s), totalizando ${fmtMoney(valorRecebidoPrestamista)})`:''}`);
     recomputeClientCommercialStatus(lead.id);
   }
   saveDB();
@@ -7927,16 +7989,19 @@ function openContractForm(id, presetLeadId){
   const c = id ? DB.contracts.find(x=>x.id===id) : null;
   const leadId = c ? c.leadId : presetLeadId;
   const adminAtual = c ? resolveContractAdministradora(c) : '';
+  const segmentoAtual = c ? resolveContractSegmento(c) : '';
   document.getElementById('modalBody').innerHTML = `
     <h2>${c?'Editar contrato':'Novo contrato'}</h2>
     <div class="form-grid">
       <div class="field full"><label>Cliente*</label>${selectWithBlank('ct_lead', DB.leads.map(l=>({value:l.id,label:l.nome})), leadId, 'Selecione um cliente')}</div>
       <div class="field"><label>Número</label><input id="ct_numero" value="${escapeHtml(c?.numero || String(DB.contracts.length+1).padStart(3,'0'))}"></div>
       <div class="field"><label>Administradora*</label>${selectWithBlank('ct_admin', DB.settings.administradoras.map(a=>({value:a,label:a})), adminAtual, 'Selecione a administradora')}</div>
+      <div class="field"><label>Segmento*</label>${selectWithBlank('ct_segmento', ['Imóvel','Veículo','Serviços','Pesados'].map(s=>({value:s,label:s})), segmentoAtual, 'Selecione o segmento')}</div>
       <div class="field"><label>Valor contratado (R$)</label><input id="ct_valor" data-money value="${moneyStr(c?.valorContratado)}"></div>
       <div class="field"><label>Data de contratação</label><input type="date" id="ct_data" value="${c?.dataContratacao||todayISO()}"></div>
       <div class="field full"><label>Observações</label><textarea id="ct_obs">${escapeHtml(c?.observacoes||'')}</textarea></div>
     </div>
+    ${c && !segmentoAtual ? '<div class="small-note">Este contrato ainda não tem segmento identificado (dado antigo, anterior a este campo) — informe acima. Isso é necessário para aplicar o calendário oficial de assembleia de administradoras como CNP e Embracon.</div>' : ''}
     <div class="modal-actions"><button class="pill-btn ghost" id="cancelForm">Cancelar</button><button class="pill-btn" id="saveContractBtn">Salvar</button></div>
   `;
   document.getElementById('cancelForm').onclick = ()=>{
@@ -7947,7 +8012,9 @@ function openContractForm(id, presetLeadId){
     const lid = document.getElementById('ct_lead').value; if(!lid){ showToast('Selecione o cliente'); return; }
     const novaAdministradora = safeAdminString(document.getElementById('ct_admin').value);
     if(!novaAdministradora){ showToast('Selecione a administradora — campo obrigatório.'); return; }
-    const data = {leadId:lid, numero:document.getElementById('ct_numero').value, administradora:novaAdministradora, valorContratado:moneyVal('ct_valor'), dataContratacao:document.getElementById('ct_data').value, observacoes:document.getElementById('ct_obs').value};
+    const novoSegmento = (document.getElementById('ct_segmento').value||'').trim();
+    if(!novoSegmento){ showToast('Selecione o segmento — campo obrigatório.'); return; }
+    const data = {leadId:lid, numero:document.getElementById('ct_numero').value, administradora:novaAdministradora, segmento:novoSegmento, valorContratado:moneyVal('ct_valor'), dataContratacao:document.getElementById('ct_data').value, observacoes:document.getElementById('ct_obs').value};
     sanitizeFields(data, ['numero','observacoes']);
     const cm = c ? DB.commissionMeta[c.id] : null;
     // v28 — sincroniza a comissão sempre que cm.administradora divergir da
@@ -8406,7 +8473,7 @@ function viewAssembleias(){
   }).sort((a,b)=> a.destaque.data.localeCompare(b.destaque.data));
 
   return `
-  <div class="toolbar"><button class="pill-btn" id="btnNewAssembly">+ Novo lance / assembleia</button></div>
+  <div class="toolbar"><button class="pill-btn" id="btnNewAssembly">+ Novo lance / assembleia</button><button class="pill-btn ghost" id="btnAtualizarCalendarioOficial">Atualizar pelo calendário oficial</button></div>
   <div class="tabbar">${tabs.map(t=>`<button class="${assembleiasTab===t.id?'active':''}" data-asmtab="${t.id}">${t.label}</button>`).join('')}</div>
   <div class="table-wrap"><table>
   <thead><tr><th>Próxima data</th><th>Grupo</th><th>Cota</th><th>Cliente</th><th>Tipo</th><th>Valor</th><th>Recorrência</th><th>Registros</th><th></th></tr></thead>
@@ -8479,14 +8546,50 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
   let selectedLeadId = a ? a.leadId : (presetLeadId || '');
   let selectedQuotaId = a ? (a.quotaId||'') : '';
   let manualMode = readOnlyCore ? false : (a ? !a.quotaId : false); // edição de registro antigo sem quotaId vinculado, ou cliente sem cota cadastrada
+  // v29 — calendário oficial: só entra em jogo na CRIAÇÃO de uma nova
+  // assembleia (nunca na edição de uma já existente, que continua 100%
+  // manual — a atualização em massa de registros existentes é uma ação
+  // separada, ver atualizarAssembleiasParaCalendarioOficial). Ligado por
+  // padrão sempre que existir calendário para a administradora/segmento
+  // detectados; o usuário pode desligar e informar a data manualmente.
+  let usarCalendarioOficial = true;
+  let confirmarTodasRestantes = false;
 
   function clientQuotas(){ return selectedLeadId ? DB.quotas.filter(q=>q.leadId===selectedLeadId && !q.cancelada) : []; }
+
+  /** Deduz administradora/segmento/contrato da seleção atual (cota
+   *  cadastrada, ou prefill de oferta automática) e localiza o calendário
+   *  oficial correspondente — null quando não há um (Mapfre, segmento sem
+   *  publicação, ano sem calendário, ou modo manual sem cota vinculada).
+   *  v30 — quando a administradora tem calendário SEPARADO por segmento
+   *  (CNP, Embracon) e o segmento não pôde ser identificado, retorna um
+   *  marcador {precisaSegmento:true,...} em vez de cair silenciosamente
+   *  para o cadastro manual — a tela pede o segmento antes de prosseguir. */
+  function detectarCalendario(quotaEscolhida, usaCotaCadastrada){
+    if(a) return null; // edição nunca usa o fluxo de calendário oficial
+    let contractId=null, administradora='', segmento='';
+    if(pre){ contractId=pre.contractId; administradora=pre.administradora||''; segmento=pre.segmento||''; }
+    else if(usaCotaCadastrada && quotaEscolhida){ contractId=quotaEscolhida.contractId; administradora=quotaEscolhida.administradora||''; }
+    if(!administradora) return null;
+    const contractRef = contractId ? DB.contracts.find(x=>x.id===contractId) : null;
+    if(!segmento && contractRef) segmento=resolveContractSegmento(contractRef);
+    const anoRef = Number(todayISO().slice(0,4));
+    if(!segmento && contractRef && administradoraExigeSegmentoParaCalendario(administradora, anoRef)){
+      return { precisaSegmento:true, administradora, contractId, ano:anoRef };
+    }
+    return findAssemblyCalendar(administradora, segmento, anoRef);
+  }
 
   function render(){
     const lead = selectedLeadId ? DB.leads.find(l=>l.id===selectedLeadId) : null;
     const quotas = clientQuotas();
     const quotaEscolhida = selectedQuotaId ? quotas.find(q=>q.id===selectedQuotaId) : null;
     const usaCotaCadastrada = !readOnlyCore && quotaEscolhida && !manualMode;
+    const resultadoCalendario = detectarCalendario(quotaEscolhida, usaCotaCadastrada);
+    const precisaSegmento = !!(resultadoCalendario && resultadoCalendario.precisaSegmento);
+    const calendario = precisaSegmento ? null : resultadoCalendario;
+    const usandoOficial = !!(calendario && usarCalendarioOficial);
+    const proximaOficial = usandoOficial ? proximaDataOficial(calendario, todayISO()) : '';
     document.getElementById('modalBody').innerHTML = `
       <h2>${a?'Editar':'Novo'} lance / assembleia</h2>
       <div class="modal-sub">${pre? 'Dados preenchidos automaticamente a partir do contrato fechado. Falta só confirmar a data da assembleia e, se for o caso, a recorrência.' : 'Busque o cliente, escolha a cota já cadastrada e cadastre o lance — sem precisar digitar grupo/cota à mão. Cada assembleia é registrada separadamente — o histórico de lances anteriores nunca é sobrescrito.'}</div>
@@ -8521,17 +8624,26 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
         <div class="field"><label>Cota</label>${readOnlyCore ? `<div class="readonly-field">${escapeHtml(a?.cota||'')}</div><input type="hidden" id="as_cota" value="${escapeHtml(a?.cota||'')}">`
             : usaCotaCadastrada ? `<div class="readonly-field">${escapeHtml(quotaEscolhida.numero||'—')}</div><input type="hidden" id="as_cota" value="${escapeHtml(quotaEscolhida.numero||'')}">`
             : `<input id="as_cota" value="${escapeHtml(a?.cota||'')}">`}</div>
-        <div class="field"><label>Data da assembleia*</label><input type="date" id="as_data" value="${a?.data || presetDate || addDays(todayISO(),7)}"></div>
+        <div class="field"><label>Data da assembleia*</label>${usandoOficial
+            ? `<div class="readonly-field">${proximaOficial?fmtDate(proximaOficial):'Nenhuma data oficial futura neste calendário'}</div><input type="hidden" id="as_data" value="${proximaOficial}">`
+            : `<input type="date" id="as_data" value="${a?.data || presetDate || addDays(todayISO(),7)}">`}</div>
         <div class="field"><label>Avisar (dias antes)</label><input type="number" min="0" id="as_dias" value="${a?.diasAntecedencia ?? 7}"></div>
         <div class="field"><label>Tipo de lance</label>${readOnlyCore ? `<div class="readonly-field">${escapeHtml(a?.tipoLance||'')}</div><input type="hidden" id="as_tipo" value="${escapeHtml(a?.tipoLance||'')}">` : selectHTML('as_tipo', ['Fixo','Livre','Limitador'], a?.tipoLance)}</div>
         <div class="field"><label>Valor do lance (R$)</label>${readOnlyCore ? `<div class="readonly-field">${fmtMoney(a?.valorLance||0)}</div><input type="hidden" id="as_valorLance" value="${moneyStr(a?.valorLance)}">` : `<input id="as_valorLance" data-money value="${moneyStr(a?.valorLance)}">`}</div>
         <div class="field"><label>% Embutido</label>${readOnlyCore ? `<div class="readonly-field">${(a?.percentualEmbutido||0)}%</div><input type="hidden" id="as_embutido" value="${a?.percentualEmbutido||0}">` : `<input type="number" step="0.1" id="as_embutido" value="${a?.percentualEmbutido||0}">`}</div>
-        <div class="field"><label>Recorrência</label>${selectHTML('as_recorrencia', ['Nenhuma','Mensal','Bimestral','Trimestral'], a?.recorrencia)}</div>
+        <div class="field"><label>Recorrência</label>${usandoOficial
+            ? `<div class="readonly-field">Calendário oficial (${escapeHtml(calendario.administradora)}/${escapeHtml(calendario.segmento)} ${calendario.ano})</div><input type="hidden" id="as_recorrencia" value="Nenhuma">`
+            : selectHTML('as_recorrencia', ['Nenhuma','Mensal','Bimestral','Trimestral'], a?.recorrencia)}</div>
         <div class="field full"><label>Observação</label><textarea id="as_obs" placeholder="Instruções específicas sobre o lance, combinados com o cliente etc.">${escapeHtml(a?.observacao||'')}</textarea></div>
       </div>
-      ${a && a.seriesId ? `<div class="checkrow"><label><input type="checkbox" id="as_aplicarfuturas"> Aplicar essas alterações também às ocorrências futuras desta série (mantendo a data de cada uma)</label></div>` : ''}
+      ${!a && precisaSegmento ? `<div class="field full"><label>Segmento do contrato* (necessário para o calendário oficial de ${escapeHtml(resultadoCalendario.administradora)})</label>${selectWithBlank('as_segmento_contrato', ['Imóvel','Veículo','Serviços','Pesados'].map(s=>({value:s,label:s})), '', 'Selecione o segmento')}</div>
+      <div class="small-note">Este contrato ainda não tem segmento identificado — ${escapeHtml(resultadoCalendario.administradora)} publica um calendário por segmento, então é preciso informar antes de aplicar a data oficial. Escolher aqui grava o segmento no contrato.</div>` : ''}
+      ${!a && calendario ? `<div class="checkrow"><label><input type="checkbox" id="as_usarcalendario" ${usarCalendarioOficial?'checked':''}> Usar calendário oficial (${escapeHtml(calendario.administradora)}/${escapeHtml(calendario.segmento)} ${calendario.ano}) — desmarque para informar uma data manual</label></div>` : ''}
+      ${!a && usandoOficial ? `<div class="checkrow"><label><input type="checkbox" id="as_confirmartodas" ${confirmarTodasRestantes?'checked':''}> Confirmar a criação de TODAS as assembleias restantes de ${calendario.ano} deste calendário para esta cota (uma tarefa de aviso de lance para cada, ${a?.diasAntecedencia ?? 7} dias antes)</label></div>
+      <div class="small-note">A recorrência oficial usa exatamente as datas publicadas pela administradora — nunca é calculada por "mesmo dia todo mês".</div>` : ''}
+      ${a && a.seriesId && !a.oficial ? `<div class="checkrow"><label><input type="checkbox" id="as_aplicarfuturas"> Aplicar essas alterações também às ocorrências futuras desta série (mantendo a data de cada uma)</label></div>` : ''}
       ${a ? `<div class="checkrow"><label><input type="checkbox" id="as_concluida" ${a.concluida?'checked':''}> Assembleia concluída (não sincroniza mais automaticamente com o contrato, e a data/recorrência/observação passam a ser só suas)</label></div>` : ''}
-      ${a? '<div class="small-note">Por padrão, a edição afeta somente esta ocorrência.</div>':'<div class="small-note">Se a recorrência não for "Nenhuma", as ocorrências são criadas automaticamente até 12 meses à frente, e o sistema continua completando o horizonte conforme o tempo passa — não há limite fixo de ocorrências.</div>'}
+      ${a? '<div class="small-note">Por padrão, a edição afeta somente esta ocorrência.</div>': (!calendario ? '<div class="small-note">Se a recorrência não for "Nenhuma", as ocorrências são criadas automaticamente até 12 meses à frente, e o sistema continua completando o horizonte conforme o tempo passa — não há limite fixo de ocorrências.</div>' : '')}
       ${!a && !readOnlyCore && quotas.length>1 ? `<div class="small-note">Este cliente tem ${quotas.length} cotas ativas e não contempladas — depois de salvar esta, use "Salvar e cadastrar outra cota" para lançar a próxima sem sair da tela.</div>` : ''}
       <div class="modal-actions">
         <button class="pill-btn ghost" id="cancelForm">${pre? 'Pular esta assembleia' : 'Cancelar'}</button>
@@ -8540,10 +8652,10 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
         <button class="pill-btn" id="saveAssemblyBtn">Salvar</button>
       </div>
     `;
-    wire();
+    wire(calendario, usandoOficial, resultadoCalendario);
   }
 
-  function wire(){
+  function wire(calendario, usandoOficial, resultadoCalendario){
     const leadSearchInput = document.getElementById('as_lead_search');
     const leadResultsDiv = document.getElementById('as_lead_results');
     const trocarBtn = document.getElementById('as_lead_trocar');
@@ -8566,6 +8678,25 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
     if(quotaSelect) quotaSelect.onchange = ()=>{
       if(quotaSelect.value==='__manual__'){ manualMode=true; selectedQuotaId=''; }
       else { manualMode=false; selectedQuotaId=quotaSelect.value; }
+      render();
+    };
+    const usarCalendarioChk = document.getElementById('as_usarcalendario');
+    if(usarCalendarioChk) usarCalendarioChk.onchange = ()=>{ usarCalendarioOficial = usarCalendarioChk.checked; confirmarTodasRestantes=false; render(); };
+    const confirmarTodasChk = document.getElementById('as_confirmartodas');
+    if(confirmarTodasChk) confirmarTodasChk.onchange = ()=>{ confirmarTodasRestantes = confirmarTodasChk.checked; };
+    // v30 — segmento obrigatório do contrato antes de aplicar calendário
+    // oficial de administradoras que publicam por segmento (CNP, Embracon):
+    // grava direto no contrato (migração não destrutiva — só preenche o que
+    // faltava) e re-renderiza para já detectar o calendário certo.
+    const segmentoContratoSel = document.getElementById('as_segmento_contrato');
+    if(segmentoContratoSel) segmentoContratoSel.onchange = ()=>{
+      const escolhido = segmentoContratoSel.value;
+      if(!escolhido) return;
+      const contractRef = resultadoCalendario && resultadoCalendario.contractId ? DB.contracts.find(x=>x.id===resultadoCalendario.contractId) : null;
+      if(contractRef && !contractRef.segmento){
+        contractRef.segmento = escolhido;
+        saveDB();
+      }
       render();
     };
     document.getElementById('cancelForm').onclick = ()=>{
@@ -8616,6 +8747,21 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
       if(!data.leadId){ showToast('Selecione o cliente.'); return; }
       if(!readOnlyCore && !manualMode && clientQuotas().length && !data.quotaId){ showToast('Selecione a cota deste cliente (ou escolha "Digitar manualmente").'); return; }
       if(!data.grupo && !data.cota){ showToast('Informe o grupo/cota (ou selecione uma cota cadastrada).'); return; }
+      if(!a && usandoOficial && confirmarTodasRestantes){
+        // v29 — gera de uma vez TODAS as ocorrências oficiais restantes do
+        // calendário (nunca addMonths — usa exatamente calendario.datas),
+        // cada uma com sua própria tarefa de aviso de lance. Idempotente por
+        // construção (gerarAssembleiasDoCalendarioOficial já faz a checagem
+        // de duplicidade data a data).
+        if(!calendario || !calendario.datas || !calendario.datas.length){ showToast('Calendário oficial sem datas cadastradas.'); return; }
+        const resultado = gerarAssembleiasDoCalendarioOficial(calendario, data);
+        saveDB();
+        showToast(resultado.criadas>0
+          ? `${resultado.criadas} assembleia(s) do calendário oficial criada(s)${resultado.puladas?` (${resultado.puladas} já existiam)`:''}.`
+          : 'Nenhuma assembleia nova — todas as datas restantes já estavam cadastradas.');
+        thenFn(data.leadId);
+        return;
+      }
       if(!data.data){ showToast('Informe a data da assembleia.'); return; }
       if(!a){
         // Impede duplicidade preferindo vínculo por ID (contractId+quotaId, ou
@@ -8642,11 +8788,12 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
         if(lead) addTimeline(lead, `Assembleia atualizada — Grupo ${data.grupo}/Cota ${data.cota} em ${fmtDate(data.data)}`);
         saveDB(); showToast('Assembleia atualizada');
       } else {
-        const isNovaSerie = data.recorrencia && data.recorrencia!=='Nenhuma';
+        const isNovaSerie = !usandoOficial && data.recorrencia && data.recorrencia!=='Nenhuma';
         const anchorDay = Number(data.data.slice(8,10));
         const lastDayOfMonth = new Date(Number(data.data.slice(0,4)), Number(data.data.slice(5,7)), 0).getDate();
         const newA = Object.assign({id:uid('asm'), seriesId: isNovaSerie ? uid('series') : null, taskId:null,
-          anchorDate: isNovaSerie ? data.data : null, anchorDay: isNovaSerie ? anchorDay : null, isEndOfMonth: isNovaSerie ? (anchorDay===lastDayOfMonth) : null}, data);
+          anchorDate: isNovaSerie ? data.data : null, anchorDay: isNovaSerie ? anchorDay : null, isEndOfMonth: isNovaSerie ? (anchorDay===lastDayOfMonth) : null,
+          oficial: usandoOficial, calendarioId: usandoOficial ? calendario.id : null}, data);
         DB.assemblies.push(newA);
         createAssemblyTask(newA);
         if(lead) addTimeline(lead, `Assembleia registrada — Grupo ${data.grupo}/Cota ${data.cota} em ${fmtDate(data.data)}`);
@@ -8701,7 +8848,7 @@ function offerAssembliesForContract(contract, proposal, newQuotas, lead){
   // somente para preencher o formulário, sem que ele exista em DB.assemblies.
   function openPrefilled(item){
     openAssemblyForm(null, null, lead.id, {
-      proposalId: proposal.id, contractId: contract.id, administradora: resolveContractAdministradora(contract), quotaId: item.quotaId,
+      proposalId: proposal.id, contractId: contract.id, administradora: resolveContractAdministradora(contract), segmento: proposal.segmento||'', quotaId: item.quotaId,
       onDone: ()=> openNext()
     });
     // Preenche os campos somente-leitura recém-renderizados com os dados desta cota específica.
@@ -8736,6 +8883,152 @@ function offerAssembliesForContract(contract, proposal, newQuotas, lead){
  *  31/01 acabava indo para 28/02 → 28/03 → 28/04 em vez de 28/02 → 31/03 → 30/04 → 31/05).
  *  anchorDate/anchorDay/isEndOfMonth ficam gravados na série (redundantes em cada
  *  ocorrência, para robustez) e são sempre a referência do cálculo. */
+/** v29 — Localiza o calendário oficial de assembleia para uma
+ *  administradora+segmento+ano. Casa primeiro por segmento exato; se não
+ *  achar, tenta um calendário marcado "Todos" para essa administradora
+ *  (caso Porto Seguro, que publica a mesma data para todos os segmentos).
+ *  Retorna null quando não há calendário cadastrado (Mapfre, segmentos ou
+ *  anos sem publicação) — nesse caso o cadastro permanece manual, nunca
+ *  inventa data. */
+function findAssemblyCalendar(administradora, segmento, ano){
+  const adminNorm = normalizeStr(administradora);
+  const segNorm = normalizeStr(segmento);
+  if(!adminNorm || !ano) return null;
+  const doAno = (DB.settings.assemblyCalendars||[]).filter(c=> Number(c.ano)===Number(ano) && normalizeStr(c.administradora)===adminNorm);
+  if(!doAno.length) return null;
+  const exato = doAno.find(c=> normalizeStr(c.segmento)===segNorm && segNorm);
+  if(exato) return exato;
+  const todos = doAno.find(c=> normalizeStr(c.segmento)==='todos');
+  return todos || null;
+}
+/** v30 — true quando a administradora tem calendário oficial cadastrado
+ *  para o ano, mas SEM um calendário "Todos" (ou seja, cada segmento tem
+ *  sua própria publicação — caso CNP e Embracon) — nesse caso o segmento é
+ *  indispensável para saber qual data usar, e a UI deve pedir o segmento
+ *  antes de aplicar o calendário oficial, em vez de deixar cair
+ *  silenciosamente para o cadastro manual. */
+function administradoraExigeSegmentoParaCalendario(administradora, ano){
+  const adminNorm = normalizeStr(administradora);
+  if(!adminNorm || !ano) return false;
+  const doAno = (DB.settings.assemblyCalendars||[]).filter(c=> Number(c.ano)===Number(ano) && normalizeStr(c.administradora)===adminNorm);
+  if(!doAno.length) return false;
+  return !doAno.some(c=> normalizeStr(c.segmento)==='todos');
+}
+/** v29 — Próxima data oficial (>= apartirDe, incluindo a própria data) do
+ *  calendário informado. "" quando não há mais datas futuras no calendário. */
+function proximaDataOficial(calendar, apartirDe){
+  if(!calendar || !Array.isArray(calendar.datas)) return '';
+  const base = apartirDe || todayISO();
+  const futuras = calendar.datas.filter(d=> d>=base).slice().sort();
+  return futuras[0] || '';
+}
+/** v29 — Gera todas as ocorrências OFICIAIS restantes de um calendário para
+ *  um contrato/cota (a partir de hoje, ou da data informada), cada uma como
+ *  registro independente de DB.assemblies (nunca addMonths — usa
+ *  exatamente as datas do calendário) e com sua própria tarefa de aviso de
+ *  lance (createAssemblyTask, sempre `diasAntecedencia` dias antes — padrão
+ *  7). Idempotente: evita duplicidade por quotaId+data (ou
+ *  contractId+cota-texto+data, ou leadId+grupo+cota+data — mesma regra já
+ *  usada no cadastro manual), então rodar de novo sobre o mesmo calendário
+ *  não duplica nada. Retorna {criadas, puladas}. */
+function gerarAssembleiasDoCalendarioOficial(calendar, campos){
+  let criadas = 0, puladas = 0;
+  if(!calendar) return {criadas, puladas};
+  const apartirDe = campos.apartirDe || todayISO();
+  const datas = calendar.datas.filter(d=> d>=apartirDe).slice().sort();
+  const lead = DB.leads.find(l=>l.id===campos.leadId);
+  const calendarSeriesId = 'oficial_'+calendar.id+'_'+(campos.quotaId||campos.contractId||campos.leadId);
+  datas.forEach(data=>{
+    const duplicada = campos.quotaId
+      ? DB.assemblies.some(x=> x.quotaId===campos.quotaId && x.data===data)
+      : campos.contractId
+        ? DB.assemblies.some(x=> x.contractId===campos.contractId && normalizeStr(x.cota)===normalizeStr(campos.cota) && x.data===data)
+        : DB.assemblies.some(x=> x.leadId===campos.leadId && normalizeStr(x.grupo)===normalizeStr(campos.grupo) && normalizeStr(x.cota)===normalizeStr(campos.cota) && x.data===data);
+    if(duplicada){ puladas++; return; }
+    const occ = {
+      id: uid('asm'), leadId: campos.leadId, contractId: campos.contractId||null, quotaId: campos.quotaId||null,
+      proposalId: campos.proposalId||null, administradora: campos.administradora, grupo: campos.grupo||'', cota: campos.cota||'',
+      data, diasAntecedencia: campos.diasAntecedencia ?? 7, tipoLance: campos.tipoLance||'', valorLance: campos.valorLance||0,
+      percentualEmbutido: campos.percentualEmbutido||0, recorrencia: 'Nenhuma', observacao: campos.observacao||'',
+      concluida:false, taskId:null,
+      // v29 — marca a origem oficial (calendário) desta ocorrência: usada só
+      // para exibição/filtragem (ex.: "Atualizar pelo calendário oficial") e
+      // para agrupar visualmente a série; NUNCA usada como base de cálculo
+      // de recorrência (que é sempre lida direto de calendar.datas).
+      oficial:true, calendarioId: calendar.id, seriesId: calendarSeriesId, anchorDate:null, anchorDay:null, isEndOfMonth:null
+    };
+    DB.assemblies.push(occ);
+    createAssemblyTask(occ);
+    criadas++;
+  });
+  if(lead && criadas>0) addTimeline(lead, `${criadas} assembleia(s) do calendário oficial ${escapeHtml(calendar.administradora)}/${escapeHtml(calendar.segmento)} ${calendar.ano} cadastrada(s)`);
+  return {criadas, puladas};
+}
+/** v29 — Para assembleias JÁ CADASTRADAS (antes deste recurso, ou geradas
+ *  manualmente) que hoje divergem do calendário oficial: reaplica a data
+ *  oficial mais próxima (>= data atual da ocorrência) SOMENTE para
+ *  ocorrências futuras (data >= hoje) e ainda abertas (concluida!==true) —
+ *  nunca mexe em assembleias passadas ou já concluídas. Atualiza a tarefa
+ *  vinculada (mesma regra: data prevista = nova data - diasAntecedencia,
+ *  via updateAssemblyTask, nunca cria uma segunda tarefa). Preserva
+ *  integralmente observação, status (concluida/resultado), e todo o
+ *  vínculo com contrato/cota — só o campo `data` (e a tarefa) muda.
+ *  Idempotente: se a data já é a oficial, nada é tocado (nem contabilizado
+ *  como atualizada).
+ *
+ *  v30 — NUNCA move duas ocorrências da MESMA cota para a MESMA data
+ *  oficial (isso criaria um duplicado): antes de mover uma ocorrência,
+ *  verifica se já existe outro registro da mesma cota (quotaId, ou
+ *  leadId+grupo+cota quando não há quotaId) na data de destino —
+ *  considerando tanto os que já estavam lá quanto os que este mesmo laço
+ *  já moveu para lá. Se houver, preserva a ocorrência já naquela data e
+ *  SINALIZA a outra (`conflitoCalendarioOficial:true`) para revisão manual
+ *  — nunca exclui nem sobrescreve nada silenciosamente. A ordem de
+ *  processamento é sempre a mesma (ordem de DB.assemblies), então o
+ *  resultado é determinístico e idempotente entre execuções.
+ *  Retorna {atualizadas, conflitos}. */
+function atualizarAssembleiasParaCalendarioOficial(filtro){
+  let atualizadas = 0, conflitos = 0;
+  const alvo = DB.assemblies.filter(a=>{
+    if(a.concluida) return false;
+    if(a.data < todayISO()) return false;
+    if(filtro && filtro.leadId && a.leadId!==filtro.leadId) return false;
+    if(filtro && filtro.contractId && a.contractId!==filtro.contractId) return false;
+    if(filtro && filtro.quotaId && a.quotaId!==filtro.quotaId) return false;
+    return true;
+  });
+  function chaveCota(a){
+    return a.quotaId ? ('q:'+a.quotaId) : ('l:'+a.leadId+'|'+normalizeStr(a.grupo||'')+'|'+normalizeStr(a.cota||''));
+  }
+  alvo.forEach(a=>{
+    const contract = a.contractId ? DB.contracts.find(c=>c.id===a.contractId) : null;
+    const administradora = a.administradora || (contract?resolveContractAdministradora(contract):'');
+    const segmento = contract ? resolveContractSegmento(contract) : '';
+    const ano = Number((a.data||'').slice(0,4));
+    const cal = findAssemblyCalendar(administradora, segmento, ano);
+    if(!cal) return; // sem calendário para esta administradora/segmento/ano — permanece manual
+    const oficial = proximaDataOficial(cal, a.data) || cal.datas.slice().sort().find(d=>d>=todayISO());
+    if(!oficial || oficial===a.data) return; // já está correta — idempotente
+    const chave = chaveCota(a);
+    const conflita = DB.assemblies.some(x=> x.id!==a.id && x.data===oficial && chaveCota(x)===chave);
+    if(conflita){
+      // v30 — outra ocorrência da mesma cota já está (ou já foi movida
+      // nesta mesma execução para) essa data oficial: preserva as duas
+      // como registros distintos, nunca mescla/exclui, só sinaliza esta
+      // para revisão manual.
+      if(!a.conflitoCalendarioOficial) conflitos++;
+      a.conflitoCalendarioOficial = true;
+      return;
+    }
+    a.data = oficial;
+    a.oficial = true;
+    a.calendarioId = cal.id;
+    a.conflitoCalendarioOficial = false;
+    updateAssemblyTask(a);
+    atualizadas++;
+  });
+  return {atualizadas, conflitos};
+}
 function generateRecurringOccurrences(seriesId, anchorDate, anchorDay, isEndOfMonth, recorrencia, horizonteISO, templateFields){
   const step = {Mensal:1,Bimestral:2,Trimestral:3}[recorrencia];
   if(!step) return 0;
@@ -8810,10 +9103,15 @@ function viewComissoes(){
   if(comissoesFilters.administradora!=='Todas') contratosComComissao = contratosComComissao.filter(c=>resolveCommissionAdministradora(DB.commissionMeta[c.id], c)===comissoesFilters.administradora);
   if(comissoesFilters.assessor!=='Todos') contratosComComissao = contratosComComissao.filter(c=>{ const lead=DB.leads.find(l=>l.id===c.leadId); return lead && lead.responsavel===comissoesFilters.assessor; });
   let totMes=0,totFuturas=0,totAtrasadas=0,totRecebido=0,totPendente=0,totAjustadas=0;
+  // v29 — totais SEPARADOS de prestamista (item 1): nunca somados aos totais
+  // acima (que continuam representando só a comissão principal) — só
+  // combinados no indicador explícito "Total consolidado".
+  let totPrincipalPrevisto=0, totPrestamistaPrevisto=0, totPrestamistaRecebido=0;
   const now = new Date();
   contratosComComissao.forEach(c=>{
     const cm = DB.commissionMeta[c.id];
     if(cm.ajustadaManualmente) totAjustadas++;
+    totPrincipalPrevisto += cm.totalPrevisto||0;
     cm.parcelas.forEach(p=>{
       if(comissoesFilters.competencia && p.dataPrevista.slice(0,7)!==comissoesFilters.competencia) return;
       const d=new Date(p.dataPrevista);
@@ -8825,6 +9123,10 @@ function viewComissoes(){
       if(p.status==='Recebida'){ totRecebido+=(p.valorRecebido||p.valor); }
       else { totPendente+=p.valor; if(p.dataPrevista<todayISO()) totAtrasadas+=p.valor; else totFuturas+=p.valor; }
     });
+    if(cm.prestamista && cm.prestamista.ativo){
+      totPrestamistaPrevisto += cm.prestamista.totalPrevisto||0;
+      totPrestamistaRecebido += cm.prestamista.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
+    }
   });
   return `
   <div class="filter-bar">
@@ -8840,19 +9142,26 @@ function viewComissoes(){
     ${kpiCard('Total pendente', fmtMoney(totPendente),'gold')}
     ${kpiCard('Comissões ajustadas manualmente', totAjustadas)}
   </div>
-  <p class="small-note" style="margin-bottom:10px;">As regras de comissão (percentual, parcelas, início) são definidas em Configurações → Comissões e ficam registradas no contrato no momento do fechamento — alterações futuras na regra não afetam comissões já geradas. Cada contrato gera sua própria comissão — um cliente com vários contratos aparece várias vezes aqui, uma por contrato. Percentual, número de parcelas, datas e valores previstos podem ser ajustados a qualquer momento em "Ver parcelas", já que administradoras diferentes pagam em fluxos diferentes.</p>
+  <div class="kpi-grid" style="margin-bottom:18px;">
+    ${kpiCard('Comissão principal', fmtMoney(totPrincipalPrevisto))}
+    ${kpiCard('Prestamista', fmtMoney(totPrestamistaPrevisto))}
+    ${kpiCard('Total consolidado', fmtMoney(totPrincipalPrevisto+totPrestamistaPrevisto))}
+  </div>
+  <p class="small-note" style="margin-bottom:10px;">As regras de comissão (percentual, parcelas, início) são definidas em Configurações → Comissões e ficam registradas no contrato no momento do fechamento — alterações futuras na regra não afetam comissões já geradas. Cada contrato gera sua própria comissão — um cliente com vários contratos aparece várias vezes aqui, uma por contrato. Percentual, número de parcelas, datas e valores previstos podem ser ajustados a qualquer momento em "Ver parcelas", já que administradoras diferentes pagam em fluxos diferentes. A comissão de seguro prestamista (quando houver) é sempre separada da comissão principal — nunca somada nos valores desta tabela — e não entra no cálculo da comissão destinada ao assessor.</p>
   <div class="table-wrap"><table>
-  <thead><tr><th>Cliente</th><th>Contrato</th><th>Administradora</th><th>Assessor</th><th>Valor vendido</th><th>%</th><th>Comissão total</th><th>Recebido</th><th>Próxima parcela</th><th></th></tr></thead>
+  <thead><tr><th>Cliente</th><th>Contrato</th><th>Administradora</th><th>Assessor</th><th>Valor vendido</th><th>%</th><th>Comissão total</th><th>Recebido</th><th>Próxima parcela</th><th>Prestamista</th><th></th></tr></thead>
   <tbody>${contratosComComissao.length? contratosComComissao.map(c=>{
     const cm = DB.commissionMeta[c.id];
     const lead = DB.leads.find(l=>l.id===c.leadId);
     const recebido = cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
     const proxima = cm.parcelas.find(p=>p.status!=='Recebida');
     const divergente = Math.abs(Number(c.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
+    const prestamistaTxt = (cm.prestamista && cm.prestamista.ativo) ? fmtMoney(cm.prestamista.totalPrevisto) : '—';
     return `<tr><td><b>${lead?lead.nome:'—'}</b></td><td>${escapeHtml(c.numero)}</td><td>${displayAdmin(resolveCommissionAdministradora(cm, c))}</td><td>${lead?(lead.responsavel||'—'):'—'}</td><td>${fmtMoney(cm.valorVenda)}${divergente?' <span class="badge b-perdido">⚠</span>':''}</td><td>${cm.percentual}%</td>
       <td>${fmtMoney(cm.totalPrevisto)}</td><td>${fmtMoney(recebido)}</td><td>${proxima?fmtDate(proxima.dataPrevista):'Todas recebidas'}</td>
+      <td>${prestamistaTxt}</td>
       <td><button class="link-btn" data-editcomm="${c.id}">Ver parcelas</button></td></tr>`;
-  }).join('') : '<tr><td colspan=10 class="empty">Nenhuma comissão gerada com os filtros atuais</td></tr>'}</tbody></table></div>
+  }).join('') : '<tr><td colspan=11 class="empty">Nenhuma comissão gerada com os filtros atuais</td></tr>'}</tbody></table></div>
   ${contratosSemComissao.length? `<div class="section-title" style="font-size:13px;">Contratos sem comissão configurada</div>
   <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Contrato</th><th>Administradora</th><th></th></tr></thead>
   <tbody>${contratosSemComissao.map(c=>{ const lead=DB.leads.find(l=>l.id===c.leadId); return `<tr><td>${lead?lead.nome:'—'}</td><td>${escapeHtml(c.numero)}</td><td>${displayAdmin(resolveContractAdministradora(c))}</td><td><button class="link-btn" data-manualcomm="${c.id}">Configurar comissão</button></td></tr>`; }).join('')}</tbody></table></div>` : ''}
@@ -8989,6 +9298,26 @@ function openCommissionForm(contractId){
   const cm = DB.commissionMeta[contractId];
   const l = DB.leads.find(x=>x.id===(cm?cm.leadId:(contract?contract.leadId:null)));
   let ajustando = false;
+  // v29 — comissão de seguro prestamista: seção independente da principal
+  // (ver cm.prestamista), com seu próprio ciclo de ajuste manual.
+  let ajustandoPrestamista = false;
+
+  /** v29 — Ajusta a comissão de PRESTAMISTA (nunca mistura com cm.* da
+   *  comissão principal). O total previsto é editável livremente (a
+   *  seguradora às vezes informa um valor fechado, não necessariamente
+   *  base×percentual) — reaproveita redistributePendingCommission, então
+   *  herda de graça: preservação integral de parcelas recebidas, bloqueio
+   *  de redução abaixo da maior parcela recebida, bloqueio de total menor
+   *  que o já recebido, e fechamento exato de centavos. */
+  function ajustarPrestamista(novoBase, novoPct, novoTotal, novoNParc, novaData1){
+    const novasParcelas = redistributePendingCommission(cm.prestamista.parcelas, novoNParc, novoTotal, i=>addMonths(novaData1, i-1));
+    cm.prestamista.baseCalculo = novoBase;
+    cm.prestamista.percentual = novoPct;
+    cm.prestamista.totalPrevisto = novoTotal;
+    cm.prestamista.parcelasQtd = novoNParc;
+    cm.prestamista.parcelas = novasParcelas;
+    cm.prestamista.ajustadaManualmente = true;
+  }
 
   function voltar(){
     // v24: se esta tela foi aberta de dentro da ficha do cliente (aba
@@ -9117,6 +9446,41 @@ function openCommissionForm(contractId){
       </tbody></table></div>
       <div class="toolbar" style="justify-content:flex-start;margin-top:8px;"><button class="pill-btn sm ghost" id="btnRecalcularDatas">Recalcular datas a partir da 1ª parcela (mensal)</button></div>
       <p class="small-note" style="margin-top:8px;">O valor e a data previstos de cada parcela podem ser ajustados livremente — administradoras diferentes pagam em fluxos diferentes (mesmo mês, mês seguinte, etc.), então o sistema nunca exige que o valor recebido "bata" com um cálculo padrão.</p>
+      ${!ajustando ? `<div class="checkrow" style="margin-top:18px;"><label><input type="checkbox" id="cf_temprestamista" ${(cm.prestamista&&cm.prestamista.ativo)?'checked':''}> Este contrato possui comissão de prestamista</label></div>` : ''}
+      ${(cm.prestamista && cm.prestamista.ativo) ? `
+      <div class="card" style="padding:14px;margin-top:8px;border:1px solid var(--border);">
+        <h3 style="margin:0 0 10px;font-size:13px;">Comissão de seguro prestamista</h3>
+        <div class="modal-sub">${cm.prestamista.percentual}% sobre ${fmtMoney(cm.prestamista.baseCalculo)} · Total previsto: ${fmtMoney(cm.prestamista.totalPrevisto)} em ${cm.prestamista.parcelasQtd}x${cm.prestamista.ajustadaManualmente?' · <b>ajustada manualmente</b>':''}</div>
+        <div class="toolbar" style="justify-content:flex-start;margin:10px 0;">
+          ${!ajustandoPrestamista ? `<button class="pill-btn sm ghost" id="cf_ajustar_prestamista">Ajustar prestamista</button>` : ''}
+        </div>
+        ${ajustandoPrestamista ? `
+        <div class="form-grid cols3">
+          <div class="field"><label>Base de cálculo (R$)</label><input data-money id="cfp_base" value="${moneyStr(cm.prestamista.baseCalculo)}"></div>
+          <div class="field"><label>% Comissão</label><input type="number" step="0.1" id="cfp_pct" value="${cm.prestamista.percentual}"></div>
+          <div class="field"><label>Valor total previsto (R$)</label><input data-money id="cfp_total" value="${moneyStr(cm.prestamista.totalPrevisto)}"></div>
+          <div class="field"><label>Nº de parcelas</label><input type="number" id="cfp_nparc" value="${cm.prestamista.parcelasQtd}"></div>
+          <div class="field"><label>Data da 1ª parcela</label><input type="date" id="cfp_data1" value="${cm.prestamista.parcelas[0]?cm.prestamista.parcelas[0].dataPrevista:todayISO()}"></div>
+        </div>
+        <div class="small-note" style="margin:8px 0 0;">O valor total previsto pode ser ajustado manualmente (não precisa ser exatamente base × percentual) — a seguradora às vezes informa um valor fechado. Redistribui somente o saldo ainda PENDENTE entre as parcelas ainda não recebidas. Parcelas já marcadas "Recebida" nunca são alteradas.</div>
+        <div class="modal-actions" style="margin-top:10px;">
+          <button class="pill-btn ghost sm" id="cfp_cancelar">Cancelar</button>
+          <button class="pill-btn sm" id="cfp_aplicar">Recalcular parcelas</button>
+        </div>
+        ` : ''}
+        <div class="table-wrap"><table class="parcel-table">
+        <thead><tr><th>#</th><th>Vencimento</th><th>Valor previsto</th><th>Status</th><th>Valor recebido</th><th>Data recebida</th></tr></thead>
+        <tbody>${cm.prestamista.parcelas.map((p,i)=>`<tr>
+          <td>${p.n}</td>
+          <td><input type="date" data-prparcdataprev="${i}" value="${p.dataPrevista||''}"></td>
+          <td><input type="text" data-money data-prparcvalorprevisto="${i}" value="${moneyStr(p.valor)}"></td>
+          <td><select data-prparcstatus="${i}">${['Pendente','Recebida'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
+          <td><input type="text" data-money data-prparcvalor="${i}" value="${moneyStr(p.valorRecebido||p.valor)}"></td>
+          <td><input type="date" data-prparcdata="${i}" value="${p.dataRecebida||''}"></td>
+        </tr>`).join('')}</tbody></table></div>
+        <div class="field full" style="margin-top:10px;"><label>Observação (prestamista)</label><textarea id="cfp_obs">${escapeHtml(cm.prestamista.observacao||'')}</textarea></div>
+      </div>
+      ` : ''}
       <div class="modal-actions"><button class="pill-btn ghost" id="closeModal">Fechar</button><button class="pill-btn" id="saveParcBtn">Salvar parcelas</button></div>
     `;
     wire();
@@ -9159,6 +9523,54 @@ function openCommissionForm(contractId){
       render();
       showToast('Datas recalculadas a partir da 1ª parcela, uma por mês.');
     };
+    // v29 — comissão de prestamista: liga/desliga sem apagar dados já
+    // preenchidos (desligar só marca ativo:false; religar reaproveita o que
+    // já existia). Contrato sem prestamista nunca cria este objeto sozinho.
+    const temPrestamistaChk = document.getElementById('cf_temprestamista');
+    if(temPrestamistaChk) temPrestamistaChk.onchange = ()=>{
+      const ligar = temPrestamistaChk.checked;
+      if(ligar){
+        if(!cm.prestamista){
+          cm.prestamista = { ativo:true, baseCalculo: cm.valorVenda||0, percentual:0, totalPrevisto:0, parcelasQtd:1,
+            parcelas:[{n:1,dataPrevista:todayISO(),valor:0,status:'Pendente',dataRecebida:'',valorRecebido:0}],
+            observacao:'', ajustadaManualmente:false };
+        } else {
+          cm.prestamista.ativo = true;
+        }
+        if(l) addTimeline(l, `Comissão de prestamista habilitada${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
+      } else {
+        if(cm.prestamista) cm.prestamista.ativo = false;
+        if(l) addTimeline(l, `Comissão de prestamista desativada${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
+      }
+      saveDB();
+      ajustandoPrestamista = false;
+      render();
+    };
+    const ajustarPrestamistaBtn = document.getElementById('cf_ajustar_prestamista');
+    if(ajustarPrestamistaBtn) ajustarPrestamistaBtn.onclick = ()=>{ ajustandoPrestamista = true; render(); };
+    const cancelarPrestamistaBtn = document.getElementById('cfp_cancelar');
+    if(cancelarPrestamistaBtn) cancelarPrestamistaBtn.onclick = ()=>{ ajustandoPrestamista = false; render(); };
+    const aplicarPrestamistaBtn = document.getElementById('cfp_aplicar');
+    if(aplicarPrestamistaBtn) aplicarPrestamistaBtn.onclick = ()=>{
+      const novoBase = moneyVal('cfp_base');
+      const novoPct = Number(document.getElementById('cfp_pct').value);
+      const novoTotal = moneyVal('cfp_total');
+      const novoNParc = Math.round(Number(document.getElementById('cfp_nparc').value));
+      const novaData1 = document.getElementById('cfp_data1').value;
+      if(!(novoTotal>=0)){ showToast('Informe um valor total previsto válido para o prestamista.'); return; }
+      if(!(novoPct>=0)){ showToast('Percentual do prestamista inválido.'); return; }
+      if(!(novoNParc>0) || !Number.isInteger(novoNParc)){ showToast('Número de parcelas do prestamista deve ser um inteiro maior que zero.'); return; }
+      if(!novaData1){ showToast('Informe a data da 1ª parcela do prestamista.'); return; }
+      const maiorRecebidaPr = maiorParcelaRecebida(cm.prestamista.parcelas);
+      if(maiorRecebidaPr > novoNParc){ showToast(`A parcela ${maiorRecebidaPr} do prestamista já está marcada como Recebida — o número de parcelas não pode ficar abaixo dela.`); return; }
+      try{
+        ajustarPrestamista(novoBase, novoPct, novoTotal, novoNParc, novaData1);
+      }catch(e){ showToast(e.message); return; }
+      saveDB();
+      ajustandoPrestamista = false;
+      render();
+      showToast('Prestamista recalculado — saldo pendente redistribuído, parcelas já recebidas preservadas.');
+    };
     document.getElementById('saveParcBtn').onclick = ()=>{
       for(const [i,p] of cm.parcelas.entries()){
         const valInput = document.querySelector(`[data-parcvalor="${i}"]`);
@@ -9170,22 +9582,78 @@ function openCommissionForm(contractId){
         const dataPrevInput = document.querySelector(`[data-parcdataprev="${i}"]`);
         if(!dataPrevInput.value){ showToast(`Parcela ${p.n}: informe a data prevista.`); return; }
       }
+      if(cm.prestamista && cm.prestamista.ativo){
+        for(const [i,p] of cm.prestamista.parcelas.entries()){
+          const valInput = document.querySelector(`[data-prparcvalor="${i}"]`);
+          const parsed = parseMoneyBR(valInput.value);
+          if(!parsed.conflict && parsed.value<0){ showToast(`Prestamista, parcela ${p.n}: valor recebido não pode ser negativo.`); return; }
+          const valPrevInput = document.querySelector(`[data-prparcvalorprevisto="${i}"]`);
+          const parsedPrev = parseMoneyBR(valPrevInput.value);
+          if(!parsedPrev.conflict && parsedPrev.value<0){ showToast(`Prestamista, parcela ${p.n}: valor previsto não pode ser negativo.`); return; }
+          const dataPrevInput = document.querySelector(`[data-prparcdataprev="${i}"]`);
+          if(!dataPrevInput.value){ showToast(`Prestamista, parcela ${p.n}: informe a data prevista.`); return; }
+        }
+      }
       let novasRecebidas = 0;
       cm.parcelas.forEach((p,i)=>{
         const newStatus = document.querySelector(`[data-parcstatus="${i}"]`).value;
         if(newStatus==='Recebida' && p.status!=='Recebida') novasRecebidas++;
+        // v30 — captura o valor ORIGINAL antes de qualquer mutação nesta
+        // iteração: o campo "Valor recebido" é exibido com fallback
+        // (p.valorRecebido||p.valor) quando ainda não há nada recebido —
+        // isso é só apresentação, nunca pode virar gravação automática.
+        const valorRecebidoOriginal = p.valorRecebido;
+        const valorPrevistoOriginal = p.valor;
+        const valorPadraoExibido = valorRecebidoOriginal || valorPrevistoOriginal;
         p.status = newStatus;
         p.dataPrevista = document.querySelector(`[data-parcdataprev="${i}"]`).value;
         const valPrevInput = document.querySelector(`[data-parcvalorprevisto="${i}"]`);
-        p.valor = parseMoneyBR(valPrevInput.value).conflict ? p.valor : parseMoneyBR(valPrevInput.value).value;
+        p.valor = parseMoneyBR(valPrevInput.value).conflict ? valorPrevistoOriginal : parseMoneyBR(valPrevInput.value).value;
         p.dataRecebida = document.querySelector(`[data-parcdata="${i}"]`).value;
         const valInput = document.querySelector(`[data-parcvalor="${i}"]`);
-        p.valorRecebido = parseMoneyBR(valInput.value).conflict ? p.valor : parseMoneyBR(valInput.value).value;
+        const parsedRecebido = parseMoneyBR(valInput.value);
+        const valorDigitado = parsedRecebido.conflict ? valorPadraoExibido : parsedRecebido.value;
+        if(p.status==='Recebida'){
+          // Recebida: grava o que está no campo (o fallback faz sentido aqui —
+          // marcar como recebida sem editar o valor assume o previsto).
+          p.valorRecebido = valorDigitado;
+        } else {
+          // Pendente: só grava se o valor foi EXPLICITAMENTE alterado em
+          // relação ao padrão exibido — nunca copia o valor previsto para
+          // dentro de valorRecebido só porque o formulário foi salvo.
+          p.valorRecebido = (valorDigitado !== valorPadraoExibido) ? valorDigitado : valorRecebidoOriginal;
+        }
       });
       // Recalcula o total previsto a partir dos valores efetivamente salvos —
       // podem ter sido ajustados parcela a parcela, não só via "Ajustar comissão".
       cm.totalPrevisto = cm.parcelas.reduce((s,p)=>s+p.valor, 0);
+      let novasRecebidasPr = 0;
+      if(cm.prestamista && cm.prestamista.ativo){
+        cm.prestamista.parcelas.forEach((p,i)=>{
+          const newStatus = document.querySelector(`[data-prparcstatus="${i}"]`).value;
+          if(newStatus==='Recebida' && p.status!=='Recebida') novasRecebidasPr++;
+          const valorRecebidoOriginal = p.valorRecebido;
+          const valorPrevistoOriginal = p.valor;
+          const valorPadraoExibido = valorRecebidoOriginal || valorPrevistoOriginal;
+          p.status = newStatus;
+          p.dataPrevista = document.querySelector(`[data-prparcdataprev="${i}"]`).value;
+          const valPrevInput = document.querySelector(`[data-prparcvalorprevisto="${i}"]`);
+          p.valor = parseMoneyBR(valPrevInput.value).conflict ? valorPrevistoOriginal : parseMoneyBR(valPrevInput.value).value;
+          p.dataRecebida = document.querySelector(`[data-prparcdata="${i}"]`).value;
+          const valInput = document.querySelector(`[data-prparcvalor="${i}"]`);
+          const parsedRecebido = parseMoneyBR(valInput.value);
+          const valorDigitado = parsedRecebido.conflict ? valorPadraoExibido : parsedRecebido.value;
+          if(p.status==='Recebida'){
+            p.valorRecebido = valorDigitado;
+          } else {
+            p.valorRecebido = (valorDigitado !== valorPadraoExibido) ? valorDigitado : valorRecebidoOriginal;
+          }
+        });
+        cm.prestamista.totalPrevisto = cm.prestamista.parcelas.reduce((s,p)=>s+p.valor, 0);
+        const obsEl = document.getElementById('cfp_obs'); if(obsEl) cm.prestamista.observacao = obsEl.value;
+      }
       if(novasRecebidas>0 && l) addTimeline(l, `${novasRecebidas} parcela(s) de comissão marcada(s) como recebida(s)${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
+      if(novasRecebidasPr>0 && l) addTimeline(l, `${novasRecebidasPr} parcela(s) de prestamista marcada(s) como recebida(s)${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
       saveDB();
       showToast('Parcelas atualizadas');
       voltar();
@@ -9606,17 +10074,27 @@ function relComissoes(){
   Object.values(DB.commissionMeta).forEach(cm=>{
     if(!itemMatchesFilterBar(cm.leadId)) return;
     const lead = DB.leads.find(l=>l.id===cm.leadId);
+    const adminTxt = displayAdminPlain(resolveCommissionAdministradora(cm, DB.contracts.find(c=>c.id===cm.contractId)));
     cm.parcelas.forEach(p=>{
       const previstoNoPeriodo = filterBarPeriodMatch(p.dataPrevista);
       const recebidoNoPeriodo = p.status==='Recebida' && p.dataRecebida && filterBarPeriodMatch(p.dataRecebida);
       if(previstoNoPeriodo) previsto += p.valor;
       if(recebidoNoPeriodo) recebido += (p.valorRecebido||p.valor);
-      if(previstoNoPeriodo || recebidoNoPeriodo) rows.push([lead?lead.nome:'', displayAdminPlain(resolveCommissionAdministradora(cm, DB.contracts.find(c=>c.id===cm.contractId))), p.n, p.dataPrevista, p.valor, p.status, p.dataRecebida||'']);
+      if(previstoNoPeriodo || recebidoNoPeriodo) rows.push([lead?lead.nome:'', adminTxt, 'Principal', p.n, p.dataPrevista, p.valor, p.status, p.dataRecebida||'']);
     });
+    // v29 — prestamista entra no relatório em linhas separadas (nunca somado
+    // aos totais "previsto"/"recebido" da comissão principal acima).
+    if(cm.prestamista && cm.prestamista.ativo){
+      cm.prestamista.parcelas.forEach(p=>{
+        const previstoNoPeriodo = filterBarPeriodMatch(p.dataPrevista);
+        const recebidoNoPeriodo = p.status==='Recebida' && p.dataRecebida && filterBarPeriodMatch(p.dataRecebida);
+        if(previstoNoPeriodo || recebidoNoPeriodo) rows.push([lead?lead.nome:'', adminTxt, 'Prestamista', p.n, p.dataPrevista, p.valor, p.status, p.dataRecebida||'']);
+      });
+    }
   });
-  return `<div class="toolbar" style="justify-content:space-between;"><span class="small-note">Previsto no período: ${fmtMoney(previsto)} · Recebido no período: ${fmtMoney(recebido)}</span><button class="pill-btn ghost sm" data-relexport="comissoes">Exportar CSV</button></div>
-  <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Administradora</th><th>Parcela</th><th>Data prevista</th><th>Valor</th><th>Status</th><th>Data recebida</th></tr></thead>
-  <tbody>${rows.length? rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${fmtDate(r[3])}</td><td>${fmtMoney(r[4])}</td><td>${r[5]}</td><td>${r[6]?fmtDate(r[6]):'—'}</td></tr>`).join('') : '<tr><td colspan=7 class="empty">Nenhuma parcela no período</td></tr>'}</tbody></table></div>`;
+  return `<div class="toolbar" style="justify-content:space-between;"><span class="small-note">Previsto (comissão principal) no período: ${fmtMoney(previsto)} · Recebido (comissão principal) no período: ${fmtMoney(recebido)}</span><button class="pill-btn ghost sm" data-relexport="comissoes">Exportar CSV</button></div>
+  <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Administradora</th><th>Tipo</th><th>Parcela</th><th>Data prevista</th><th>Valor</th><th>Status</th><th>Data recebida</th></tr></thead>
+  <tbody>${rows.length? rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${fmtDate(r[4])}</td><td>${fmtMoney(r[5])}</td><td>${r[6]}</td><td>${r[7]?fmtDate(r[7]):'—'}</td></tr>`).join('') : '<tr><td colspan=8 class="empty">Nenhuma parcela no período</td></tr>'}</tbody></table></div>`;
 }
 function relInadimplencia(){
   const list = DB.delinquents;
@@ -9679,7 +10157,7 @@ function runReportExport(tab){
   }
   else if(tab==='assembleias'){ const list=DB.assemblies.filter(a=>filterBarPeriodMatch(a.data) && itemMatchesFilterBar(a.leadId)); exportCSV('assembleias.csv',['Cliente','Grupo','Cota','Data','Tipo de lance','Valor','Observação'], list.map(a=>{ const lead=DB.leads.find(l=>l.id===a.leadId); return [lead?lead.nome:'',a.grupo,a.cota,a.data,a.tipoLance,a.valorLance,a.observacao]; })); }
   else if(tab==='contemplacoes'){ const list=DB.quotas.filter(q=>q.contemplado&&filterBarPeriodMatch(q.dataContemplacao) && itemMatchesFilterBar(q.leadId)); exportCSV('contemplacoes.csv',['Cliente','Cota','Administradora','Grupo','Crédito liberado','Data'], list.map(q=>{ const lead=DB.leads.find(l=>l.id===q.leadId); return [lead?lead.nome:'',q.numero,q.administradora,q.grupo,q.creditoLiberado,q.dataContemplacao]; })); }
-  else if(tab==='comissoes'){ const rows=[]; Object.values(DB.commissionMeta).forEach(cm=>{ if(!itemMatchesFilterBar(cm.leadId)) return; const lead=DB.leads.find(l=>l.id===cm.leadId); const adminTxt=displayAdminPlain(resolveCommissionAdministradora(cm, DB.contracts.find(c=>c.id===cm.contractId))); cm.parcelas.forEach(p=>{ if(filterBarPeriodMatch(p.dataPrevista) || (p.dataRecebida && filterBarPeriodMatch(p.dataRecebida))) rows.push([lead?lead.nome:'',adminTxt,p.n,p.dataPrevista,p.valor,p.status,p.dataRecebida]); }); }); exportCSV('comissoes.csv',['Cliente','Administradora','Parcela','Data prevista','Valor','Status','Data recebida'], rows); }
+  else if(tab==='comissoes'){ const rows=[]; Object.values(DB.commissionMeta).forEach(cm=>{ if(!itemMatchesFilterBar(cm.leadId)) return; const lead=DB.leads.find(l=>l.id===cm.leadId); const adminTxt=displayAdminPlain(resolveCommissionAdministradora(cm, DB.contracts.find(c=>c.id===cm.contractId))); cm.parcelas.forEach(p=>{ if(filterBarPeriodMatch(p.dataPrevista) || (p.dataRecebida && filterBarPeriodMatch(p.dataRecebida))) rows.push([lead?lead.nome:'',adminTxt,'Principal',p.n,p.dataPrevista,p.valor,p.status,p.dataRecebida]); }); if(cm.prestamista && cm.prestamista.ativo){ cm.prestamista.parcelas.forEach(p=>{ if(filterBarPeriodMatch(p.dataPrevista) || (p.dataRecebida && filterBarPeriodMatch(p.dataRecebida))) rows.push([lead?lead.nome:'',adminTxt,'Prestamista',p.n,p.dataPrevista,p.valor,p.status,p.dataRecebida]); }); } }); exportCSV('comissoes.csv',['Cliente','Administradora','Tipo','Parcela','Data prevista','Valor','Status','Data recebida'], rows); }
   else if(tab==='porassessor'){
     const rows = DB.assessores.map(a=>{
       const clientesDoAssessor = DB.leads.filter(l=>l.responsavel===a.nome);
@@ -9795,6 +10273,19 @@ function viewConfig(){
       <td><input type="number" style="width:70px;" data-rule-parc="${a}" value="${r.parcelas}"></td>
       <td><input type="number" style="width:70px;" data-rule-ini="${a}" value="${r.inicioMesesApos}"></td></tr>`; }).join('')}</tbody></table></div>
     <button class="pill-btn sm" id="saveCommRulesBtn" style="margin-top:10px;">Salvar regras de comissão</button>
+  </div>
+  <div class="card settings-block">
+    <h3>Calendários oficiais de assembleia</h3>
+    <div class="small-note" style="margin-bottom:10px;">Datas exatas publicadas por cada administradora — usadas para preencher automaticamente a próxima data ao cadastrar uma assembleia, e para a recorrência oficial (nunca "mesmo dia todo mês"). "Todos" em segmento vale para qualquer segmento dessa administradora. Editar aqui não altera assembleias já cadastradas — use "Atualizar pelo calendário oficial" na ficha do cliente/contrato para isso.</div>
+    <div class="table-wrap"><table><thead><tr><th>Ano</th><th>Administradora</th><th>Segmento</th><th>Horário</th><th>Datas (dd/mm, separadas por vírgula)</th></tr></thead>
+    <tbody>${(st.assemblyCalendars||[]).map((c,i)=>`<tr>
+      <td><input type="number" style="width:70px;" data-cal-ano="${i}" value="${c.ano}"></td>
+      <td><input style="width:130px;" data-cal-admin="${i}" value="${escapeHtml(c.administradora)}"></td>
+      <td><input style="width:100px;" data-cal-seg="${i}" value="${escapeHtml(c.segmento)}"></td>
+      <td><input style="width:70px;" data-cal-horario="${i}" value="${escapeHtml(c.horario||'')}"></td>
+      <td><input style="width:100%;min-width:280px;" data-cal-datas="${i}" value="${(c.datas||[]).map(d=>d.slice(8,10)+'/'+d.slice(5,7)).join(', ')}"></td>
+    </tr>`).join('')}</tbody></table></div>
+    <button class="pill-btn sm" id="saveAssemblyCalendarsBtn" style="margin-top:10px;">Salvar calendários</button>
   </div>
   <div class="card settings-block">
     <h3>Follow-up automático</h3>
@@ -10107,6 +10598,16 @@ function attachViewHandlers(){
   });
 
   const bnAsm=document.getElementById('btnNewAssembly'); if(bnAsm) bnAsm.onclick=()=>openAssemblyForm(null,null,null);
+  const bnAsmCal=document.getElementById('btnAtualizarCalendarioOficial'); if(bnAsmCal) bnAsmCal.onclick=()=>{
+    if(!window.confirm('Atualizar todas as assembleias FUTURAS e ainda ABERTAS (não concluídas) para as datas do calendário oficial, quando houver um cadastrado para a administradora/segmento? Assembleias passadas ou já concluídas nunca são alteradas.')) return;
+    const resultado = atualizarAssembleiasParaCalendarioOficial(null);
+    if(resultado.atualizadas>0) saveDB();
+    const partes = [];
+    if(resultado.atualizadas>0) partes.push(`${resultado.atualizadas} assembleia(s) atualizada(s)`);
+    if(resultado.conflitos>0) partes.push(`${resultado.conflitos} conflito(s) sinalizado(s) para revisão (mesma cota disputando a mesma data — nada foi excluído)`);
+    showToast(partes.length ? partes.join(' · ')+'.' : 'Nenhuma assembleia precisava de atualização.');
+    renderView();
+  };
   c.querySelectorAll('[data-asmtab]').forEach(btn=> btn.onclick=()=>{ assembleiasTab=btn.dataset.asmtab; renderView(); });
   c.querySelectorAll('[data-editassembly]').forEach(btn=> btn.onclick=()=>openAssemblyForm(btn.dataset.editassembly));
   c.querySelectorAll('[data-opengroup]').forEach(btn=> btn.onclick=()=>openAssemblyGroupDetail(btn.dataset.opengroup));
@@ -10290,6 +10791,30 @@ function wireConfigHandlers(c){
       if(pctEl) DB.settings.commissionRules[a] = {pct:Number(pctEl.value||0), parcelas:Number(parcEl.value||12), inicioMesesApos:Number(iniEl.value||1)};
     });
     saveDB(); showToast('Regras de comissão salvas'); renderView();
+  };
+  const saveAssemblyCalendarsBtn=document.getElementById('saveAssemblyCalendarsBtn'); if(saveAssemblyCalendarsBtn) saveAssemblyCalendarsBtn.onclick=()=>{
+    const atual = DB.settings.assemblyCalendars||[];
+    const novos = atual.map((c,i)=>{
+      const anoEl=document.querySelector(`[data-cal-ano="${i}"]`), adminEl=document.querySelector(`[data-cal-admin="${i}"]`),
+            segEl=document.querySelector(`[data-cal-seg="${i}"]`), horEl=document.querySelector(`[data-cal-horario="${i}"]`), datasEl=document.querySelector(`[data-cal-datas="${i}"]`);
+      const ano = Number(anoEl?anoEl.value:c.ano) || c.ano;
+      const datasTexto = (datasEl?datasEl.value:'').split(',').map(s=>s.trim()).filter(Boolean);
+      const datas = [];
+      for(const item of datasTexto){
+        const m = item.match(/^(\d{1,2})\/(\d{1,2})$/);
+        if(!m){ datas.push(null); continue; }
+        const dd = m[1].padStart(2,'0'), mm = m[2].padStart(2,'0');
+        datas.push(`${ano}-${mm}-${dd}`);
+      }
+      if(datas.some(d=>d===null)){ showToast(`Data inválida no calendário de ${c.administradora}/${c.segmento} — use o formato dd/mm.`); return null; }
+      return Object.assign({}, c, {
+        ano, administradora: (adminEl?adminEl.value:c.administradora).trim(), segmento: (segEl?segEl.value:c.segmento).trim(),
+        horario: (horEl?horEl.value:c.horario||'').trim(), datas: datas.sort()
+      });
+    });
+    if(novos.some(x=>x===null)) return; // erro de validação já mostrado — nada salvo
+    DB.settings.assemblyCalendars = novos;
+    saveDB(); showToast('Calendários oficiais salvos'); renderView();
   };
   const saveFollowupBtn=document.getElementById('saveFollowupBtn'); if(saveFollowupBtn) saveFollowupBtn.onclick=()=>{
     DB.settings.followupDays = {propostaEnviada:Number(document.getElementById('cfg_fu1').value||2), semResposta:Number(document.getElementById('cfg_fu2').value||5)};
