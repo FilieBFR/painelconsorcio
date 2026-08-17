@@ -3522,7 +3522,7 @@ let comissoesFilters = { administradora:'Todas', assessor:'Todos', competencia:'
 /* Barra de filtros ÚNICA, compartilhada pela Visão Geral e por Relatórios —
    selecionar período/assessor/segmento/administradora/origem/status muda as
    duas telas ao mesmo tempo. */
-let filterBar = { mode:'mes', from:'', to:'', assessor:'Todos', segmento:'Todos', administradora:'Todos', origem:'Todos', status:'Todos' };
+let filterBar = { mode:'mes', from:'', to:'', assessor:'Todos', segmento:'Todos', administradora:'Todos', origem:'Todos', status:'Todos', customError:'' };
 let comparePeriod = 'nenhum'; // nenhum | anterior | anoPassado
 /** Índice comercial (Maps por leadId/proposalId/contractId) construído por
  *  viewDashboard() e reaproveitado por renderDashboardCharts() logo em
@@ -3727,7 +3727,7 @@ function filterBarHTML(){
         <option value="tudo" ${fb.mode==='tudo'?'selected':''}>Todo o período</option>
         <option value="custom" ${fb.mode==='custom'?'selected':''}>Intervalo personalizado</option>
       </select>
-      ${fb.mode==='custom'? `<input type="date" id="fbFrom" value="${fb.from}"><span class="small-note">até</span><input type="date" id="fbTo" value="${fb.to}">` : ''}
+      ${fb.mode==='custom'? `<input type="date" id="fbFrom" value="${fb.from}"><span class="small-note">até</span><input type="date" id="fbTo" value="${fb.to}"><button class="pill-btn ghost sm" id="fbApplyCustom">Aplicar período</button>${fb.customError? `<span class="small-note" style="color:var(--red);">${escapeHtml(fb.customError)}</span>` : ''}` : ''}
       <select id="fbAssessor"><option value="Todos">Todos os assessores</option>${st.assessores.map(a=>`<option ${fb.assessor===a?'selected':''}>${a}</option>`).join('')}</select>
       <select id="fbSegmento"><option value="Todos">Todos os segmentos</option>${st.segmentos.map(a=>`<option ${fb.segmento===a?'selected':''}>${a}</option>`).join('')}</select>
       <select id="fbAdmin"><option value="Todos">Todas as administradoras</option>${st.administradoras.map(a=>`<option ${fb.administradora===a?'selected':''}>${a}</option>`).join('')}</select>
@@ -4129,7 +4129,7 @@ function dashboardFilterBarHTML(){
           <option value="tudo" ${fb.mode==='tudo'?'selected':''}>Todo o período</option>
           <option value="custom" ${fb.mode==='custom'?'selected':''}>Intervalo personalizado</option>
         </select>
-        ${fb.mode==='custom'? `<input type="date" id="fbFrom" value="${fb.from}"><span class="small-note">até</span><input type="date" id="fbTo" value="${fb.to}">` : ''}
+        ${fb.mode==='custom'? `<input type="date" id="fbFrom" value="${fb.from}"><span class="small-note">até</span><input type="date" id="fbTo" value="${fb.to}"><button class="pill-btn ghost sm" id="fbApplyCustom">Aplicar período</button>${fb.customError? `<span class="small-note" style="color:var(--red);">${escapeHtml(fb.customError)}</span>` : ''}` : ''}
         <select id="fbAssessor"><option value="Todos">Todos os assessores</option>${st.assessores.map(a=>`<option ${fb.assessor===a?'selected':''}>${escapeHtml(a)}</option>`).join('')}</select>
         <select id="fbSegmento"><option value="Todos">Todos os segmentos</option>${st.segmentos.map(a=>`<option ${fb.segmento===a?'selected':''}>${escapeHtml(a)}</option>`).join('')}</select>
         <select id="fbAdmin"><option value="Todos">Todas as administradoras</option>${st.administradoras.map(a=>`<option ${fb.administradora===a?'selected':''}>${escapeHtml(a)}</option>`).join('')}</select>
@@ -4261,20 +4261,23 @@ function viewDashboard(){
   </div>
   `;
 }
-/** Resolve a "dimensão" (administradora/segmento/assessor/origem) de um
- *  contrato vendido, em cascata: contrato -> proposta que o gerou -> cliente.
- *  Nunca deixa uma venda sem categoria nos gráficos/tabelas do dashboard —
- *  cai para "Não informado" só quando NENHUMA das três fontes tem o dado
- *  (ex.: cliente ficou sem assessor definido depois que a venda já tinha
- *  sido fechada, ou um contrato antigo não tem segmento na proposta). Só usa
- *  isso para agrupar exibição — não altera nenhum dado gravado. */
+/** v31 — Resolve a "dimensão" (administradora/segmento/assessor/origem) de
+ *  um contrato vendido, em cascata. Nunca deixa uma venda sem categoria nos
+ *  gráficos/tabelas do dashboard — cai para "Não informado" só quando
+ *  NENHUMA das fontes tem o dado. Só usa isso para agrupar exibição — não
+ *  altera nenhum dado gravado.
+ *  Para "segmento", a precedência é: 1. contract.segmento (contrato manual,
+ *  a partir da v30, ou já migrado); 2. segmento da proposta que gerou o
+ *  contrato; 3. lead.tipoConsorcio (dado comercial legado do cliente);
+ *  4. "Não informado". Um contrato com segmento próprio preenchido NUNCA
+ *  cai para a proposta/lead — a fonte mais específica sempre vence. */
 function resolveContractDim(contract, dimKey, idx){
   const proposal = idx ? idx.proposalByContractId.get(contract.id) : DB.proposals.find(p=>p.contratoGeradoId===contract.id);
   const lead = idx ? idx.leadsById.get(contract.leadId) : DB.leads.find(l=>l.id===contract.leadId);
   let val;
   if(dimKey==='administradora') val = contract.administradora || (proposal&&proposal.administradora) || (lead&&lead.administradora);
   else if(dimKey==='assessor') val = (proposal&&proposal.assessorResponsavel) || (lead&&lead.responsavel);
-  else if(dimKey==='segmento') val = (proposal&&proposal.segmento) || (lead&&lead.tipoConsorcio);
+  else if(dimKey==='segmento') val = contract.segmento || (proposal&&proposal.segmento) || (lead&&lead.tipoConsorcio);
   else if(dimKey==='origem') val = (proposal&&proposal.origemOportunidade) || (lead&&lead.origem);
   val = (val && String(val).trim()) ? String(val).trim() : '';
   return val || 'Não informado';
@@ -8469,7 +8472,8 @@ function viewAssembleias(){
   const groupRows = Array.from(groups.entries()).map(([key,items])=>{
     items.sort((a,b)=>a.data.localeCompare(b.data));
     const destaque = items.find(x=>x.data>=todayISO()) || items[items.length-1];
-    return { key, items, destaque };
+    const temConflito = items.some(x=>x.conflitoCalendarioOficial);
+    return { key, items, destaque, temConflito };
   }).sort((a,b)=> a.destaque.data.localeCompare(b.destaque.data));
 
   return `
@@ -8482,15 +8486,15 @@ function viewAssembleias(){
     const lead = DB.leads.find(l=>l.id===a.leadId);
     const soon = a.data>=todayISO() && a.data<=addDays(todayISO(),7);
     return `<tr>
-      <td style="${soon?'color:var(--red);font-weight:600':''}">${fmtDate(a.data)}${soon?' ⚠':''}</td>
+      <td style="${soon?'color:var(--red);font-weight:600':''}">${fmtDate(a.data)}${soon?' ⚠':''}${g.temConflito?' <span class="badge b-perdido" title="Duas ocorrências desta cota disputavam a mesma data oficial — revise antes de confirmar.">Conflito de calendário</span>':''}</td>
       <td>${escapeHtml(a.grupo||'—')}</td><td>${escapeHtml(a.cota||'—')}</td><td>${lead?escapeHtml(lead.nome):'—'}</td>
       <td>${escapeHtml(a.tipoLance||'—')}</td><td>${fmtMoney(a.valorLance)}</td>
       <td>${escapeHtml(a.recorrencia||'Nenhuma')}</td>
       <td>${g.items.length}</td>
-      <td><button class="link-btn" data-opengroup="${escapeHtml(g.key)}">Abrir</button></td>
+      <td><button class="link-btn" data-opengroup="${escapeHtml(g.key)}">${g.temConflito?'Revisar':'Abrir'}</button></td>
     </tr>`;
   }).join('') : '<tr><td colspan=9 class="empty">Nenhum registro nesta categoria</td></tr>'}</tbody></table></div>
-  <p class="small-note" style="margin-top:12px;">Cada linha reúne todas as assembleias/lances de um mesmo cliente e cota — clique em "Abrir" para ver o histórico completo. O lembrete de aviso é criado automaticamente conforme os "dias de antecedência" configurados em cada registro (padrão 7 dias antes). Cada assembleia continua sendo um registro histórico independente — nada é sobrescrito.</p>
+  <p class="small-note" style="margin-top:12px;">Cada linha reúne todas as assembleias/lances de um mesmo cliente e cota — clique em "Abrir" para ver o histórico completo. O lembrete de aviso é criado automaticamente conforme os "dias de antecedência" configurados em cada registro (padrão 7 dias antes). Cada assembleia continua sendo um registro histórico independente — nada é sobrescrito. Quando o botão "Atualizar pelo calendário oficial" encontra duas ocorrências da mesma cota disputando a mesma data, ele preserva as duas e marca a badge "Conflito de calendário" aqui — nenhuma é excluída automaticamente.</p>
   `;
 }
 /** Mostra o histórico completo (todas as ocorrências, independente da aba/filtro
@@ -8508,13 +8512,14 @@ function openAssemblyGroupDetail(key){
       const soon = a.data>=todayISO() && a.data<=addDays(todayISO(),7);
       const obsRaw = a.observacao||''; const obsResumo = obsRaw.length>40 ? escapeHtml(obsRaw.slice(0,40))+'…' : (escapeHtml(obsRaw)||'—');
       return `<tr>
-        <td style="${soon?'color:var(--red);font-weight:600':''}">${fmtDate(a.data)}${soon?' ⚠':''}${a.concluida?' <span class="badge b-fechado">Concluída</span>':''}</td>
+        <td style="${soon?'color:var(--red);font-weight:600':''}">${fmtDate(a.data)}${soon?' ⚠':''}${a.concluida?' <span class="badge b-fechado">Concluída</span>':''}${a.conflitoCalendarioOficial?' <span class="badge b-perdido" title="Esta ocorrência ficou com uma data divergente porque outra assembleia da mesma cota já ocupava a data oficial — revise e ajuste manualmente se necessário.">Conflito de calendário</span>':''}</td>
         <td>${escapeHtml(a.tipoLance||'—')}</td><td>${fmtMoney(a.valorLance)}</td><td>${a.percentualEmbutido||0}%</td>
         <td>${escapeHtml(a.recorrencia||'Nenhuma')}</td>
         <td title="${escapeHtml(obsRaw)}">${obsResumo}</td>
-        <td><button class="link-btn" data-editassembly="${a.id}">Editar</button></td>
+        <td><button class="link-btn" data-editassembly="${a.id}">${a.conflitoCalendarioOficial?'Revisar':'Editar'}</button></td>
       </tr>`;
     }).join('')}</tbody></table></div>
+    ${items.some(a=>a.conflitoCalendarioOficial) ? '<p class="small-note" style="color:var(--red);margin-top:8px;">⚠ Há um conflito de calendário oficial nesta cota — duas ocorrências disputavam a mesma data e uma delas manteve a data antiga sinalizada acima. Nenhum registro foi excluído; ajuste manualmente a data que preferir.</p>' : ''}
     <div class="modal-actions"><button class="pill-btn ghost" id="closeModal">Fechar</button></div>
   `;
   document.getElementById('closeModal').onclick = closeModalFn;
@@ -8778,6 +8783,10 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
       if(a){
         const aplicarFuturas = document.getElementById('as_aplicarfuturas') && document.getElementById('as_aplicarfuturas').checked;
         Object.assign(a,data);
+        // v31 — editar manualmente uma ocorrência sinalizada como conflito de
+        // calendário oficial conta como a revisão pedida: limpa a bandeira
+        // (o usuário já olhou e decidiu a data correta).
+        if(a.conflitoCalendarioOficial) a.conflitoCalendarioOficial = false;
         updateAssemblyTask(a);
         if(aplicarFuturas && a.seriesId){
           DB.assemblies.filter(x=> x.seriesId===a.seriesId && x.id!==a.id && x.data>a.data).forEach(x=>{
@@ -10494,15 +10503,31 @@ function attachViewHandlers(){
   const scOpenAgenda=document.getElementById('scOpenAgenda'); if(scOpenAgenda) scOpenAgenda.onclick=()=>{ currentView='agenda'; renderNav(); renderView(); };
   const scOpenLeads=document.getElementById('scOpenLeads'); if(scOpenLeads) scOpenLeads.onclick=()=>{ currentView='leads'; renderNav(); renderView(); };
 
-  const fbMode=document.getElementById('fbMode'); if(fbMode) fbMode.onchange=()=>{ filterBar.mode=fbMode.value; if(filterBar.mode==='tudo') comparePeriod='nenhum'; renderView(); };
-  const fbFrom=document.getElementById('fbFrom'); if(fbFrom) fbFrom.onchange=()=>{ filterBar.from=fbFrom.value; renderView(); };
-  const fbTo=document.getElementById('fbTo'); if(fbTo) fbTo.onchange=()=>{ filterBar.to=fbTo.value; renderView(); };
+  const fbMode=document.getElementById('fbMode'); if(fbMode) fbMode.onchange=()=>{ filterBar.mode=fbMode.value; filterBar.customError=''; if(filterBar.mode==='tudo') comparePeriod='nenhum'; renderView(); };
+  // v31 — "Intervalo personalizado": NÃO chama renderView() a cada troca de
+  // valor (isso reconstruía o DOM e cortava a digitação no meio do ano).
+  // Só guarda o valor digitado; a validação e a atualização do dashboard só
+  // acontecem ao clicar em "Aplicar período" (ver fbApplyCustom abaixo).
+  const fbFrom=document.getElementById('fbFrom'); if(fbFrom) fbFrom.onchange=()=>{ filterBar.from=fbFrom.value; };
+  const fbTo=document.getElementById('fbTo'); if(fbTo) fbTo.onchange=()=>{ filterBar.to=fbTo.value; };
+  const fbApplyCustom=document.getElementById('fbApplyCustom'); if(fbApplyCustom) fbApplyCustom.onclick=()=>{
+    const fromEl=document.getElementById('fbFrom'), toEl=document.getElementById('fbTo');
+    const fromVal = fromEl?fromEl.value:''; const toVal = toEl?toEl.value:'';
+    // <input type="date"> só devolve valor não-vazio quando dia/mês/ano estão
+    // completos e formam uma data real — "" cobre tanto vazio quanto
+    // incompleto, então esta checagem já exige as duas datas completas.
+    filterBar.from = fromVal; filterBar.to = toVal; // mantém o que foi digitado, mesmo se inválido
+    if(!fromVal || !toVal){ filterBar.customError = 'Informe a data inicial e a data final (completas).'; renderView(); return; }
+    if(fromVal > toVal){ filterBar.customError = 'A data inicial não pode ser posterior à data final.'; renderView(); return; }
+    filterBar.customError = '';
+    renderView();
+  };
   const fbAssessor=document.getElementById('fbAssessor'); if(fbAssessor) fbAssessor.onchange=()=>{ filterBar.assessor=fbAssessor.value; renderView(); };
   const fbSegmento=document.getElementById('fbSegmento'); if(fbSegmento) fbSegmento.onchange=()=>{ filterBar.segmento=fbSegmento.value; renderView(); };
   const fbAdmin=document.getElementById('fbAdmin'); if(fbAdmin) fbAdmin.onchange=()=>{ filterBar.administradora=fbAdmin.value; renderView(); };
   const fbOrigem=document.getElementById('fbOrigem'); if(fbOrigem) fbOrigem.onchange=()=>{ filterBar.origem=fbOrigem.value; renderView(); };
   const fbStatus=document.getElementById('fbStatus'); if(fbStatus) fbStatus.onchange=()=>{ filterBar.status=fbStatus.value; renderView(); };
-  const fbClear=document.getElementById('fbClear'); if(fbClear) fbClear.onclick=()=>{ filterBar={mode:'mes',from:'',to:'',assessor:'Todos',segmento:'Todos',administradora:'Todos',origem:'Todos',status:'Todos'}; comparePeriod='nenhum'; renderView(); };
+  const fbClear=document.getElementById('fbClear'); if(fbClear) fbClear.onclick=()=>{ filterBar={mode:'mes',from:'',to:'',assessor:'Todos',segmento:'Todos',administradora:'Todos',origem:'Todos',status:'Todos',customError:''}; comparePeriod='nenhum'; renderView(); };
   const fbToggle=document.getElementById('fbToggle'); if(fbToggle) fbToggle.onclick=()=>{ const body=document.getElementById('fbBody'); if(body) body.classList.toggle('open'); };
   const fbCompare=document.getElementById('fbCompare'); if(fbCompare) fbCompare.onchange=()=>{ comparePeriod=fbCompare.value; renderView(); };
   c.querySelectorAll('tr[data-setassessor]').forEach(tr=> tr.onclick=()=>{ filterBar.assessor=tr.dataset.setassessor; renderView(); });
@@ -10601,7 +10626,9 @@ function attachViewHandlers(){
   const bnAsmCal=document.getElementById('btnAtualizarCalendarioOficial'); if(bnAsmCal) bnAsmCal.onclick=()=>{
     if(!window.confirm('Atualizar todas as assembleias FUTURAS e ainda ABERTAS (não concluídas) para as datas do calendário oficial, quando houver um cadastrado para a administradora/segmento? Assembleias passadas ou já concluídas nunca são alteradas.')) return;
     const resultado = atualizarAssembleiasParaCalendarioOficial(null);
-    if(resultado.atualizadas>0) saveDB();
+    // v31 — a sinalização de conflito (conflitoCalendarioOficial:true) TAMBÉM
+    // precisa ser persistida, senão desaparece ao recarregar a página.
+    if(resultado.atualizadas>0 || resultado.conflitos>0) saveDB();
     const partes = [];
     if(resultado.atualizadas>0) partes.push(`${resultado.atualizadas} assembleia(s) atualizada(s)`);
     if(resultado.conflitos>0) partes.push(`${resultado.conflitos} conflito(s) sinalizado(s) para revisão (mesma cota disputando a mesma data — nada foi excluído)`);
