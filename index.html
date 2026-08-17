@@ -1560,16 +1560,21 @@ function resolveContractAdministradora(contract){
   if(adminsUnicas.length===1) return adminsUnicas[0];
   return '';
 }
-/** v26 — Fonte única da administradora de uma COMISSÃO
- *  (DB.commissionMeta[contractId]): usa cm.administradora se já válida;
- *  senão cai para a administradora resolvida do CONTRATO correspondente
- *  (resolveContractAdministradora) — nunca inventa/escolhe arbitrariamente. */
+/** v28 — Fonte única da administradora de uma COMISSÃO
+ *  (DB.commissionMeta[contractId]). PRIORIDADE INVERTIDA em relação à v26:
+ *  quando o CONTRATO tem uma administradora válida (resolvida por
+ *  resolveContractAdministradora — direta, por proposta ou por cota), ela é
+ *  SEMPRE a fonte oficial, mesmo que cm.administradora tenha um valor
+ *  diferente gravado (dado antigo divergente, ex.: contrato CNP com
+ *  comissão calculada como Embracon). cm.administradora só é usada como
+ *  fallback quando o contrato não existe ou não tem administradora
+ *  identificável por nenhum caminho — nunca o contrário. */
 function resolveCommissionAdministradora(cm, contract){
   if(!cm) return '';
-  const direta = safeAdminString(cm.administradora);
-  if(direta) return direta;
   const c = contract || (cm.contractId ? DB.contracts.find(x=>x.id===cm.contractId) : null);
-  return resolveContractAdministradora(c);
+  const viaContrato = resolveContractAdministradora(c);
+  if(viaContrato) return viaContrato;
+  return safeAdminString(cm.administradora);
 }
 /** v26 — Migração segura da administradora de CONTRATOS e COMISSÕES
  *  antigos, chamada dentro de normalizeDB() a cada carregamento:
@@ -1578,25 +1583,38 @@ function resolveCommissionAdministradora(cm, contract){
  *     geradora, depois cotas) e preenche SOMENTE quando o resultado é
  *     inequívoco; em caso de dúvida/conflito, o resultado é "" — nunca
  *     escolhe um valor arbitrário;
- *   - comissão sem administradora válida: usa a administradora (já
- *     migrada, se for o caso) do contrato correspondente; sem contrato
- *     definido, cai na mesma precedência via resolveContractAdministradora;
  *   - NUNCA sobrescreve uma administradora já preenchida corretamente —
  *     só corrige o que está vazio/undefined/null ou com as strings
  *     literais "undefined"/"null";
  *   - NUNCA toca em valor, percentual, parcelas, datas ou recebimentos;
  *   - NUNCA cria nem duplica contrato ou comissão — só corrige o campo
  *     administradora dos registros já existentes.
- *  Idempotente: rodar de novo não muda nada que já esteja correto.
  *
- *  v27 — retorna `true` quando pelo menos um contrato ou comissão teve sua
- *  administradora EFETIVAMENTE recuperada (o valor semântico mudou de ""
- *  para algo definido), e `false` quando nada mudou de verdade — inclusive
- *  quando o valor bruto era só uma string corrompida ("undefined"/"null")
- *  e continua sem administradora identificável (nesse caso o campo é limpo
- *  em memória, mas isso não conta como correção real para fins de
- *  persistência). Esse retorno é o que permite loadDB() decidir se vale a
- *  pena chamar saveDB() — nunca é a própria função quem salva. */
+ *  v28 — para a COMISSÃO, o contrato agora é a fonte oficial sempre que
+ *  tiver administradora identificável (mesma regra de
+ *  resolveCommissionAdministradora, aplicada aqui na migração):
+ *   - contrato com administradora válida e cm.administradora vazia ⇒
+ *     preenchimento simples (sem sinalizar revisão — nunca houve cálculo
+ *     sob uma administradora "errada", só faltava o dado);
+ *   - contrato com administradora válida DIFERENTE da cm.administradora já
+ *     preenchida (divergência real, ex.: caso Douglas — contrato CNP,
+ *     comissão Embracon) ⇒ cm.administradora é corrigida para a do
+ *     contrato E cm.regraDesatualizada é marcada true (percentual/parcelas
+ *     podem não bater mais com a regra da administradora certa) — nunca
+ *     recalcula valores aqui;
+ *   - contrato SEM administradora identificável ⇒ cm.administradora
+ *     preservada como estava (fallback legítimo, nunca apagada).
+ *  Idempotente: rodar de novo não muda nada que já esteja correto — na
+ *  segunda passagem cm.administradora já bate com o contrato, então nem o
+ *  preenchimento nem a sinalização de divergência disparam de novo.
+ *
+ *  Retorna `true` quando pelo menos um contrato ou comissão teve sua
+ *  administradora EFETIVAMENTE corrigida (preenchida ou sincronizada com o
+ *  contrato) — inclusive quando o que mudou foi só a sinalização de
+ *  divergência (regraDesatualizada) pela primeira vez. `false` quando nada
+ *  mudou de verdade (inclusive limpeza de lixo bruto tipo "undefined" que
+ *  não resolveu para nada). Esse retorno é o que permite loadDB() decidir
+ *  se vale a pena chamar saveDB() — nunca é a própria função quem salva. */
 function migrarAdministradorasDeContratosEComissoes(){
   let alterou = false;
   DB.contracts.forEach(c=>{
@@ -1606,14 +1624,21 @@ function migrarAdministradorasDeContratosEComissoes(){
     if(c.administradora !== novo) c.administradora = novo; // também limpa lixo bruto (ex.: string "undefined") mesmo sem contar como correção
   });
   Object.values(DB.commissionMeta).forEach(cm=>{
+    const contract = cm.contractId ? DB.contracts.find(c=>c.id===cm.contractId) : null;
     const antes = safeAdminString(cm.administradora);
-    let novo;
-    if(antes){ novo = antes; }
-    else {
-      const contract = cm.contractId ? DB.contracts.find(c=>c.id===cm.contractId) : null;
-      novo = resolveCommissionAdministradora(cm, contract);
+    const viaContrato = resolveContractAdministradora(contract); // contrato já migrado no laço acima
+    let novo = antes; // por padrão preserva o fallback (contrato sem administradora identificável)
+    if(viaContrato){
+      novo = viaContrato;
+      if(antes && antes!==viaContrato){
+        // Divergência real entre contrato e comissão — o contrato manda,
+        // mas a regra financeira pode não bater mais: sinaliza revisão,
+        // NUNCA recalcula percentual/parcelas/valores sozinho aqui.
+        if(!cm.regraDesatualizada) alterou = true;
+        cm.regraDesatualizada = true;
+      }
     }
-    if(novo !== antes) alterou = true;
+    if(novo !== antes) alterou = true; // preenchimento simples (comissão antes vazia) ou correção de divergência
     if(cm.administradora !== novo) cm.administradora = novo;
   });
   return alterou;
@@ -7925,18 +7950,24 @@ function openContractForm(id, presetLeadId){
     const data = {leadId:lid, numero:document.getElementById('ct_numero').value, administradora:novaAdministradora, valorContratado:moneyVal('ct_valor'), dataContratacao:document.getElementById('ct_data').value, observacoes:document.getElementById('ct_obs').value};
     sanitizeFields(data, ['numero','observacoes']);
     const cm = c ? DB.commissionMeta[c.id] : null;
-    const administradoraAnterior = c ? resolveContractAdministradora(c) : '';
-    const administradoraMudou = !!(c && cm && administradoraAnterior && administradoraAnterior!==novaAdministradora);
+    // v28 — sincroniza a comissão sempre que cm.administradora divergir da
+    // administradora final do contrato, MESMO que a administradora do
+    // próprio contrato não tenha mudado nesta edição (cobre o caso de uma
+    // comissão antiga já divergente, tipo Douglas: contrato CNP, comissão
+    // Embracon, editado só para corrigir o valor — a divergência é
+    // corrigida de qualquer forma).
+    const cmAdminAntes = cm ? safeAdminString(cm.administradora) : '';
+    const precisaSincronizarComissao = !!(cm && cmAdminAntes !== novaAdministradora);
     if(c) Object.assign(c,data); else DB.contracts.push(Object.assign({id:uid('ctr')}, data));
     const contratoFinal = c || DB.contracts[DB.contracts.length-1];
-    if(administradoraMudou){
+    if(precisaSincronizarComissao){
       cm.administradora = novaAdministradora; // atualiza só a IDENTIFICAÇÃO — nunca recalcula valor/percentual/parcelas aqui
       cm.regraDesatualizada = true; // sinaliza que a comissão precisa ser revisada (ver openCommissionForm)
     }
     const lead = DB.leads.find(l=>l.id===lid); if(lead) addTimeline(lead, `Contrato ${data.numero} ${c?'atualizado':'cadastrado'} (${displayAdminPlain(novaAdministradora)})`);
     saveDB();
-    if(administradoraMudou){
-      showToastWithAction('Administradora do contrato alterada — a regra de comissão pode ter mudado. Revise a comissão.', 'Revisar comissão', ()=> openCommissionForm(contratoFinal.id));
+    if(precisaSincronizarComissao){
+      showToastWithAction('Administradora da comissão sincronizada com o contrato — a regra de comissão pode ter mudado. Revise a comissão.', 'Revisar comissão', ()=> openCommissionForm(contratoFinal.id));
     } else {
       showToast('Contrato salvo');
     }
