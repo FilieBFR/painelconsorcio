@@ -1505,6 +1505,119 @@ function normalizeAdministradorasList(){
   });
   DB.settings.administradoras = limpa;
 }
+/** v26 — Normaliza um valor de administradora vindo de QUALQUER lugar
+ *  (contrato, comissão, cota, proposta): nunca deixa passar undefined/null,
+ *  nem as strings literais "undefined"/"null" (dados corrompidos de versões
+ *  antigas) — sempre retorna uma string, "" quando não há nada de válido. */
+function safeAdminString(valor){
+  if(valor===undefined || valor===null) return '';
+  const s = String(valor).trim();
+  if(!s) return '';
+  const norm = normalizeStr(s);
+  if(norm==='undefined' || norm==='null') return '';
+  return s;
+}
+/** v26 — Apresentação segura (HTML-escapada) de uma administradora para
+ *  telas — nunca "undefined"/"null", sempre com um fallback textual
+ *  explícito quando vazia. Usar em qualquer render de contrato/comissão. */
+function displayAdmin(valor){
+  const s = safeAdminString(valor);
+  return s ? escapeHtml(s) : 'Administradora não definida';
+}
+/** v26 — Mesma apresentação segura acima, mas SEM escapar HTML — para uso
+ *  em texto puro (CSV, timeline, alert/confirm, WhatsApp). */
+function displayAdminPlain(valor){
+  const s = safeAdminString(valor);
+  return s || 'Administradora não definida';
+}
+/** v26 — Fonte única e precedência oficial da administradora de um
+ *  CONTRATO. NUNCA busca nos dados comerciais do CLIENTE (lead.administradora
+ *  é um campo legado, ignorado aqui de propósito). Ordem:
+ *   1. contract.administradora, se já válida;
+ *   2. proposta vinculada por contract.proposalId;
+ *   3. proposta cujo contratoGeradoId === contract.id (caminho inverso,
+ *      cobre contratos antigos sem proposalId gravado);
+ *   4. administradora das cotas vinculadas ao contrato, SOMENTE quando
+ *      TODAS apontarem para a mesma administradora — conflito nunca
+ *      escolhe um valor arbitrário, resulta em "" (passo 5, seleção
+ *      manual obrigatória, é responsabilidade de quem chama esta função
+ *      na UI, nunca decidido aqui).
+ *  Retorna sempre uma STRING (nunca undefined/null). */
+function resolveContractAdministradora(contract){
+  if(!contract) return '';
+  const direta = safeAdminString(contract.administradora);
+  if(direta) return direta;
+  if(contract.proposalId){
+    const p = DB.proposals.find(x=>x.id===contract.proposalId);
+    const viaProp = p && safeAdminString(p.administradora);
+    if(viaProp) return viaProp;
+  }
+  const propostaGeradora = DB.proposals.find(p=>p.contratoGeradoId===contract.id);
+  const viaGeradora = propostaGeradora && safeAdminString(propostaGeradora.administradora);
+  if(viaGeradora) return viaGeradora;
+  const cotas = DB.quotas.filter(q=>q.contractId===contract.id);
+  const adminsUnicas = Array.from(new Set(cotas.map(q=>safeAdminString(q.administradora)).filter(Boolean)));
+  if(adminsUnicas.length===1) return adminsUnicas[0];
+  return '';
+}
+/** v26 — Fonte única da administradora de uma COMISSÃO
+ *  (DB.commissionMeta[contractId]): usa cm.administradora se já válida;
+ *  senão cai para a administradora resolvida do CONTRATO correspondente
+ *  (resolveContractAdministradora) — nunca inventa/escolhe arbitrariamente. */
+function resolveCommissionAdministradora(cm, contract){
+  if(!cm) return '';
+  const direta = safeAdminString(cm.administradora);
+  if(direta) return direta;
+  const c = contract || (cm.contractId ? DB.contracts.find(x=>x.id===cm.contractId) : null);
+  return resolveContractAdministradora(c);
+}
+/** v26 — Migração segura da administradora de CONTRATOS e COMISSÕES
+ *  antigos, chamada dentro de normalizeDB() a cada carregamento:
+ *   - contrato sem administradora válida: reaplica a precedência oficial
+ *     (resolveContractAdministradora — proposta vinculada, depois proposta
+ *     geradora, depois cotas) e preenche SOMENTE quando o resultado é
+ *     inequívoco; em caso de dúvida/conflito, o resultado é "" — nunca
+ *     escolhe um valor arbitrário;
+ *   - comissão sem administradora válida: usa a administradora (já
+ *     migrada, se for o caso) do contrato correspondente; sem contrato
+ *     definido, cai na mesma precedência via resolveContractAdministradora;
+ *   - NUNCA sobrescreve uma administradora já preenchida corretamente —
+ *     só corrige o que está vazio/undefined/null ou com as strings
+ *     literais "undefined"/"null";
+ *   - NUNCA toca em valor, percentual, parcelas, datas ou recebimentos;
+ *   - NUNCA cria nem duplica contrato ou comissão — só corrige o campo
+ *     administradora dos registros já existentes.
+ *  Idempotente: rodar de novo não muda nada que já esteja correto.
+ *
+ *  v27 — retorna `true` quando pelo menos um contrato ou comissão teve sua
+ *  administradora EFETIVAMENTE recuperada (o valor semântico mudou de ""
+ *  para algo definido), e `false` quando nada mudou de verdade — inclusive
+ *  quando o valor bruto era só uma string corrompida ("undefined"/"null")
+ *  e continua sem administradora identificável (nesse caso o campo é limpo
+ *  em memória, mas isso não conta como correção real para fins de
+ *  persistência). Esse retorno é o que permite loadDB() decidir se vale a
+ *  pena chamar saveDB() — nunca é a própria função quem salva. */
+function migrarAdministradorasDeContratosEComissoes(){
+  let alterou = false;
+  DB.contracts.forEach(c=>{
+    const antes = safeAdminString(c.administradora);
+    const novo = antes || resolveContractAdministradora(c);
+    if(novo !== antes) alterou = true; // correção real: o valor semântico mudou
+    if(c.administradora !== novo) c.administradora = novo; // também limpa lixo bruto (ex.: string "undefined") mesmo sem contar como correção
+  });
+  Object.values(DB.commissionMeta).forEach(cm=>{
+    const antes = safeAdminString(cm.administradora);
+    let novo;
+    if(antes){ novo = antes; }
+    else {
+      const contract = cm.contractId ? DB.contracts.find(c=>c.id===cm.contractId) : null;
+      novo = resolveCommissionAdministradora(cm, contract);
+    }
+    if(novo !== antes) alterou = true;
+    if(cm.administradora !== novo) cm.administradora = novo;
+  });
+  return alterou;
+}
 function normalizeDB(){
   // Defensivo: garante que módulos novos existam mesmo em bases antigas.
   const base = defaultDB();
@@ -1530,6 +1643,9 @@ function normalizeDB(){
   // nenhum outro dado da comissão.
   Object.values(DB.commissionMeta).forEach(cm=>{
     if(cm.ajustadaManualmente===undefined) cm.ajustadaManualmente = false;
+    // v26: idem para regraDesatualizada (sinaliza comissão a revisar depois
+    // de troca de administradora no contrato) — registros antigos não têm.
+    if(cm.regraDesatualizada===undefined) cm.regraDesatualizada = false;
   });
   // Defensivo: cotas cadastradas antes deste ajuste não têm os campos
   // cancelada/dataCancelamento — garante que existam, sem alterar nada mais.
@@ -1537,6 +1653,10 @@ function normalizeDB(){
     if(q.cancelada===undefined) q.cancelada = false;
     if(q.dataCancelamento===undefined) q.dataCancelamento = '';
   });
+  // v25: contratos gerados antes deste ajuste não têm proposalId — deixa
+  // explícito null (nunca inventa um vínculo) para findProposalLinkedRecords
+  // poder sempre contar com o campo presente.
+  DB.contracts.forEach(c=>{ if(c.proposalId===undefined) c.proposalId = null; });
   // Correção de dados: clientes marcados "Fechado" que ficaram sem data de
   // fechamento por causa do bug em commitSaveLead (o Object.assign gravava o
   // novo status antes de applyStatusChange comparar com o antigo, então o
@@ -1709,12 +1829,23 @@ function normalizeDB(){
   // v24: normaliza a lista de administradoras para o formato canônico
   // (lista de nomes em texto), antes de qualquer tela usá-la.
   normalizeAdministradorasList();
+  // v26: corrige a origem da administradora em contratos e comissões
+  // antigos — idempotente, não destrutiva, nunca mexe em valores/
+  // percentuais/parcelas/recebimentos, nunca duplica contrato ou comissão.
+  // v27: guarda se algo foi REALMENTE corrigido, para devolver ao chamador
+  // (normalizeDB nunca chama saveDB() sozinha — quem decide se e quando
+  // persistir é loadDB(), com base neste retorno).
+  const administradorasForamCorrigidas = migrarAdministradorasDeContratosEComissoes();
   // v24: status do cliente sempre derivado — recalcula para TODOS os
   // clientes a cada carregamento da base, garantindo que qualquer edição
   // feita fora da UI (import, restauração de backup, dado legado com status
   // pré-v24 como "Pós-venda"/"Proposta Enviada" etc.) convirja para um dos 4
   // status atuais antes de qualquer tela ser desenhada.
   DB.leads.forEach(l=> recomputeClientCommercialStatus(l.id));
+  // v27: normalizeDB() nunca persiste sozinha (nenhum saveDB() aqui dentro)
+  // — só informa ao chamador (loadDB) se algo mudou de verdade, para que a
+  // decisão de gravar seja tomada em UM único lugar.
+  return { administradorasForamCorrigidas };
 }
 /** Mapeia o status ANTIGO do cliente (STATUS_LIST) para o status de proposta
  *  equivalente (PROPOSAL_STATUS) — usado só pela migração, para dar à
@@ -1811,7 +1942,13 @@ async function loadDB(){
     try{
       DB = JSON.parse(raw3);
       if(!DB || typeof DB!=='object' || !Array.isArray(DB.leads)) throw new Error('Estrutura inválida (leads não é array)');
-      normalizeDB();
+      const resultado = normalizeDB();
+      // v27 — normalizeDB() nunca salva sozinha; loadDB() é o único lugar que
+      // decide persistir, e só quando a migração de administradoras
+      // REALMENTE corrigiu algo (contrato ou comissão) — nunca de forma
+      // incondicional a cada carregamento, senão a mesma gravação
+      // "desnecessária" de antes voltaria a acontecer todo load.
+      if(resultado && resultado.administradorasForamCorrigidas) saveDB();
       return;
     }catch(parseErr){
       // A chave existe mas está corrompida — NUNCA cair silenciosamente para dados de
@@ -4433,7 +4570,7 @@ function leadHasAdministradora(l, administradora, idx){
   const props = idx.proposalsByLead.get(l.id) || [];
   if(props.some(p=>p.administradora===administradora)) return true;
   const ctrs = idx.contractsByLead.get(l.id) || [];
-  if(ctrs.some(c=>c.administradora===administradora)) return true;
+  if(ctrs.some(c=>resolveContractAdministradora(c)===administradora)) return true;
   return l.administradora === administradora; // fallback legado (cliente antigo sem proposta migrada)
 }
 /** Cliente atende à faixa de crédito quando QUALQUER proposta OU contrato
@@ -5057,14 +5194,20 @@ function renderClientAgendaTab(l){
   ${asms.length? `<div class="table-wrap"><table><thead><tr><th>Data</th><th>Grupo/Cota</th><th>Observação</th><th>Aviso de lance</th></tr></thead><tbody>${asms.map(a=>{ const tk=a.taskId?DB.tasks.find(x=>x.id===a.taskId):null; return `<tr><td>${fmtDate(a.data)}</td><td>${escapeHtml(a.grupo||'')}/${escapeHtml(a.cota||'')}</td><td>${escapeHtml((a.observacao||'').slice(0,50))||'—'}</td><td>${tk? (tk.done? '<span class="small-note">✓ Concluído</span>' : `<button class="pill-btn sm ghost" data-completetask="${tk.id}">Concluir aviso</button>`) : '—'}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">Nenhuma assembleia vinculada</div>'}`;
 }
 function renderClientCommissionsTab(l){
-  // Um cliente pode ter vários contratos, cada um com sua própria comissão
-  // (item 3) — lista todas, uma por contrato, em vez de assumir só uma.
+  // v25: lista TODOS os contratos do cliente, mesmo os que ainda não têm
+  // comissão configurada — para esses, oferece "Configurar comissão da
+  // administradora" direto por aqui (openManualCommissionForm), em vez de só
+  // mostrar quem já tem comissão gerada.
   const contratosDoCliente = DB.contracts.filter(c=>c.leadId===l.id);
-  const comissoesDoCliente = contratosDoCliente.map(c=>({contract:c, cm:DB.commissionMeta[c.id]})).filter(x=>x.cm);
-  const admBlock = !comissoesDoCliente.length ? '<div class="empty">Este cliente ainda não possui comissão da administradora gerada (disponível após o fechamento de um contrato).</div>' : comissoesDoCliente.map(({contract,cm})=>{
+  const admBlock = !contratosDoCliente.length ? '<div class="empty">Este cliente ainda não possui contrato (disponível após o fechamento de uma proposta).</div>' : contratosDoCliente.map(contract=>{
+    const cm = DB.commissionMeta[contract.id];
+    if(!cm){
+      return `<div class="small-note" style="margin-bottom:6px;"><b>Contrato ${escapeHtml(contract.numero)}</b> · ${displayAdmin(resolveContractAdministradora(contract))} · ${fmtMoney(contract.valorContratado)} · <span class="badge b-perdido">Sem comissão configurada</span></div>
+      <button class="pill-btn sm ghost" data-manualcomm="${contract.id}" style="margin-bottom:10px;">Configurar comissão da administradora</button>`;
+    }
     const recebido = cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
     const divergente = Math.abs(Number(contract.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
-    return `<div class="small-note" style="margin-bottom:10px;"><b>Contrato ${escapeHtml(contract.numero)}</b> · ${escapeHtml(cm.administradora)} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelasQtd}x · Recebido até agora: ${fmtMoney(recebido)}${divergente?' <span class="badge b-perdido">⚠ divergência de crédito</span>':''}</div>
+    return `<div class="small-note" style="margin-bottom:10px;"><b>Contrato ${escapeHtml(contract.numero)}</b> · ${displayAdmin(resolveCommissionAdministradora(cm, contract))} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelasQtd}x · Recebido até agora: ${fmtMoney(recebido)}${divergente?' <span class="badge b-perdido">⚠ divergência de crédito</span>':''}</div>
     <button class="pill-btn sm" data-managecomm="${contract.id}" style="margin-bottom:10px;">Gerenciar parcelas — contrato ${escapeHtml(contract.numero)}</button>`;
   }).join('');
   const assessorComms = DB.assessorCommissions.filter(c=>c.leadId===l.id);
@@ -5130,6 +5273,7 @@ function wireClientSubTabHandlers(t, l, renderTab){
   }
   if(t==='comissoes'){
     document.querySelectorAll('[data-managecomm]').forEach(btn=> btn.onclick=()=>openCommissionForm(btn.dataset.managecomm));
+    document.querySelectorAll('[data-manualcomm]').forEach(btn=> btn.onclick=()=>openManualCommissionForm(btn.dataset.manualcomm));
     document.querySelectorAll('[data-newassessorcomm]').forEach(btn=> btn.onclick=()=>openAssessorCommissionForm(null, btn.dataset.newassessorcomm));
     document.querySelectorAll('[data-manageassessorcomm]').forEach(btn=> btn.onclick=()=>openAssessorCommissionForm(btn.dataset.manageassessorcomm));
   }
@@ -7451,7 +7595,11 @@ function confirmProposalClosing(existingProposal, pendingProposal, cons, lead, o
  *  em caso de qualquer pendência — nunca retorna um pacote parcial. */
 function buildContractPackage(p, consCheck, lead){
   const numero = String(DB.contracts.length+1).padStart(3,'0');
-  const contract = {id:uid('ctr'), leadId:lead.id, numero, administradora:p.administradora, valorContratado:consCheck.creditoTotal, dataContratacao:todayISO(), observacoes:`Gerado a partir da proposta ${p.numeroProposta||''} v${p.versao}`};
+  // v25: guarda a referência inversa proposalId no contrato (além de
+  // proposal.contratoGeradoId, já existente) — usada só para checagens de
+  // vínculo (ex.: bloqueio de exclusão de proposta em deleteProposal). Não
+  // altera nenhum cálculo nem o fluxo transacional em si.
+  const contract = {id:uid('ctr'), leadId:lead.id, numero, administradora:p.administradora, valorContratado:consCheck.creditoTotal, dataContratacao:todayISO(), observacoes:`Gerado a partir da proposta ${p.numeroProposta||''} v${p.versao}`, proposalId:p.id};
 
   const cotas = (p.cotas && p.cotas.length) ? p.cotas : [blankCota('001')];
   const rates = p.rates || {taxaAdministracao:0,fundoReserva:0,taxaAdesao:0,seguro:{tipo:'semSeguro',valor:0}};
@@ -7626,12 +7774,52 @@ function renderContractsList(){
  *  pode gerar um novo contrato depois, se for o caso. Sempre recalcula o
  *  status comercial do cliente ao final (pode deixar de ser Fechado se este
  *  era o único contrato/cota ativo). */
-/** v24 — Exclusão de proposta (listagem geral, aba Propostas do cliente e
- *  formulário de edição). Se a proposta já gerou contrato (p.contratoGeradoId),
- *  a exclusão é BLOQUEADA — nunca há exclusão em cascata de contrato, cota ou
- *  comissão a partir daqui; o vínculo é explicado para o usuário, que pode
- *  excluir o contrato pela aba Contratos se realmente quiser desfazer o
- *  fechamento. Para propostas sem vínculo: exclui só a proposta selecionada,
+/** v25 — Reúne TODOS os registros vinculados a uma proposta, sem confiar
+ *  apenas em proposal.contratoGeradoId (que pode ficar desatualizado em
+ *  dados legados ou inconsistentes). Verifica, nesta ordem:
+ *   1. contrato via proposal.contratoGeradoId;
+ *   2. contrato via contract.proposalId === proposal.id (referência inversa,
+ *      gravada em buildContractPackage a partir desta versão — ver ali);
+ *   3. comissão via commission.proposalId === proposal.id;
+ *   4. comissão associada a qualquer um dos contratos já encontrados acima
+ *      (DB.commissionMeta[contract.id]) — e, na volta, qualquer contrato
+ *      referenciado por uma comissão encontrada só pelo caminho 3 também
+ *      entra na lista de contratos, para que suas cotas/assembleias sejam
+ *      igualmente detectadas;
+ *   5. cotas e assembleias vinculadas a qualquer um desses contratos.
+ *  Nunca exclui nada — só relata o que encontrou, para deleteProposal()
+ *  decidir se bloqueia. */
+function findProposalLinkedRecords(proposalId){
+  const proposal = DB.proposals.find(x=>x.id===proposalId);
+  const contratosMap = new Map(); // contractId -> contract
+  if(proposal && proposal.contratoGeradoId){
+    const c = DB.contracts.find(x=>x.id===proposal.contratoGeradoId);
+    if(c) contratosMap.set(c.id, c);
+  }
+  DB.contracts.forEach(c=>{ if(c.proposalId===proposalId) contratosMap.set(c.id, c); });
+  const comissoesMap = new Map(); // contractId -> commission
+  Object.entries(DB.commissionMeta).forEach(([contractId, cm])=>{
+    if(cm.proposalId===proposalId){
+      comissoesMap.set(contractId, cm);
+      const c = DB.contracts.find(x=>x.id===contractId);
+      if(c) contratosMap.set(c.id, c); // traz o contrato dessa comissão para dentro da checagem de cotas/assembleias
+    }
+  });
+  const contratos = Array.from(contratosMap.values());
+  contratos.forEach(c=>{ if(DB.commissionMeta[c.id]) comissoesMap.set(c.id, DB.commissionMeta[c.id]); });
+  const comissoes = Array.from(comissoesMap.values());
+  const contratoIds = new Set(contratos.map(c=>c.id));
+  const cotas = DB.quotas.filter(q=>contratoIds.has(q.contractId));
+  const assembleias = DB.assemblies.filter(a=>contratoIds.has(a.contractId));
+  return { contratos, comissoes, cotas, assembleias };
+}
+/** v24/v25 — Exclusão de proposta (listagem geral, aba Propostas do cliente e
+ *  formulário de edição). Se HOUVER QUALQUER VÍNCULO (contrato, comissão,
+ *  cota ou assembleia — ver findProposalLinkedRecords), a exclusão é
+ *  BLOQUEADA — nunca há exclusão em cascata a partir daqui; os vínculos
+ *  encontrados são listados na mensagem para o usuário, que pode excluir o
+ *  contrato pela aba Contratos se realmente quiser desfazer o fechamento.
+ *  Para propostas sem NENHUM vínculo: exclui só a proposta selecionada,
  *  registra a ação na timeline do cliente, recalcula o status comercial e
  *  retorna true (chamador é quem atualiza a tela). Buscar a proposta de novo
  *  em DB.proposals a cada chamada (em vez de guardar a referência) garante
@@ -7640,15 +7828,15 @@ function deleteProposal(proposalId){
   const p = DB.proposals.find(x=>x.id===proposalId);
   if(!p){ showToast('Esta proposta já foi excluída.'); return false; }
   const lead = DB.leads.find(l=>l.id===p.leadId);
-  if(p.contratoGeradoId){
-    const contract = DB.contracts.find(c=>c.id===p.contratoGeradoId);
-    const cm = contract ? DB.commissionMeta[contract.id] : null;
-    const cotas = contract ? DB.quotas.filter(q=>q.contractId===contract.id) : [];
+  const vinculos = findProposalLinkedRecords(proposalId);
+  const temVinculo = vinculos.contratos.length || vinculos.comissoes.length || vinculos.cotas.length || vinculos.assembleias.length;
+  if(temVinculo){
     const partes = [];
-    if(contract) partes.push(`o contrato ${contract.numero}`);
-    if(cotas.length) partes.push(`${cotas.length} cota(s)`);
-    if(cm) partes.push('a comissão já gerada');
-    window.alert(`Não é possível excluir esta proposta: ela está vinculada a ${partes.length?partes.join(', '):'um contrato já gerado'}.\n\nA exclusão nunca é feita em cascata — se quiser desfazer o fechamento, exclua o contrato primeiro (aba Contratos do cliente).`);
+    if(vinculos.contratos.length) partes.push(vinculos.contratos.length===1 ? `o contrato ${vinculos.contratos[0].numero}` : `${vinculos.contratos.length} contratos (${vinculos.contratos.map(c=>c.numero).join(', ')})`);
+    if(vinculos.comissoes.length) partes.push(vinculos.comissoes.length===1 ? 'a comissão já gerada' : `${vinculos.comissoes.length} comissões já geradas`);
+    if(vinculos.cotas.length) partes.push(`${vinculos.cotas.length} cota(s)`);
+    if(vinculos.assembleias.length) partes.push(`${vinculos.assembleias.length} assembleia(s)`);
+    window.alert(`Não é possível excluir esta proposta: ela está vinculada a ${partes.join(', ')}.\n\nA exclusão nunca é feita em cascata — se quiser desfazer o fechamento, exclua o contrato primeiro (aba Contratos do cliente).`);
     return false;
   }
   const credito = p.tipoProposta==='simples' ? (p.creditoPretendido||0) : (p.valorTotal||0);
@@ -7703,14 +7891,23 @@ function deleteContract(contractId){
   saveDB();
   showToast('Contrato excluído');
 }
+/** v26 — Formulário de contrato manual (fora do fechamento transacional a
+ *  partir de proposta). Administradora agora é campo OBRIGATÓRIO, sempre a
+ *  partir de DB.settings.administradoras — nunca herdada do cadastro do
+ *  cliente. Se o contrato já tiver comissão e a administradora for alterada
+ *  na edição, a identificação é atualizada na mesma comissão (nunca
+ *  recalcula valor/percentual/parcelas em silêncio) e um aviso com atalho
+ *  para "Recalcular pela regra atual" é oferecido. */
 function openContractForm(id, presetLeadId){
   const c = id ? DB.contracts.find(x=>x.id===id) : null;
   const leadId = c ? c.leadId : presetLeadId;
+  const adminAtual = c ? resolveContractAdministradora(c) : '';
   document.getElementById('modalBody').innerHTML = `
     <h2>${c?'Editar contrato':'Novo contrato'}</h2>
     <div class="form-grid">
       <div class="field full"><label>Cliente*</label>${selectWithBlank('ct_lead', DB.leads.map(l=>({value:l.id,label:l.nome})), leadId, 'Selecione um cliente')}</div>
       <div class="field"><label>Número</label><input id="ct_numero" value="${escapeHtml(c?.numero || String(DB.contracts.length+1).padStart(3,'0'))}"></div>
+      <div class="field"><label>Administradora*</label>${selectWithBlank('ct_admin', DB.settings.administradoras.map(a=>({value:a,label:a})), adminAtual, 'Selecione a administradora')}</div>
       <div class="field"><label>Valor contratado (R$)</label><input id="ct_valor" data-money value="${moneyStr(c?.valorContratado)}"></div>
       <div class="field"><label>Data de contratação</label><input type="date" id="ct_data" value="${c?.dataContratacao||todayISO()}"></div>
       <div class="field full"><label>Observações</label><textarea id="ct_obs">${escapeHtml(c?.observacoes||'')}</textarea></div>
@@ -7723,11 +7920,26 @@ function openContractForm(id, presetLeadId){
   };
   document.getElementById('saveContractBtn').onclick = ()=>{
     const lid = document.getElementById('ct_lead').value; if(!lid){ showToast('Selecione o cliente'); return; }
-    const data = {leadId:lid, numero:document.getElementById('ct_numero').value, valorContratado:moneyVal('ct_valor'), dataContratacao:document.getElementById('ct_data').value, observacoes:document.getElementById('ct_obs').value};
+    const novaAdministradora = safeAdminString(document.getElementById('ct_admin').value);
+    if(!novaAdministradora){ showToast('Selecione a administradora — campo obrigatório.'); return; }
+    const data = {leadId:lid, numero:document.getElementById('ct_numero').value, administradora:novaAdministradora, valorContratado:moneyVal('ct_valor'), dataContratacao:document.getElementById('ct_data').value, observacoes:document.getElementById('ct_obs').value};
     sanitizeFields(data, ['numero','observacoes']);
+    const cm = c ? DB.commissionMeta[c.id] : null;
+    const administradoraAnterior = c ? resolveContractAdministradora(c) : '';
+    const administradoraMudou = !!(c && cm && administradoraAnterior && administradoraAnterior!==novaAdministradora);
     if(c) Object.assign(c,data); else DB.contracts.push(Object.assign({id:uid('ctr')}, data));
-    const lead = DB.leads.find(l=>l.id===lid); if(lead) addTimeline(lead, `Contrato ${data.numero} ${c?'atualizado':'cadastrado'}`);
-    saveDB(); showToast('Contrato salvo');
+    const contratoFinal = c || DB.contracts[DB.contracts.length-1];
+    if(administradoraMudou){
+      cm.administradora = novaAdministradora; // atualiza só a IDENTIFICAÇÃO — nunca recalcula valor/percentual/parcelas aqui
+      cm.regraDesatualizada = true; // sinaliza que a comissão precisa ser revisada (ver openCommissionForm)
+    }
+    const lead = DB.leads.find(l=>l.id===lid); if(lead) addTimeline(lead, `Contrato ${data.numero} ${c?'atualizado':'cadastrado'} (${displayAdminPlain(novaAdministradora)})`);
+    saveDB();
+    if(administradoraMudou){
+      showToastWithAction('Administradora do contrato alterada — a regra de comissão pode ter mudado. Revise a comissão.', 'Revisar comissão', ()=> openCommissionForm(contratoFinal.id));
+    } else {
+      showToast('Contrato salvo');
+    }
     if(selectedClientId && lid===selectedClientId) closeNestedFormAndReturn();
     else { closeModalFn(); renderView(); }
   };
@@ -8458,7 +8670,7 @@ function offerAssembliesForContract(contract, proposal, newQuotas, lead){
   // somente para preencher o formulário, sem que ele exista em DB.assemblies.
   function openPrefilled(item){
     openAssemblyForm(null, null, lead.id, {
-      proposalId: proposal.id, contractId: contract.id, administradora: contract.administradora, quotaId: item.quotaId,
+      proposalId: proposal.id, contractId: contract.id, administradora: resolveContractAdministradora(contract), quotaId: item.quotaId,
       onDone: ()=> openNext()
     });
     // Preenche os campos somente-leitura recém-renderizados com os dados desta cota específica.
@@ -8564,7 +8776,7 @@ function viewComissoes(){
   // contratos, cada um com sua própria linha/comissão nesta tela.
   let contratosComComissao = DB.contracts.filter(c=>DB.commissionMeta[c.id]);
   const contratosSemComissao = DB.contracts.filter(c=>!DB.commissionMeta[c.id]);
-  if(comissoesFilters.administradora!=='Todas') contratosComComissao = contratosComComissao.filter(c=>DB.commissionMeta[c.id].administradora===comissoesFilters.administradora);
+  if(comissoesFilters.administradora!=='Todas') contratosComComissao = contratosComComissao.filter(c=>resolveCommissionAdministradora(DB.commissionMeta[c.id], c)===comissoesFilters.administradora);
   if(comissoesFilters.assessor!=='Todos') contratosComComissao = contratosComComissao.filter(c=>{ const lead=DB.leads.find(l=>l.id===c.leadId); return lead && lead.responsavel===comissoesFilters.assessor; });
   let totMes=0,totFuturas=0,totAtrasadas=0,totRecebido=0,totPendente=0,totAjustadas=0;
   const now = new Date();
@@ -8606,13 +8818,13 @@ function viewComissoes(){
     const recebido = cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
     const proxima = cm.parcelas.find(p=>p.status!=='Recebida');
     const divergente = Math.abs(Number(c.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
-    return `<tr><td><b>${lead?lead.nome:'—'}</b></td><td>${escapeHtml(c.numero)}</td><td>${cm.administradora}</td><td>${lead?(lead.responsavel||'—'):'—'}</td><td>${fmtMoney(cm.valorVenda)}${divergente?' <span class="badge b-perdido">⚠</span>':''}</td><td>${cm.percentual}%</td>
+    return `<tr><td><b>${lead?lead.nome:'—'}</b></td><td>${escapeHtml(c.numero)}</td><td>${displayAdmin(resolveCommissionAdministradora(cm, c))}</td><td>${lead?(lead.responsavel||'—'):'—'}</td><td>${fmtMoney(cm.valorVenda)}${divergente?' <span class="badge b-perdido">⚠</span>':''}</td><td>${cm.percentual}%</td>
       <td>${fmtMoney(cm.totalPrevisto)}</td><td>${fmtMoney(recebido)}</td><td>${proxima?fmtDate(proxima.dataPrevista):'Todas recebidas'}</td>
       <td><button class="link-btn" data-editcomm="${c.id}">Ver parcelas</button></td></tr>`;
   }).join('') : '<tr><td colspan=10 class="empty">Nenhuma comissão gerada com os filtros atuais</td></tr>'}</tbody></table></div>
   ${contratosSemComissao.length? `<div class="section-title" style="font-size:13px;">Contratos sem comissão configurada</div>
   <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Contrato</th><th>Administradora</th><th></th></tr></thead>
-  <tbody>${contratosSemComissao.map(c=>{ const lead=DB.leads.find(l=>l.id===c.leadId); return `<tr><td>${lead?lead.nome:'—'}</td><td>${escapeHtml(c.numero)}</td><td>${c.administradora||'—'}</td><td><button class="link-btn" data-manualcomm="${c.id}">Configurar comissão</button></td></tr>`; }).join('')}</tbody></table></div>` : ''}
+  <tbody>${contratosSemComissao.map(c=>{ const lead=DB.leads.find(l=>l.id===c.leadId); return `<tr><td>${lead?lead.nome:'—'}</td><td>${escapeHtml(c.numero)}</td><td>${displayAdmin(resolveContractAdministradora(c))}</td><td><button class="link-btn" data-manualcomm="${c.id}">Configurar comissão</button></td></tr>`; }).join('')}</tbody></table></div>` : ''}
   `;
 }
 /** Comissão DESTINADA AO ASSESSOR — conceito separado da comissão recebida da
@@ -8684,26 +8896,50 @@ function openAssessorCommissionForm(id, leadId){
   };
   openModal();
 }
-/** v24 — Redistribui o TOTAL PREVISTO de uma comissão entre suas parcelas,
- *  preservando integralmente qualquer parcela já marcada "Recebida" (nunca
- *  sobrescrita). O saldo pendente (total novo menos o que já foi efetivamente
- *  recebido nas parcelas "Recebida") é o único valor redistribuído entre as
- *  parcelas ainda não recebidas, com fechamento exato de centavos
- *  (splitCentsExact). `dateForIndex(n)` decide a data prevista de cada
- *  parcela pendente pelo número absoluto da parcela (1-based) — parcelas já
- *  recebidas mantêm sua própria data, nunca recalculada aqui. */
+/** Maior número de parcela (campo `n`) entre as parcelas já marcadas
+ *  "Recebida" — 0 se nenhuma. Ex.: se só a parcela 12 está recebida (mesmo
+ *  que seja a única), o resultado é 12, não 1 — usado para nunca deixar o
+ *  número de parcelas cair abaixo do necessário para preservá-la. */
+function maiorParcelaRecebida(parcelas){
+  return (parcelas||[]).filter(p=>p.status==='Recebida').reduce((max,p)=> Math.max(max, Number(p.n)||0), 0);
+}
+/** v25 — Redistribui o TOTAL PREVISTO de uma comissão entre suas parcelas,
+ *  preservando integralmente qualquer parcela já marcada "Recebida" — nunca
+ *  removida, renumerada, sobrescrita ou revertida para Pendente. Lança um
+ *  Error (e não aplica NENHUMA alteração) quando o recálculo pedido seria
+ *  inválido:
+ *   - novoNParc menor que a maior parcela já recebida (ex.: parcela 12
+ *     recebida exige no mínimo 12 parcelas no total, mesmo que só essa uma
+ *     esteja recebida — reduzir para 6 apagaria/renumeraria a 12ª);
+ *   - novoTotalPrevisto menor que o total já efetivamente recebido.
+ *  O saldo pendente (total novo menos o que já foi recebido) é o único
+ *  valor redistribuído entre as parcelas ainda não recebidas, com
+ *  fechamento exato de centavos (splitCentsExact) — a soma final das
+ *  parcelas sempre bate com novoTotalPrevisto. `dateForIndex(n)` decide a
+ *  data prevista de cada parcela pendente pelo número absoluto da parcela
+ *  (1-based) — parcelas já recebidas mantêm sua própria data, nunca
+ *  recalculada aqui. */
 function redistributePendingCommission(parcelasAntigas, novoNParc, novoTotalPrevisto, dateForIndex){
   const recebidas = parcelasAntigas.filter(p=>p.status==='Recebida');
+  const maiorRecebida = maiorParcelaRecebida(parcelasAntigas);
+  if(novoNParc < maiorRecebida){
+    throw new Error(`Não é possível reduzir para ${novoNParc} parcela(s): a parcela ${maiorRecebida} já está marcada como Recebida — o número de parcelas não pode ficar abaixo dela.`);
+  }
   const recebidoTotal = recebidas.reduce((s,p)=> s + Number(p.valorRecebido!=null && p.valorRecebido!=='' ? p.valorRecebido : p.valor), 0);
+  const recebidoTotalArred = Math.round(recebidoTotal*100)/100;
+  const novoTotalArred = Math.round(novoTotalPrevisto*100)/100;
+  if(novoTotalArred < recebidoTotalArred - 0.005){
+    throw new Error(`O novo total previsto (${fmtMoney(novoTotalArred)}) não pode ser menor que o total já recebido (${fmtMoney(recebidoTotalArred)}).`);
+  }
   const pendentesQtd = Math.max(novoNParc - recebidas.length, 0);
-  const saldoPendente = Math.max(Math.round((novoTotalPrevisto - recebidoTotal) * 100) / 100, 0);
+  const saldoPendente = Math.max(Math.round((novoTotalArred - recebidoTotal) * 100) / 100, 0);
   const valoresPendentes = pendentesQtd>0 ? splitCentsExact(saldoPendente, pendentesQtd) : [];
   const novasParcelas = [];
   let pendIdx = 0;
   for(let i=1;i<=novoNParc;i++){
     const antiga = parcelasAntigas.find(p=>p.n===i);
     if(antiga && antiga.status==='Recebida'){
-      novasParcelas.push(Object.assign({}, antiga)); // preserva integralmente o que já foi de fato recebido
+      novasParcelas.push(Object.assign({}, antiga)); // preserva integralmente número, valor previsto, valor recebido, datas e status
     } else {
       novasParcelas.push({ n:i, dataPrevista: dateForIndex(i), valor: valoresPendentes[pendIdx]!==undefined?valoresPendentes[pendIdx]:0, status:'Pendente', dataRecebida:'', valorRecebido:0 });
       pendIdx++;
@@ -8734,33 +8970,41 @@ function openCommissionForm(contractId){
 
   function recalcularComissao(novoPct, novoNParc, novoValorVenda, novaData1){
     const totalPrevisto = Math.round(novoValorVenda * novoPct/100 * 100) / 100;
-    const novasParcelas = redistributePendingCommission(cm.parcelas, novoNParc, totalPrevisto, i=>addMonths(novaData1, i-1));
+    const novasParcelas = redistributePendingCommission(cm.parcelas, novoNParc, totalPrevisto, i=>addMonths(novaData1, i-1)); // lança Error se inválido — não altera cm em caso de falha
     cm.valorVenda = novoValorVenda;
     cm.percentual = novoPct;
     cm.parcelasQtd = novoNParc;
     cm.totalPrevisto = totalPrevisto;
     cm.parcelas = novasParcelas;
     cm.ajustadaManualmente = true;
+    cm.regraDesatualizada = false; // revisão manual concluída
   }
 
   /** Botão "Recalcular pela regra atual": usa o CRÉDITO e a ADMINISTRADORA
-   *  ATUAIS do contrato (não os que a comissão tinha quando foi gerada),
-   *  pede confirmação explícita e nunca duplica — sempre atualiza o mesmo
+   *  ATUAIS do contrato (não os que a comissão tinha quando foi gerada,
+   *  resolvidos por resolveContractAdministradora — nunca lida diretamente
+   *  com contract.administradora podendo estar vazio/inválido), pede
+   *  confirmação explícita e nunca duplica — sempre atualiza o mesmo
    *  registro DB.commissionMeta[contractId], a única fonte compartilhada
    *  pela ficha do cliente, pelo módulo global e pelo contrato. */
   function recalcularPelaRegraAtual(){
     if(!contract){ showToast('Contrato não encontrado — não é possível recalcular pela regra.'); return; }
-    const administradora = contract.administradora;
-    const rule = administradora ? DB.settings.commissionRules[administradora] : null;
-    if(!rule){ showToast(`Nenhuma regra de comissão configurada para "${administradora||'—'}" em Configurações → Comissões.`); return; }
+    const administradora = resolveContractAdministradora(contract);
+    if(!administradora){ showToast('Defina a administradora do contrato antes de recalcular pela regra.'); return; }
+    const rule = DB.settings.commissionRules[administradora];
+    if(!rule){ showToast(`Regra de comissão não configurada para "${displayAdminPlain(administradora)}" em Configurações → Comissões — use "Ajustar comissão" para definir manualmente.`); return; }
     if(!(Number(contract.valorContratado)>0)){ showToast('Este contrato não tem um valor contratado positivo.'); return; }
-    const parcelasRecebidas = cm.parcelas.filter(p=>p.status==='Recebida').length;
-    if(parcelasRecebidas > rule.parcelas){ showToast(`Já existem ${parcelasRecebidas} parcela(s) marcada(s) como Recebida — a regra atual (${rule.parcelas}x) tem menos parcelas que isso. Ajuste manualmente o número de parcelas antes.`); return; }
-    const ok = window.confirm(`Recalcular esta comissão pela regra atual de ${administradora} (${rule.pct}% em ${rule.parcelas}x, sobre ${fmtMoney(contract.valorContratado)})?\n\nParcelas já recebidas serão preservadas — só o saldo ainda pendente é redistribuído.`);
+    const maiorRecebida = maiorParcelaRecebida(cm.parcelas);
+    if(maiorRecebida > rule.parcelas){ showToast(`A parcela ${maiorRecebida} já está marcada como Recebida — a regra atual (${rule.parcelas}x) tem menos parcelas que isso. Ajuste manualmente o número de parcelas antes.`); return; }
+    const ok = window.confirm(`Recalcular esta comissão pela regra atual de ${displayAdminPlain(administradora)} (${rule.pct}% em ${rule.parcelas}x, sobre ${fmtMoney(contract.valorContratado)})?\n\nParcelas já recebidas serão preservadas — só o saldo ainda pendente é redistribuído.`);
     if(!ok) return;
     const totalPrevisto = Math.round(Number(contract.valorContratado) * rule.pct/100 * 100) / 100;
-    const novasParcelas = redistributePendingCommission(cm.parcelas, rule.parcelas, totalPrevisto, i=>addMonths(contract.dataContratacao||todayISO(), rule.inicioMesesApos + (i-1)));
+    let novasParcelas;
+    try{
+      novasParcelas = redistributePendingCommission(cm.parcelas, rule.parcelas, totalPrevisto, i=>addMonths(contract.dataContratacao||todayISO(), rule.inicioMesesApos + (i-1)));
+    }catch(e){ showToast(e.message); return; }
     cm.administradora = administradora;
+    if(!safeAdminString(contract.administradora)) contract.administradora = administradora; // identificação também gravada no contrato quando ele ainda não a tinha
     cm.percentual = rule.pct;
     cm.parcelasQtd = rule.parcelas;
     cm.valorVenda = Number(contract.valorContratado);
@@ -8768,7 +9012,8 @@ function openCommissionForm(contractId){
     cm.parcelas = novasParcelas;
     cm.regraOrigem = {pct:rule.pct, parcelas:rule.parcelas, inicioMesesApos:rule.inicioMesesApos};
     cm.ajustadaManualmente = false; // recalculada pela regra padrão vigente, não é mais um ajuste manual
-    if(l) addTimeline(l, `Comissão recalculada pela regra atual de ${administradora}${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
+    cm.regraDesatualizada = false; // revisão concluída
+    if(l) addTimeline(l, `Comissão recalculada pela regra atual de ${displayAdminPlain(administradora)}${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
     saveDB();
     ajustando = false;
     render();
@@ -8776,10 +9021,37 @@ function openCommissionForm(contractId){
   }
 
   function render(){
+    // v26 — administradora ausente/insegura: pede seleção obrigatória antes
+    // de mostrar qualquer outra parte da tela (nunca escolhe sozinho, nunca
+    // deixa cm.administradora vazio silenciosamente).
+    const adminResolvida = resolveCommissionAdministradora(cm, contract);
+    if(!adminResolvida){
+      document.getElementById('modalBody').innerHTML = `
+        <h2>Comissão — ${l?l.nome:'—'}${contract?` · Contrato ${escapeHtml(contract.numero)}`:''}</h2>
+        <div class="dup-warning" style="margin-bottom:12px;">⚠ Esta comissão está sem administradora definida — selecione antes de continuar.</div>
+        <div class="form-grid">
+          <div class="field"><label>Administradora*</label>${selectWithBlank('cf_admin_required', DB.settings.administradoras.map(a=>({value:a,label:a})), '', 'Selecione a administradora')}</div>
+        </div>
+        <div class="modal-actions"><button class="pill-btn ghost" id="closeModal">Fechar</button><button class="pill-btn" id="cf_salvar_admin">Salvar administradora</button></div>
+      `;
+      document.getElementById('closeModal').onclick = voltar;
+      document.getElementById('cf_salvar_admin').onclick = ()=>{
+        const escolhida = safeAdminString(document.getElementById('cf_admin_required').value);
+        if(!escolhida){ showToast('Selecione a administradora — campo obrigatório.'); return; }
+        cm.administradora = escolhida; // corrige o MESMO registro — nunca cria outro
+        if(contract && !safeAdminString(contract.administradora)) contract.administradora = escolhida;
+        if(l) addTimeline(l, `Administradora da comissão definida manualmente: ${displayAdminPlain(escolhida)}${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
+        saveDB();
+        showToast('Administradora salva.');
+        render();
+      };
+      return;
+    }
     const divergente = contract && Math.abs(Number(contract.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
     document.getElementById('modalBody').innerHTML = `
       <h2>Comissão — ${l?l.nome:'—'}${contract?` · Contrato ${escapeHtml(contract.numero)}`:''}</h2>
-      <div class="modal-sub">${escapeHtml(cm.administradora)} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelas.length}x${cm.ajustadaManualmente?' · <b>ajustada manualmente</b>':''}</div>
+      <div class="modal-sub">${displayAdmin(adminResolvida)} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelas.length}x${cm.ajustadaManualmente?' · <b>ajustada manualmente</b>':''}</div>
+      ${cm.regraDesatualizada ? `<div class="dup-warning" style="margin-bottom:12px;">⚠ A administradora deste contrato foi alterada — o percentual/parcelas desta comissão pode não corresponder mais à regra atual. Use "Recalcular pela regra atual" (ou "Ajustar comissão") para revisar.</div>` : ''}
       ${divergente ? `<div class="dup-warning" style="margin-bottom:12px;">⚠ O valor contratado atual (${fmtMoney(contract.valorContratado)}) é diferente da base de cálculo desta comissão (${fmtMoney(cm.valorVenda)}). Nada foi recalculado automaticamente — use "Recalcular pela regra atual" abaixo (ou "Ajustar comissão") para atualizar; parcelas já recebidas são preservadas.</div>` : ''}
       <div class="toolbar" style="justify-content:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
         ${!ajustando? `<button class="pill-btn sm ghost" id="cf_ajustar">Ajustar comissão</button>` : ''}
@@ -8837,9 +9109,11 @@ function openCommissionForm(contractId){
       if(!(novoPct>=0)){ showToast('Percentual inválido.'); return; }
       if(!(novoNParc>0) || !Number.isInteger(novoNParc)){ showToast('Número de parcelas deve ser um inteiro maior que zero.'); return; }
       if(!novaData1){ showToast('Informe a data da 1ª parcela.'); return; }
-      const parcelasRecebidas = cm.parcelas.filter(p=>p.status==='Recebida').length;
-      if(parcelasRecebidas > novoNParc){ showToast(`Já existem ${parcelasRecebidas} parcela(s) marcada(s) como Recebida — o número de parcelas não pode ser menor que isso.`); return; }
-      recalcularComissao(novoPct, novoNParc, novoValorVenda, novaData1);
+      const maiorRecebida = maiorParcelaRecebida(cm.parcelas);
+      if(maiorRecebida > novoNParc){ showToast(`A parcela ${maiorRecebida} já está marcada como Recebida — o número de parcelas não pode ficar abaixo dela.`); return; }
+      try{
+        recalcularComissao(novoPct, novoNParc, novoValorVenda, novaData1);
+      }catch(e){ showToast(e.message); return; }
       saveDB();
       ajustando = false;
       render();
@@ -8890,36 +9164,90 @@ function openCommissionForm(contractId){
   render();
   openModal();
 }
+/** v26 — Configura a comissão de um contrato que ainda não tem nenhuma.
+ *  Usa SEMPRE o crédito e a administradora do CONTRATO (nunca do lead),
+ *  resolvida por resolveContractAdministradora — quando o contrato já tem
+ *  uma administradora identificável (direta, por proposta ou por cota), ela
+ *  é usada automaticamente (campo somente-leitura); quando não, um seletor
+ *  OBRIGATÓRIO é exibido, e a escolha do usuário é salva tanto no contrato
+ *  quanto nesta comissão ao confirmar. Se existir regra configurada para a
+ *  administradora (Configurações → Comissões), pré-preenche percentual/
+ *  parcelas/início com ela — mas o usuário ainda pode ajustar antes de
+ *  gerar; sem regra, mostra "Regra de comissão não configurada" e os campos
+ *  ficam abertos para preenchimento manual. Grava direto em
+ *  DB.commissionMeta[contractId] (nunca duplica — bloqueia se já existir,
+ *  inclusive contra duplo clique) e respeita a origem do modal: se foi
+ *  aberto de dentro da ficha do cliente (aba Comissões), volta para lá; se
+ *  foi aberto do módulo global Comissões, só fecha e re-renderiza a view
+ *  atual — como o módulo global sempre lê DB.commissionMeta na hora de
+ *  desenhar a tabela, ele sai atualizado de qualquer forma. */
 function openManualCommissionForm(contractId){
   const contract = DB.contracts.find(x=>x.id===contractId);
   const l = contract ? DB.leads.find(x=>x.id===contract.leadId) : null;
   if(!contract || !l){ showToast('Contrato não encontrado.'); return; }
+  if(DB.commissionMeta[contractId]){ showToast('Este contrato já possui uma comissão gerada.'); return; }
+
+  const abertoPelaFicha = selectedClientId === l.id;
+  function voltar(){
+    if(abertoPelaFicha){ selectedClientTab = 'comissoes'; closeNestedFormAndReturn(); }
+    else { closeModalFn(); renderView(); }
+  }
+
+  const adminResolvida = resolveContractAdministradora(contract);
+  const rule = adminResolvida ? DB.settings.commissionRules[adminResolvida] : null;
+
   document.getElementById('modalBody').innerHTML = `
     <h2>Configurar comissão — ${l.nome} · Contrato ${escapeHtml(contract.numero)}</h2>
-    <div class="modal-sub">Administradora fora da tabela padrão (ou regra não definida). Informe manualmente. Usa o valor contratado (${fmtMoney(contract.valorContratado)}) deste contrato, nunca o valor do lead.</div>
+    <div class="modal-sub">${adminResolvida
+      ? (rule ? `Regra configurada para ${displayAdmin(adminResolvida)}: ${rule.pct}% em ${rule.parcelas}x (pode ser ajustada abaixo antes de gerar).`
+              : `Regra de comissão não configurada para "${displayAdmin(adminResolvida)}" — informe percentual e parcelas manualmente abaixo.`)
+      : 'Este contrato ainda não tem administradora definida — selecione abaixo (será salva no contrato e nesta comissão).'
+    } Usa o valor contratado (${fmtMoney(contract.valorContratado)}) deste contrato, nunca o valor do lead.</div>
     <div class="form-grid">
-      <div class="field"><label>% Comissão</label><input type="number" step="0.1" id="mc_pct" value="4"></div>
-      <div class="field"><label>Nº de parcelas</label><input type="number" id="mc_parc" value="12"></div>
+      <div class="field"><label>Administradora${adminResolvida?'':'*'}</label>${adminResolvida
+        ? `<div class="readonly-field">${displayAdmin(adminResolvida)}</div>`
+        : selectWithBlank('mc_admin', DB.settings.administradoras.map(a=>({value:a,label:a})), '', 'Selecione a administradora')}</div>
+      <div class="field"><label>Crédito / base de cálculo (R$)</label><div class="readonly-field">${fmtMoney(contract.valorContratado)}</div></div>
+      <div class="field"><label>% Comissão</label><input type="number" step="0.1" id="mc_pct" value="${rule?rule.pct:4}"></div>
+      <div class="field"><label>Nº de parcelas</label><input type="number" id="mc_parc" value="${rule?rule.parcelas:12}"></div>
     </div>
     <div class="modal-actions"><button class="pill-btn ghost" id="cancelForm">Cancelar</button><button class="pill-btn" id="saveMcBtn">Gerar comissão</button></div>
   `;
-  document.getElementById('cancelForm').onclick = closeModalFn;
+  document.getElementById('cancelForm').onclick = voltar;
   document.getElementById('saveMcBtn').onclick = ()=>{
+    let administradoraFinal = adminResolvida;
+    if(!administradoraFinal){
+      const sel = document.getElementById('mc_admin');
+      administradoraFinal = safeAdminString(sel ? sel.value : '');
+    }
+    if(!administradoraFinal){ showToast('Selecione a administradora — campo obrigatório.'); return; }
     const pct = Number(document.getElementById('mc_pct').value||0);
-    const parc = Number(document.getElementById('mc_parc').value||12);
+    const parc = Math.round(Number(document.getElementById('mc_parc').value||12));
     if(!(pct>=0)){ showToast('Percentual de comissão inválido.'); return; }
     if(!(parc>0) || !Number.isInteger(parc)){ showToast('Número de parcelas deve ser um inteiro maior que zero.'); return; }
     if(!(Number(contract.valorContratado||0)>0)){ showToast('Este contrato não tem um valor contratado positivo — não é possível gerar comissão.'); return; }
     if(!l.responsavel){ showToast('Defina o assessor do cliente antes de gerar a comissão.'); return; }
-    if(DB.commissionMeta[contractId]){ showToast('Este contrato já possui uma comissão gerada.'); return; }
-    const sched = generateCommissionSchedule(l, pct, parc, contract.valorContratado);
-    if(sched){
-      sched.contractId = contract.id; sched.contractNumero = contract.numero;
-      sched.proposalId = null; sched.proposalNumero = null; sched.leadId = l.id; sched.assessor = l.responsavel;
-      DB.commissionMeta[contractId] = sched;
-      addTimeline(l, `Comissão configurada manualmente para o contrato ${contract.numero}: ${pct}% em ${parc}x`);
-    }
-    saveDB(); closeModalFn(); renderView(); showToast('Comissão configurada');
+    if(DB.commissionMeta[contractId]){ showToast('Este contrato já possui uma comissão gerada.'); return; } // nunca duplica, mesmo em duplo clique
+    const ruleFinal = DB.settings.commissionRules[administradoraFinal] || null;
+    const inicioMesesApos = ruleFinal ? ruleFinal.inicioMesesApos : 1;
+    const totalPrevisto = Math.round(Number(contract.valorContratado) * pct/100 * 100) / 100;
+    const valoresParcelas = splitCentsExact(totalPrevisto, parc);
+    const base = contract.dataContratacao || todayISO();
+    const parcelas = [];
+    for(let i=1;i<=parc;i++) parcelas.push({ n:i, dataPrevista: addMonths(base, inicioMesesApos+(i-1)), valor: valoresParcelas[i-1], status:'Pendente', dataRecebida:'', valorRecebido:0 });
+    const sched = {
+      administradora: administradoraFinal, percentual: pct, parcelasQtd: parc, valorVenda: Number(contract.valorContratado), totalPrevisto,
+      regraOrigem: {pct, parcelas:parc, inicioMesesApos}, geradoEm: new Date().toISOString(), parcelas,
+      origem: ruleFinal ? 'contrato' : 'manual', contractId: contract.id, contractNumero: contract.numero,
+      proposalId: contract.proposalId || null, proposalNumero: null, leadId: l.id, assessor: l.responsavel,
+      ajustadaManualmente: false, regraDesatualizada: false
+    };
+    DB.commissionMeta[contractId] = sched; // grava direto no registro único e compartilhado (contractId), nunca cria um segundo
+    if(!safeAdminString(contract.administradora)) contract.administradora = administradoraFinal; // seleção manual também é salva no contrato
+    addTimeline(l, `Comissão configurada${ruleFinal?' pela regra atual':' manualmente'} para o contrato ${contract.numero}: ${pct}% em ${parc}x (${displayAdminPlain(administradoraFinal)})`);
+    saveDB();
+    showToast('Comissão configurada');
+    voltar();
   };
   openModal();
 }
@@ -9252,7 +9580,7 @@ function relComissoes(){
       const recebidoNoPeriodo = p.status==='Recebida' && p.dataRecebida && filterBarPeriodMatch(p.dataRecebida);
       if(previstoNoPeriodo) previsto += p.valor;
       if(recebidoNoPeriodo) recebido += (p.valorRecebido||p.valor);
-      if(previstoNoPeriodo || recebidoNoPeriodo) rows.push([lead?lead.nome:'', cm.administradora, p.n, p.dataPrevista, p.valor, p.status, p.dataRecebida||'']);
+      if(previstoNoPeriodo || recebidoNoPeriodo) rows.push([lead?lead.nome:'', displayAdminPlain(resolveCommissionAdministradora(cm, DB.contracts.find(c=>c.id===cm.contractId))), p.n, p.dataPrevista, p.valor, p.status, p.dataRecebida||'']);
     });
   });
   return `<div class="toolbar" style="justify-content:space-between;"><span class="small-note">Previsto no período: ${fmtMoney(previsto)} · Recebido no período: ${fmtMoney(recebido)}</span><button class="pill-btn ghost sm" data-relexport="comissoes">Exportar CSV</button></div>
@@ -9320,7 +9648,7 @@ function runReportExport(tab){
   }
   else if(tab==='assembleias'){ const list=DB.assemblies.filter(a=>filterBarPeriodMatch(a.data) && itemMatchesFilterBar(a.leadId)); exportCSV('assembleias.csv',['Cliente','Grupo','Cota','Data','Tipo de lance','Valor','Observação'], list.map(a=>{ const lead=DB.leads.find(l=>l.id===a.leadId); return [lead?lead.nome:'',a.grupo,a.cota,a.data,a.tipoLance,a.valorLance,a.observacao]; })); }
   else if(tab==='contemplacoes'){ const list=DB.quotas.filter(q=>q.contemplado&&filterBarPeriodMatch(q.dataContemplacao) && itemMatchesFilterBar(q.leadId)); exportCSV('contemplacoes.csv',['Cliente','Cota','Administradora','Grupo','Crédito liberado','Data'], list.map(q=>{ const lead=DB.leads.find(l=>l.id===q.leadId); return [lead?lead.nome:'',q.numero,q.administradora,q.grupo,q.creditoLiberado,q.dataContemplacao]; })); }
-  else if(tab==='comissoes'){ const rows=[]; Object.values(DB.commissionMeta).forEach(cm=>{ if(!itemMatchesFilterBar(cm.leadId)) return; const lead=DB.leads.find(l=>l.id===cm.leadId); cm.parcelas.forEach(p=>{ if(filterBarPeriodMatch(p.dataPrevista) || (p.dataRecebida && filterBarPeriodMatch(p.dataRecebida))) rows.push([lead?lead.nome:'',cm.administradora,p.n,p.dataPrevista,p.valor,p.status,p.dataRecebida]); }); }); exportCSV('comissoes.csv',['Cliente','Administradora','Parcela','Data prevista','Valor','Status','Data recebida'], rows); }
+  else if(tab==='comissoes'){ const rows=[]; Object.values(DB.commissionMeta).forEach(cm=>{ if(!itemMatchesFilterBar(cm.leadId)) return; const lead=DB.leads.find(l=>l.id===cm.leadId); const adminTxt=displayAdminPlain(resolveCommissionAdministradora(cm, DB.contracts.find(c=>c.id===cm.contractId))); cm.parcelas.forEach(p=>{ if(filterBarPeriodMatch(p.dataPrevista) || (p.dataRecebida && filterBarPeriodMatch(p.dataRecebida))) rows.push([lead?lead.nome:'',adminTxt,p.n,p.dataPrevista,p.valor,p.status,p.dataRecebida]); }); }); exportCSV('comissoes.csv',['Cliente','Administradora','Parcela','Data prevista','Valor','Status','Data recebida'], rows); }
   else if(tab==='porassessor'){
     const rows = DB.assessores.map(a=>{
       const clientesDoAssessor = DB.leads.filter(l=>l.responsavel===a.nome);
