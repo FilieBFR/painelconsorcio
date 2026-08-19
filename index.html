@@ -1695,6 +1695,40 @@ function migrarAdministradorasDeContratosEComissoes(){
   });
   return alterou;
 }
+/** v32 — Migração segura de lead.nextAction para DB.tasks (a Agenda passa a
+ *  ser sempre a fonte oficial — ver syncNextActionTask). Para cada cliente
+ *  com nextAction que ainda não tem um vínculo válido (taskId ausente, ou
+ *  apontando para uma tarefa que não existe mais):
+ *   1. procura uma tarefa EQUIVALENTE já existente (mesmo cliente, mesma
+ *      data, mesma hora, mesmo tipo) e apenas VINCULA por ela — nunca cria
+ *      uma segunda quando já existe uma correspondente;
+ *   2. só cria uma tarefa nova quando não encontra nenhuma equivalente.
+ *  Nunca apaga nenhum registro, em nenhum dos dois casos. Idempotente: na
+ *  segunda execução, todo nextAction já tem taskId válido, então não há
+ *  nada a fazer — retorna false. */
+function migrarProximasAcoesParaTasks(){
+  let alterou = false;
+  DB.leads.forEach(l=>{
+    if(!l.nextAction) return;
+    const na = l.nextAction;
+    if(na.taskId && DB.tasks.some(t=>t.id===na.taskId)) return; // vínculo já existe e é válido — nada a fazer
+    const equivalente = DB.tasks.find(t=>
+      t.clientId===l.id &&
+      t.data===na.data &&
+      (t.hora||'')===(na.hora||'') &&
+      normalizeStr(t.tipo||'')===normalizeStr(na.tipo||'')
+    );
+    if(equivalente){
+      na.taskId = equivalente.id;
+      if(!equivalente.regraAuto) equivalente.regraAuto = 'proximaAcao';
+      if(equivalente.done) na.done = true;
+    } else {
+      syncNextActionTask(l); // cria a tarefa vinculada corretamente (mesma função usada no fluxo normal)
+    }
+    alterou = true;
+  });
+  return alterou;
+}
 function normalizeDB(){
   // Defensivo: garante que módulos novos existam mesmo em bases antigas.
   const base = defaultDB();
@@ -1913,6 +1947,10 @@ function normalizeDB(){
   // (normalizeDB nunca chama saveDB() sozinha — quem decide se e quando
   // persistir é loadDB(), com base neste retorno).
   const administradorasForamCorrigidas = migrarAdministradorasDeContratosEComissoes();
+  // v32 — vincula lead.nextAction a uma tarefa em DB.tasks (Agenda é a fonte
+  // oficial): idempotente, nunca duplica, nunca apaga — ver
+  // migrarProximasAcoesParaTasks().
+  const proximasAcoesMigradas = migrarProximasAcoesParaTasks();
   // v24: status do cliente sempre derivado — recalcula para TODOS os
   // clientes a cada carregamento da base, garantindo que qualquer edição
   // feita fora da UI (import, restauração de backup, dado legado com status
@@ -1922,7 +1960,7 @@ function normalizeDB(){
   // v27: normalizeDB() nunca persiste sozinha (nenhum saveDB() aqui dentro)
   // — só informa ao chamador (loadDB) se algo mudou de verdade, para que a
   // decisão de gravar seja tomada em UM único lugar.
-  return { administradorasForamCorrigidas };
+  return { administradorasForamCorrigidas, proximasAcoesMigradas };
 }
 /** Mapeia o status ANTIGO do cliente (STATUS_LIST) para o status de proposta
  *  equivalente (PROPOSAL_STATUS) — usado só pela migração, para dar à
@@ -2025,7 +2063,8 @@ async function loadDB(){
       // REALMENTE corrigiu algo (contrato ou comissão) — nunca de forma
       // incondicional a cada carregamento, senão a mesma gravação
       // "desnecessária" de antes voltaria a acontecer todo load.
-      if(resultado && resultado.administradorasForamCorrigidas) saveDB();
+      // v32 — mesma regra vale para a migração de próximas ações -> tarefas.
+      if(resultado && (resultado.administradorasForamCorrigidas || resultado.proximasAcoesMigradas)) saveDB();
       return;
     }catch(parseErr){
       // A chave existe mas está corrompida — NUNCA cair silenciosamente para dados de
@@ -3239,6 +3278,47 @@ const ESTRATEGIAS_CONTEMPLACAO = [
 /* ================= TASKS (lembretes + compromissos unificados) =================
    ensureAutoTask evita duplicidade: uma automação (regraAuto) só cria uma nova
    tarefa se não existir outra igual, em aberto, para o mesmo cliente. */
+/** v32 — Cria ou atualiza a tarefa (DB.tasks) vinculada à "Próxima ação" de
+ *  um cliente, mantendo `lead.nextAction.taskId` sempre sincronizado nos
+ *  dois sentidos. É a ÚNICA função que deve gravar essa ligação — chamada
+ *  toda vez que a próxima ação é definida/editada (ficha do cliente,
+ *  automação de follow-up, migração). Nunca duplica: reaproveita a tarefa já
+ *  vinculada por `taskId`; só cria uma nova quando não existe vínculo válido
+ *  (taskId ausente, ou apontando para uma tarefa que não existe mais — ex.:
+ *  apagada por fora). A tarefa é sempre marcada com `regraAuto:'proximaAcao'`
+ *  para nunca ser confundida com um compromisso/lembrete manual comum, e
+ *  fica com `kind:'Compromisso'` (é um retorno agendado, não um lembrete
+ *  solto). Se `lead.nextAction` for null (removida), a tarefa vinculada é
+ *  excluída — nunca fica órfã na Agenda. */
+function syncNextActionTask(lead){
+  const na = lead.nextAction;
+  if(!na){ deleteNextActionTask(lead); return; }
+  let task = na.taskId ? DB.tasks.find(t=>t.id===na.taskId) : null;
+  if(!task){
+    task = { id:uid('task'), kind:'Compromisso', tipo:na.tipo||'', titulo:`${na.tipo||'Próxima ação'} — ${lead.nome}`,
+      data:na.data, hora:na.hora||'', prioridade:'Média', clientId:lead.id, obs:na.observacao||'',
+      done: !!na.done, regraAuto:'proximaAcao', completedAt: na.done?new Date().toISOString():undefined, completedBy: na.done?'Você':undefined };
+    DB.tasks.push(task);
+    na.taskId = task.id;
+  } else {
+    task.tipo = na.tipo||'';
+    task.titulo = `${na.tipo||'Próxima ação'} — ${lead.nome}`;
+    task.data = na.data;
+    task.hora = na.hora||'';
+    task.clientId = lead.id;
+    task.obs = na.observacao||'';
+    task.regraAuto = 'proximaAcao'; // garante a marca mesmo numa tarefa vinculada por migração
+  }
+}
+/** v32 — Remove a tarefa vinculada à próxima ação de um cliente (usada ao
+ *  excluir/substituir a próxima ação por uma nova sem reaproveitar o
+ *  vínculo) — trata SOMENTE essa tarefa, nunca outros compromissos do
+ *  cliente. */
+function deleteNextActionTask(lead){
+  if(lead.nextAction && lead.nextAction.taskId){
+    DB.tasks = DB.tasks.filter(t=>t.id!==lead.nextAction.taskId);
+  }
+}
 function ensureAutoTask(clientId, regraAuto, factory){
   const exists = DB.tasks.find(t=>t.clientId===clientId && t.regraAuto===regraAuto && !t.done);
   if(exists) return exists;
@@ -3256,7 +3336,12 @@ function ensureAutoTask(clientId, regraAuto, factory){
  *  ocorrência de uma série recorrente (assembleia/lance) afeta só ESSA
  *  tarefa — cada ocorrência tem seu próprio registro em DB.tasks desde a
  *  geração (createAssemblyTask/generateRecurringOccurrences), então a
- *  recorrência nunca é quebrada nem duplicada por esta função. */
+ *  recorrência nunca é quebrada nem duplicada por esta função.
+ *  v32 — quando a tarefa é a que está vinculada à "Próxima ação" do cliente
+ *  (lead.nextAction.taskId===t.id), a conclusão também é refletida lá
+ *  (nextAction.done=true), nos dois sentidos: concluir pela Agenda reflete
+ *  no cliente, e concluir pela ficha do cliente (mesmo botão, mesma função)
+ *  reflete na Agenda — é o mesmo registro. */
 function completeTask(taskId){
   const t = DB.tasks.find(x=>x.id===taskId);
   if(!t) return null;
@@ -3265,7 +3350,10 @@ function completeTask(taskId){
   t.completedAt = new Date().toISOString();
   t.completedBy = currentUser ? (currentUser.email||currentUser.id||'Você') : 'Você';
   const lead = t.clientId ? DB.leads.find(l=>l.id===t.clientId) : null;
-  if(lead) addTimeline(lead, `Tarefa concluída: ${t.titulo}`, '', t.completedBy);
+  if(lead){
+    addTimeline(lead, `Tarefa concluída: ${t.titulo}`, '', t.completedBy);
+    if(lead.nextAction && lead.nextAction.taskId===t.id) lead.nextAction.done = true;
+  }
   saveDB();
   return t;
 }
@@ -3279,7 +3367,10 @@ function undoCompleteTask(taskId){
   delete t.completedAt;
   delete t.completedBy;
   const lead = t.clientId ? DB.leads.find(l=>l.id===t.clientId) : null;
-  if(lead) addTimeline(lead, `Conclusão desfeita: ${t.titulo}`);
+  if(lead){
+    addTimeline(lead, `Conclusão desfeita: ${t.titulo}`);
+    if(lead.nextAction && lead.nextAction.taskId===t.id) lead.nextAction.done = false;
+  }
   saveDB();
   return t;
 }
@@ -3763,7 +3854,7 @@ function interactionAlertLevel(lead){
 function getPendencias(){
   const active = activeLeads();
   const novosLeadsAguardando = active.filter(l=> l.status==='Novo Lead');
-  const retornosAtrasados = active.filter(l=> l.nextAction && l.nextAction.data && l.nextAction.data < todayISO());
+  const retornosAtrasados = active.filter(l=> l.nextAction && !l.nextAction.done && l.nextAction.data && l.nextAction.data < todayISO());
   const propostasSemResposta = active.filter(l=> l.status==='Aguardando Resposta' || DB.proposals.some(p=>p.leadId===l.id && ['Enviada','Visualizada'].includes(p.status)));
   const propostasEmElaboracao = DB.proposals.filter(p=>p.status==='Rascunho');
   const contatosHoje = DB.tasks.filter(t=>!t.done && t.data===todayISO() && t.kind==='Lembrete');
@@ -3782,7 +3873,7 @@ function getPendencias(){
 function getPriorityQueue(limit){
   const active = activeLeads();
   const scored = active.map(l=>{
-    const overdue = l.nextAction && l.nextAction.data && l.nextAction.data < todayISO();
+    const overdue = l.nextAction && !l.nextAction.done && l.nextAction.data && l.nextAction.data < todayISO();
     const semResposta = l.status==='Aguardando Resposta' || DB.proposals.some(p=>p.leadId===l.id && ['Enviada','Visualizada'].includes(p.status));
     const dias = daysBetween(l.lastInteraction, todayISO());
     let priority, reason;
@@ -4674,7 +4765,7 @@ function filterLeadsList(){
   if(leadFilters.creditoMin) list = list.filter(l=>leadHasCreditoInRange(l, leadFilters.creditoMin, null, idx));
   if(leadFilters.creditoMax) list = list.filter(l=>leadHasCreditoInRange(l, null, leadFilters.creditoMax, idx));
   if(leadFilters.diasSemInteracao) list = list.filter(l=>daysBetween(l.lastInteraction,todayISO())>=leadFilters.diasSemInteracao);
-  if(leadFilters.apenasAtrasados) list = list.filter(l=>l.nextAction && l.nextAction.data && l.nextAction.data<todayISO());
+  if(leadFilters.apenasAtrasados) list = list.filter(l=>l.nextAction && !l.nextAction.done && l.nextAction.data && l.nextAction.data<todayISO());
   if(leadFilters.apenasCampanha){ const ativas=DB.promotions.filter(isPromoAtiva); list = list.filter(l=>ativas.some(p=>matchClientsForPromo(p).some(m=>m.id===l.id))); }
   if(searchTerm){
     const s = normalizeStr(searchTerm);
@@ -4884,7 +4975,7 @@ function renderLeadsTable(list){
   return `<div class="table-wrap"><table>
   <thead><tr><th>Nome</th><th>Segmento</th><th class="num">Crédito</th><th>Status</th><th>Assessor</th><th>Próxima ação</th><th>Entrada</th><th></th></tr></thead>
   <tbody>${list.map(l=>{
-    const overdue = l.nextAction && l.nextAction.data && l.nextAction.data<todayISO();
+    const overdue = l.nextAction && !l.nextAction.done && l.nextAction.data && l.nextAction.data<todayISO();
     return `<tr data-lead="${l.id}">
       <td><b>${l.nome}</b></td>
       <td>${leadDisplaySegmento(l)}</td>
@@ -4899,7 +4990,7 @@ function renderLeadsTable(list){
 }
 function renderLeadsKanban(list){
   return renderGenericKanban(STATUS_LIST, list, l=>l.status, l=>{
-    const overdue = l.nextAction && l.nextAction.data && l.nextAction.data<todayISO();
+    const overdue = l.nextAction && !l.nextAction.done && l.nextAction.data && l.nextAction.data<todayISO();
     return `<b>${l.nome}</b><div class="meta">${leadDisplaySegmento(l)} · ${fmtMoney(leadDisplayValor(l))}</div><div class="meta">${l.responsavel||'—'}</div>${overdue?'<div class="flag">⚠ ação atrasada</div>':''}`;
   }, l=>l.id);
 }
@@ -5113,7 +5204,7 @@ function openLeadDetail(id, initialTab){
 function renderResumoTab(l){
   const props = DB.proposals.filter(p=>p.leadId===l.id).sort((a,b)=>(b.dataUltimaAlteracao||b.dataCriacao||'').localeCompare(a.dataUltimaAlteracao||a.dataCriacao||''));
   const propostaPrincipal = props[0];
-  const overdue = l.nextAction && l.nextAction.data && l.nextAction.data<todayISO();
+  const overdue = l.nextAction && !l.nextAction.done && l.nextAction.data && l.nextAction.data<todayISO();
   const semResposta = props.some(p=>['Enviada','Visualizada'].includes(p.status));
   const diasSemContato = daysBetween(l.lastInteraction, todayISO());
   const flags = [];
@@ -5254,7 +5345,7 @@ function renderClientQuotasTab(l){
 function renderClientAgendaTab(l){
   const tasks = DB.tasks.filter(t=>t.clientId===l.id).sort((a,b)=>(a.data+a.hora).localeCompare(b.data+b.hora));
   const asms = DB.assemblies.filter(a=>a.leadId===l.id).sort((a,b)=>a.data.localeCompare(b.data));
-  const overdue = l.nextAction && l.nextAction.data && l.nextAction.data<todayISO();
+  const overdue = l.nextAction && !l.nextAction.done && l.nextAction.data && l.nextAction.data<todayISO();
   // "Próxima ação" e "Agenda" unificadas numa única aba — antes eram dois
   // lugares separados na ficha (Resumo tinha o editor de próxima ação; Agenda
   // tinha os compromissos/lembretes/assembleias), tratando essencialmente da
@@ -5263,8 +5354,9 @@ function renderClientAgendaTab(l){
   return `
   <div class="card next-action-box ${overdue?'overdue':''}" style="margin-bottom:16px;">
     <div style="font-weight:700;font-size:13px;">Próxima ação</div>
-    ${l.nextAction? `<div style="font-size:12px;margin-top:6px;">${l.nextAction.tipo} — ${fmtDate(l.nextAction.data)} ${l.nextAction.hora||''}${overdue?' <b style="color:var(--red)">(atrasada)</b>':''}<br><span class="small-note">Responsável: ${l.nextAction.responsavel||'—'}${l.nextAction.observacao?' · '+l.nextAction.observacao:''}</span></div>` : '<div class="small-note" style="margin-top:6px;">Nenhuma próxima ação definida.</div>'}
+    ${l.nextAction? `<div style="font-size:12px;margin-top:6px;">${l.nextAction.tipo} — ${fmtDate(l.nextAction.data)} ${l.nextAction.hora||''}${l.nextAction.done?' <b style="color:var(--green)">(concluída)</b>':(overdue?' <b style="color:var(--red)">(atrasada)</b>':'')}<br><span class="small-note">Responsável: ${l.nextAction.responsavel||'—'}${l.nextAction.observacao?' · '+l.nextAction.observacao:''}</span></div>` : '<div class="small-note" style="margin-top:6px;">Nenhuma próxima ação definida.</div>'}
     <button class="pill-btn sm ghost" id="editNextActionBtn" style="margin-top:10px;">Definir / editar</button>
+    ${l.nextAction? '<button class="pill-btn sm ghost" id="removeNextActionBtn" style="margin-top:10px;color:var(--red);border-color:var(--red);">Remover</button>' : ''}
     <div id="nextActionForm" style="display:none;margin-top:10px;"></div>
   </div>
   <div class="toolbar"><button class="pill-btn sm ghost" id="tabNewTask">+ Compromisso/lembrete</button><button class="pill-btn sm ghost" id="tabNewAssembly">+ Lance/assembleia</button></div>
@@ -5346,10 +5438,19 @@ function wireClientSubTabHandlers(t, l, renderTab){
         <div class="field full"><label>Observação</label><input id="na_obs" value="${escapeHtml(l.nextAction?.observacao||'')}"></div>
       </div><button class="pill-btn sm" id="saveNextAction" style="margin-top:8px;">Salvar próxima ação</button>`;
       document.getElementById('saveNextAction').onclick=()=>{
-        l.nextAction = {tipo:document.getElementById('na_tipo').value, data:document.getElementById('na_data').value, hora:document.getElementById('na_hora').value, responsavel:document.getElementById('na_resp').value, observacao:document.getElementById('na_obs').value};
+        const taskIdAnterior = l.nextAction ? l.nextAction.taskId : null;
+        l.nextAction = {tipo:document.getElementById('na_tipo').value, data:document.getElementById('na_data').value, hora:document.getElementById('na_hora').value, responsavel:document.getElementById('na_resp').value, observacao:document.getElementById('na_obs').value, done:false, taskId:taskIdAnterior};
+        syncNextActionTask(l); // cria ou reaproveita a MESMA tarefa vinculada em DB.tasks — nunca duplica
         addTimeline(l, `Próxima ação definida: ${l.nextAction.tipo} em ${fmtDate(l.nextAction.data)}`);
         saveDB(); showToast('Próxima ação salva'); renderTab('agenda');
       };
+    };
+    const rn=document.getElementById('removeNextActionBtn'); if(rn) rn.onclick=()=>{
+      if(!window.confirm('Remover a próxima ação deste cliente? A tarefa vinculada na Agenda também será removida.')) return;
+      deleteNextActionTask(l); // trata SOMENTE a tarefa vinculada — nunca outros compromissos do cliente
+      l.nextAction = null;
+      addTimeline(l, 'Próxima ação removida');
+      saveDB(); showToast('Próxima ação removida'); renderTab('agenda');
     };
   }
   if(t==='comissoes'){
@@ -8288,7 +8389,16 @@ function openDayModal(iso){
     document.querySelectorAll('[data-daycomplete]').forEach(btn=> btn.onclick=()=> completeTaskFromUI(btn.dataset.daycomplete, render));
     document.querySelectorAll('[data-daydelete]').forEach(btn=> btn.onclick=()=>{
       if(!window.confirm('Excluir este item da agenda? Esta ação não pode ser desfeita.')) return;
-      DB.tasks = DB.tasks.filter(t=>t.id!==btn.dataset.daydelete);
+      const taskId = btn.dataset.daydelete;
+      // v32 — se esta tarefa é a vinculada à "Próxima ação" de um cliente,
+      // excluir por aqui também limpa o vínculo (nunca deixa
+      // lead.nextAction.taskId apontando para uma tarefa que não existe mais).
+      const taskAlvo = DB.tasks.find(t=>t.id===taskId);
+      if(taskAlvo && taskAlvo.regraAuto==='proximaAcao'){
+        const leadDono = DB.leads.find(x=> x.nextAction && x.nextAction.taskId===taskId);
+        if(leadDono) leadDono.nextAction = null;
+      }
+      DB.tasks = DB.tasks.filter(t=>t.id!==taskId);
       saveDB(); render();
     });
   }
@@ -8320,7 +8430,20 @@ function openTaskForm(id, presetLeadId, presetDate){
     const data = {kind:document.getElementById('tk_kind').value, tipo:document.getElementById('tk_tipo').value, titulo, data:document.getElementById('tk_data').value, hora:document.getElementById('tk_hora').value, prioridade:document.getElementById('tk_prio').value, clientId:document.getElementById('tk_lead').value, obs:document.getElementById('tk_obs').value};
     sanitizeFields(data, ['tipo','titulo','obs']);
     const isNewTask = !t;
-    if(t) Object.assign(t,data); else DB.tasks.push(Object.assign({id:uid('task'), done:false, regraAuto:null}, data));
+    const taskRef = t || Object.assign({id:uid('task'), done:false, regraAuto:null}, data);
+    if(t) Object.assign(t,data); else DB.tasks.push(taskRef);
+    // v32 — se esta tarefa é a vinculada à "Próxima ação" de um cliente
+    // (regraAuto:'proximaAcao'), editar aqui também mantém os dois em sincronia
+    // (data/horário/tipo/descrição) — o mesmo compromisso, duas telas.
+    if(taskRef.regraAuto==='proximaAcao'){
+      const leadDono = DB.leads.find(x=> x.nextAction && x.nextAction.taskId===taskRef.id);
+      if(leadDono){
+        leadDono.nextAction.tipo = data.tipo;
+        leadDono.nextAction.data = data.data;
+        leadDono.nextAction.hora = data.hora;
+        leadDono.nextAction.observacao = data.obs;
+      }
+    }
     if(isNewTask && data.clientId){ const lead=DB.leads.find(l=>l.id===data.clientId); if(lead) addTimeline(lead, `${data.kind} agendado: ${data.titulo} em ${fmtDate(data.data)} ${data.hora}`); }
     saveDB();
     showToast('Item de agenda salvo');
@@ -10581,7 +10704,19 @@ function attachViewHandlers(){
   const agendaToggle = document.getElementById('agendaShowDoneToggle');
   if(agendaToggle) agendaToggle.onchange = ()=>{ agendaShowDone = agendaToggle.checked; renderView(); };
   c.querySelectorAll('[data-opentask]').forEach(btn=> btn.onclick=()=>openTaskForm(btn.dataset.opentask));
-  c.querySelectorAll('[data-deltask]').forEach(btn=> btn.onclick=()=>{ DB.tasks = DB.tasks.filter(t=>t.id!==btn.dataset.deltask); saveDB(); renderView(); });
+  c.querySelectorAll('[data-deltask]').forEach(btn=> btn.onclick=()=>{
+    const taskId = btn.dataset.deltask;
+    // v32 — mesma proteção do modal do dia: excluir a tarefa vinculada à
+    // "Próxima ação" de um cliente também limpa o vínculo, nunca deixa
+    // lead.nextAction.taskId órfão.
+    const taskAlvo = DB.tasks.find(t=>t.id===taskId);
+    if(taskAlvo && taskAlvo.regraAuto==='proximaAcao'){
+      const leadDono = DB.leads.find(x=> x.nextAction && x.nextAction.taskId===taskId);
+      if(leadDono) leadDono.nextAction = null;
+    }
+    DB.tasks = DB.tasks.filter(t=>t.id!==taskId);
+    saveDB(); renderView();
+  });
 
   const bnp=document.getElementById('btnNewProposalTop'); if(bnp) bnp.onclick=()=>openNewProposalChooser(null);
   c.querySelectorAll('[data-editproposal]').forEach(btn=> btn.onclick=()=>openProposalByIdSmart(btn.dataset.editproposal, btn.dataset.leadctx));
