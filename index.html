@@ -190,6 +190,12 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .proposal-modal-content{padding:20px 30px 24px;overflow-y:auto;min-height:0;flex:1;}
 .proposal-modal-footer{padding:16px 30px;border-top:1px solid var(--border);flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border-radius:0 0 16px 16px;}
 .proposal-modal-footer .pmf-secondary,.proposal-modal-footer .pmf-primary{display:flex;gap:8px;flex-wrap:wrap;}
+/* v36.3 — item 7: instrução discreta, só na interface (nunca impressa — ver
+   "display:none" em @media print logo abaixo), orientando a configuração
+   correta da caixa de diálogo real "Imprimir → Salvar como PDF" do
+   navegador, já que a CSS sozinha não consegue forçar essas opções. */
+.print-dialog-hint{align-self:center;font-size:11px;color:var(--text-secondary,#7a8699);line-height:1.4;}
+@media print{ .print-dialog-hint{display:none !important;} }
 @media(max-width:700px){
   .modal.xwide.proposal-modal{max-height:100vh;border-radius:0;}
   .proposal-modal-footer{flex-direction:column;align-items:stretch;}
@@ -1407,7 +1413,24 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   page-break-before: always;
 }
 
-@media (max-width: 760px) {
+/* v36.3 — item 10: escopada explicitamente para "screen" (era só
+   "max-width:760px", sem tipo de mídia). Investigação desta rodada: testes
+   reais via page.pdf() (o mesmo backend que "Imprimir → Salvar como PDF"
+   usa) em três larguras de janela diferentes (1920px, 1024px, 400px)
+   produziram PDFs pixel-idênticos — ou seja, não foi possível reproduzir o
+   vazamento da regra mobile para a impressão com as ferramentas disponíveis
+   neste ambiente. Mesmo assim, uma media query "max-width" sem o tipo
+   "screen" É, por definição do CSS, avaliada também em contexto de
+   paginação/impressão caso o mecanismo de impressão do navegador considere
+   a largura efetiva da página (ex.: 182mm de área útil de conteúdo, se a
+   margem do diálogo não for exatamente 0) menor que 760px — o que ativaria
+   silenciosamente todo este bloco (capa em px em vez de mm, grid financeiro
+   em coluna única, padding menor) sobre o PDF final. Restringir a "screen"
+   torna essa classe inteira de risco estruturalmente impossível,
+   independentemente de versão de navegador/SO ou da largura de impressão
+   calculada internamente pelo motor de paginação — sem custo algum, já que
+   estas regras nunca deveriam mesmo se aplicar à impressão. */
+@media screen and (max-width: 760px) {
   .proposal-preview.bfrp-document {
     border-radius: 0;
   }
@@ -1675,6 +1698,67 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   .bfrp-details-page .bfrp-table tbody tr:nth-last-child(-n + 2) {
     break-after: avoid;
     page-break-after: avoid;
+  }
+
+  /* v36.3 — item 9: reforço redundante e defensivo. A media query mobile já
+     foi restrita a "screen" acima (não deveria mais ativar em impressão de
+     forma alguma), mas as propriedades que ela alterava são sobrescritas
+     aqui explicitamente também dentro de @media print — caso algum
+     navegador/versão futura avalie "max-width" de forma inesperada durante
+     a paginação, ou caso a regra "screen" seja removida por engano em uma
+     edição futura, a impressão continua garantida com os valores corretos
+     de A4 independentemente disso. Nenhum destes valores é novo: são os
+     mesmos já usados no restante deste bloco @media print (capa em mm, grid
+     financeiro em linha, cotas em duas colunas). */
+  .proposal-preview.bfrp-document {
+    border-radius: 0;
+  }
+
+  .bfrp-cover-main {
+    margin-top: 22mm;
+  }
+
+  .bfrp-cover-summary {
+    grid-template-columns: 1.2fr 1fr 0.8fr;
+  }
+
+  .bfrp-flow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .bfrp-strategy {
+    grid-template-columns: minmax(0, 1.5fr) minmax(56mm, 0.7fr);
+  }
+
+  .bfrp-financial-grid {
+    flex-direction: row;
+  }
+
+  .bfrp-metric {
+    padding: 0 18px;
+    border-left: 1px solid var(--bfrp-line);
+    border-top: 0;
+  }
+
+  .bfrp-metric:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .bfrp-cover-fact + .bfrp-cover-fact {
+    padding-left: 15px;
+    border-left: 1px solid rgba(255, 255, 255, 0.14);
+    border-top: 0;
+  }
+
+  .bfrp-cover-foot,
+  .bfrp-trust {
+    flex-direction: row;
+  }
+
+  .bfrp-trust-meta {
+    max-width: 76mm;
+    text-align: right;
   }
 }
 
@@ -6458,6 +6542,7 @@ function openProposalForm(id, presetLeadId){
       <div class="proposal-modal-footer">
         <div class="pmf-secondary">
           <button class="pill-btn ghost sm" id="pBtnPrint">Imprimir / PDF</button>
+          <span class="print-dialog-hint" id="printDialogHint">Para PDF: A4 · Retrato · Escala 100% · Margens Nenhuma · Cabeçalhos desativados.</span>
           <button class="pill-btn ghost sm" id="pBtnWhatsCopy">Copiar resumo</button>
           <button class="pill-btn ghost sm" id="pBtnWhatsOpen">Abrir WhatsApp</button>
           ${p? '<button class="pill-btn ghost sm" id="pBtnDuplicate">Duplicar</button>' : ''}
