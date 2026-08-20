@@ -526,19 +526,26 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   --bfrp-gold-500: #c5a85a;
   --bfrp-gold-300: #e4d49b;
   --bfrp-ink: #162238;
-  --bfrp-muted: #66738a;
-  --bfrp-line: #dce3ed;
+  --bfrp-muted: #6b7791;
+  --bfrp-line: #e4e9f0;
+  --bfrp-line-soft: #edf1f6;
   --bfrp-paper: #ffffff;
-  --bfrp-soft: #f5f7fa;
+  --bfrp-soft: #f7f8fa;
+  /* v36 — refinamento visual: raio único e padronizado para todos os blocos de
+     conteúdo (era uma mistura de 5px/6px/7px espalhada pelo CSS); pills/selos
+     continuam com raio total (999px), tratados à parte. */
+  --bfrp-radius: 10px;
   width: 100%;
   max-width: 210mm;
   margin: 0 auto;
   overflow: hidden;
   border: 0;
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--bfrp-paper);
   color: var(--bfrp-ink);
-  box-shadow: 0 18px 55px rgba(6, 22, 47, 0.16);
+  /* v36 — sombra bem mais sutil (só para a prévia em tela; a impressão já zera
+     este valor em @media print, mais abaixo). */
+  box-shadow: 0 8px 28px rgba(6, 22, 47, 0.09);
   font-family: Inter, "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -553,12 +560,18 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   background: var(--bfrp-paper);
 }
 
+/* v36.1 — item 1: capa ocupava altura de página inteira (279mm em tela) com um
+   vão vazio grande entre o crédito e a faixa inferior. Em tela/preview, a capa
+   agora usa uma altura própria ~16% menor (234mm) — na impressão (A4 real) o
+   bloco continua preenchendo a página inteira (297mm, ver @media print), pois
+   isso é o padrão correto de uma capa full-bleed impressa; o ganho ali vem do
+   reequilíbrio dos espaçamentos internos abaixo, não da altura física do papel. */
 .bfrp-cover {
-  min-height: 279mm;
+  min-height: 234mm;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 22mm 18mm 16mm;
+  padding: 19mm 18mm 15mm;
   color: #fff;
   background: linear-gradient(148deg, var(--bfrp-navy-950) 0%, var(--bfrp-navy-900) 54%, var(--bfrp-navy-800) 100%);
 }
@@ -611,19 +624,43 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 }
 
 .bfrp-cover-brand {
-  padding-top: 4px;
+  padding-top: 6px;
   text-align: right;
-  color: rgba(255, 255, 255, 0.64);
+  color: rgba(255, 255, 255, 0.58);
   font-size: 9.5px;
   font-weight: 600;
-  letter-spacing: 0.14em;
-  line-height: 1.6;
+  letter-spacing: 0.1em;
+  line-height: 1.7;
+}
+
+/* v36 — cabeçalho mais editorial: "PROPOSTA COMERCIAL" deixa de ser um selo com
+   borda (lia como chip de dashboard) e passa a ser um rótulo tipográfico simples,
+   igual ao restante do bloco — só se destaca pela cor dourada e peso. Grupo e
+   administradora ficam explicitamente em hierarquia secundária (menor, sem caixa),
+   como pedido. */
+.bfrp-cover-brand-tag {
+  display: block;
+  color: var(--bfrp-gold-300);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
 .bfrp-cover-main {
-  margin-top: 44mm;
+  margin-top: 22mm;
   max-width: 151mm;
+}
+
+/* v36.1 — item 10: "Proposta preparada para X" reposicionado logo abaixo do
+   objetivo (mais pessoal/elegante do que só no rodapé da capa). Quando usado,
+   o rodapé (.bfrp-cover-foot) deixa de repetir o nome do cliente — ver coverHtml. */
+.bfrp-cover-prepared {
+  margin: 10px 0 0;
+  color: rgba(244, 247, 251, 0.62);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .bfrp-eyebrow {
@@ -646,6 +683,54 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   line-height: 1.11;
 }
 
+/* v35 — hero principal: "CARTA DE X" (eyebrow acima) + valor grande em destaque,
+   com selo opcional de múltiplas cotas e de redutor. */
+.bfrp-hero {
+  margin-bottom: 14px;
+}
+
+.bfrp-hero-multi {
+  display: block;
+  margin: 0 0 6px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.bfrp-hero-value-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.bfrp-hero-value-row h1 {
+  max-width: none;
+}
+
+/* v36 — selo sem borda (preenchido, discreto) — menos "chip de dashboard",
+   mais rótulo editorial em destaque secundário. */
+.bfrp-hero-badge {
+  margin-bottom: 6px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  background: rgba(197, 168, 90, 0.16);
+  color: var(--bfrp-gold-300);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.bfrp-hero-sub {
+  margin: 10px 0 0;
+  color: rgba(244, 247, 251, 0.7);
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .bfrp-cover-subtitle {
   max-width: 126mm;
   margin: 16px 0 0;
@@ -655,11 +740,16 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   line-height: 1.65;
 }
 
+/* v36.1 — item 1: era "margin-top:auto" (esticava ao máximo, criando o vão
+   vazio entre o crédito e esta faixa). Agora um valor fixo e generoso, mas
+   limitado — reduz o vão sem comprimir nenhum elemento; o espaço que sobra
+   passa a ficar como margem inferior discreta da capa (abaixo do rodapé),
+   em vez de um buraco no meio. */
 .bfrp-cover-summary {
   display: grid;
   grid-template-columns: 1.2fr 1fr 0.8fr;
   gap: 0;
-  margin-top: auto;
+  margin-top: 28mm;
   border-top: 1px solid rgba(228, 212, 155, 0.5);
   border-bottom: 1px solid rgba(255, 255, 255, 0.14);
 }
@@ -706,8 +796,14 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   line-height: 1.55;
 }
 
+/* v36.1 — item 9: cada ".bfrp-page" herdava min-height:279mm (ou 297mm na
+   impressão) mesmo quando o conteúdo real era bem mais curto — reservando
+   espaço em branco fixo por página, principal causa da "segunda página quase
+   vazia" no Lance Livre com histórico. Conteúdo/detalhes agora ocupam só a
+   altura que precisam; a capa continua com página cheia (ver .bfrp-cover). */
 .bfrp-content-page,
 .bfrp-details-page {
+  min-height: 0;
   padding: 14mm 15mm 13mm;
 }
 
@@ -735,27 +831,37 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   text-transform: uppercase;
 }
 
+/* v36.1 — item 2: leitura do corpo ligeiramente maior (~5-8%) para melhorar a
+   legibilidade em PDF aberto no celular/WhatsApp, sem mexer em títulos. */
 .bfrp-intro {
   max-width: 160mm;
   margin: 0 0 7mm;
   color: #3c4960;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
 }
 
+/* v36 — mais espaço entre as grandes seções (era 7mm) — parte da direção de
+   "mais espaço em branco" pedida para reduzir a sensação de painel/dashboard. */
 .bfrp-section {
-  margin-top: 7mm;
+  margin-top: 9.5mm;
 }
 
+/* v36.1 — item 6: menos "caixa alta gritada" nos títulos técnicos (Estrutura
+   financeira, Condições da carta, Estratégia de contemplação, Como o plano
+   evolui, Cenário apresentado, Observações do planejamento, Próximos passos,
+   Detalhamento das cotas, Histórico do grupo) — todos usam esta mesma classe,
+   então o ajuste vale para os 9 de uma vez. Mantém maiúsculas e a régua ao
+   lado (identidade institucional), só reduz peso e espaçamento entre letras. */
 .bfrp-section-title {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 0 3.5mm;
+  margin: 0 0 4.5mm;
   color: var(--bfrp-navy-900);
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.14em;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -766,29 +872,96 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   background: var(--bfrp-line);
 }
 
+/* v36 — item 7: detalhamento de cotas recebe destaque maior só quando há mais de
+   uma cota; com uma única cota, a mesma informação (integral, nada é removido)
+   aparece de forma visualmente mais discreta — título menor e mais neutro,
+   tabela com tipografia reduzida e bordas ainda mais leves. */
+.bfrp-section-quiet .bfrp-section-title {
+  color: var(--bfrp-muted);
+  font-size: 8.6px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+}
+
+.bfrp-section-quiet .bfrp-table-wrap {
+  border-color: var(--bfrp-line-soft);
+}
+
+.bfrp-section-quiet .bfrp-table {
+  font-size: 9.8px;
+}
+
+.bfrp-section-quiet .bfrp-table th {
+  font-size: 8.5px;
+  font-weight: 650;
+}
+
+/* v36 — "Resumo financeiro": deixou de ser uma grade de cartões com borda e fundo
+   próprios (lia como um dashboard de KPIs) e passa a ser uma FAIXA HORIZONTAL
+   ÚNICA E INTEGRADA — os indicadores dividem o mesmo espaço, separados por uma
+   linha vertical bem discreta (ou só espaçamento, quando quebram de linha), sem
+   caixas pesadas. Mesmos dados, mesma função JS (financialGridHtml) — só a
+   apresentação visual muda. */
 .bfrp-financial-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 9px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  padding: 2px 0;
 }
 
 .bfrp-metric {
-  min-height: 24mm;
-  padding: 12px 13px;
-  border: 1px solid var(--bfrp-line);
-  border-radius: 7px;
-  background: #fff;
+  flex: 1 1 0;
+  min-width: 38mm;
+  padding: 0 18px;
+  border-left: 1px solid var(--bfrp-line);
 }
 
+.bfrp-metric:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+/* v36.1 — item 3: "Estrutura financeira" ganha 3 níveis reais de hierarquia
+   (antes todos os indicadores tinham exatamente o mesmo peso visual):
+     1) .bfrp-metric-primary  — Crédito contratado e Parcela inicial (maior
+        destaque: tique dourado, tamanho e peso maiores, navy mais escuro).
+     2) .bfrp-metric-accent   — resultados pós-contemplação (Após a
+        contemplação, Crédito líquido): destaque intermediário.
+     3) .bfrp-metric (padrão) — Prazo, Quantidade de cotas: nível secundário.
+   Mesmos dados, mesma função financialGridHtml; só a classe/CSS mudou. */
 .bfrp-metric-primary {
-  border-color: rgba(197, 168, 90, 0.68);
-  background: linear-gradient(145deg, #fffdf7, #fff);
+  padding-top: 2px;
+}
+
+.bfrp-metric-primary::before {
+  content: "";
+  display: block;
+  width: 18px;
+  height: 2px;
+  margin-bottom: 7px;
+  background: var(--bfrp-gold-500);
+}
+
+.bfrp-metric-primary strong {
+  color: var(--bfrp-navy-950);
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.bfrp-metric-accent strong {
+  color: var(--bfrp-navy-900);
+  font-size: 17.5px;
+  font-weight: 680;
+}
+
+.bfrp-metric-accent span {
+  color: #7c8aa3;
 }
 
 .bfrp-metric span {
   display: block;
   color: var(--bfrp-muted);
-  font-size: 8.8px;
+  font-size: 9.1px;
   font-weight: 680;
   letter-spacing: 0.08em;
   line-height: 1.35;
@@ -797,10 +970,10 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 
 .bfrp-metric strong {
   display: block;
-  margin-top: 6px;
-  color: var(--bfrp-navy-900);
-  font-size: 18px;
-  font-weight: 700;
+  margin-top: 7px;
+  color: var(--bfrp-navy-800);
+  font-size: 15px;
+  font-weight: 620;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
@@ -809,38 +982,56 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   display: block;
   margin-top: 5px;
   color: var(--bfrp-muted);
-  font-size: 9px;
+  font-size: 9.2px;
   line-height: 1.4;
 }
 
+/* v36 — bloco de "grande destaque" pedido para a estratégia de contemplação,
+   mas sem a caixa pesada (borda completa + fundo creme) da v35: fica só a barra
+   de destaque à esquerda (mais fina) sobre fundo branco, e um leve tom neutro
+   muito claro por trás — a hierarquia agora vem do espaçamento e da tipografia,
+   não de uma "caixa". */
 .bfrp-strategy {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(56mm, 0.75fr);
-  gap: 12px;
-  padding: 14px 15px;
-  border: 1px solid #e6dcc0;
-  border-left: 3px solid var(--bfrp-gold-500);
-  border-radius: 7px;
-  background: #fcfaf4;
+  grid-template-columns: minmax(0, 1.5fr) minmax(56mm, 0.7fr);
+  gap: 20px;
+  padding: 18px 20px;
+  border-left: 2px solid var(--bfrp-gold-500);
+  border-radius: 4px;
+  background: var(--bfrp-soft);
+}
+
+/* v36 — pequeno rótulo de identidade acima do título (Sorteio / Lance Fixo /
+   Lance Livre / Estratégia combinada) — dá a cada modalidade uma marca própria
+   dentro do mesmo padrão visual, sem criar cores ou componentes novos. */
+.bfrp-strategy-tag {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--bfrp-gold-500);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .bfrp-strategy h3 {
-  margin: 0 0 6px;
+  margin: 0 0 7px;
   color: var(--bfrp-navy-900);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .bfrp-strategy p {
   margin: 0;
   color: #4e5c72;
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 11.8px;
+  line-height: 1.6;
 }
 
 .bfrp-strategy-values {
   display: grid;
-  gap: 6px;
+  gap: 9px;
   align-content: center;
 }
 
@@ -849,10 +1040,10 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid rgba(13, 42, 82, 0.1);
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(13, 42, 82, 0.08);
   color: var(--bfrp-muted);
-  font-size: 9.5px;
+  font-size: 10.2px;
 }
 
 .bfrp-strategy-value:last-child {
@@ -862,34 +1053,152 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 
 .bfrp-strategy-value b {
   color: var(--bfrp-navy-900);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 650;
   white-space: nowrap;
 }
 
+/* v36.1 — item 4: no bloco de Lance Livre, o percentual passa a ser o dado
+   mais identificável da estratégia (número grande, isolado no topo da coluna
+   de valores); lance total, composição e crédito líquido continuam logo
+   abaixo, com o mesmo peso visual secundário de sempre. Nenhum valor mudou —
+   só a ênfase visual do percentual. Usado exclusivamente em strategyHtml()
+   no ramo Lance Livre; Sorteio, Lance Fixo e estratégia combinada continuam
+   usando apenas .bfrp-strategy-value, sem nenhuma alteração visual. */
+.bfrp-strategy-percent {
+  margin-bottom: 9px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid rgba(197, 168, 90, 0.35);
+}
+
+.bfrp-strategy-percent span {
+  display: block;
+  color: var(--bfrp-muted);
+  font-size: 9.2px;
+  font-weight: 680;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.bfrp-strategy-percent strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--bfrp-navy-950);
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* v35 — variante do bfrp-strategy-value para a composição do lance ("sendo: ...");
+   texto mais longo, então quebra linha em vez de forçar nowrap. */
+.bfrp-strategy-value-wide b {
+  white-space: normal;
+  font-size: 10.5px;
+  font-weight: 650;
+  text-align: right;
+}
+
+/* v36 — "Até a contemplação" como extensão natural do bloco de estratégia: mesma
+   barra de destaque à esquerda, mesmo fundo, mas separada só por uma linha fina —
+   nunca um novo cartão isolado com borda própria. */
+.bfrp-strategy-extra {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(197, 168, 90, 0.35);
+}
+
+/* v36.1 — item 5: "Até a contemplação" já vivia dentro do bloco de estratégia
+   desde a v36 (preservado); agora o cabeçalho também LÊ como premissa (não
+   como título de seção nova) — "PREMISSA UTILIZADA" em destaque dourado, com
+   "Até a contemplação" como complemento discreto na mesma linha. */
+.bfrp-strategy-extra-head {
+  margin: 0 0 10px;
+  color: var(--bfrp-muted);
+  font-size: 8.8px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bfrp-strategy-extra-kicker {
+  color: var(--bfrp-gold-500);
+  font-weight: 800;
+}
+
+.bfrp-strategy-extra .bfrp-financial-grid {
+  padding: 0;
+}
+
+.bfrp-strategy-extra .bfrp-metric {
+  padding: 0 18px;
+}
+
+.bfrp-strategy-extra .bfrp-metric:first-child {
+  padding-left: 0;
+}
+
+/* v35 — "CONDIÇÕES DA CARTA": grade compacta de pares rótulo/valor, mesmo padrão
+   visual dos cartões financeiros, porém mais densa (mais itens, menos ênfase). */
+/* v36 — "Condições da carta" vira ficha técnica: sem caixa/borda ao redor, só
+   uma grade tipográfica de rótulo/valor com linhas finas entre os itens. */
+.bfrp-conditions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 24px;
+}
+
+.bfrp-conditions-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--bfrp-line-soft);
+}
+
+.bfrp-conditions-item:nth-last-child(-n+2) {
+  border-bottom: 0;
+}
+
+.bfrp-conditions-item span {
+  color: var(--bfrp-muted);
+  font-size: 10.5px;
+}
+
+.bfrp-conditions-item b {
+  color: var(--bfrp-navy-900);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* v36 — "Como o plano evolui" deixa de ser 3 cartões grandes e passa a ser uma
+   LINHA HORIZONTAL SIMPLES: uma régua fina contínua com três marcadores: cada
+   etapa é só texto (índice + título + descrição) apoiado na régua, sem caixa,
+   sem fundo, sem borda ao redor. */
 .bfrp-flow {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--bfrp-line);
 }
 
 .bfrp-flow-item {
   position: relative;
-  min-height: 24mm;
-  padding: 13px 12px 11px;
-  border-top: 2px solid var(--bfrp-navy-800);
-  background: var(--bfrp-soft);
+  padding-top: 14px;
 }
 
-.bfrp-flow-item:not(:last-child)::after {
+.bfrp-flow-item::before {
   content: "";
   position: absolute;
-  top: 15px;
-  right: -10px;
-  width: 6px;
-  height: 6px;
-  border-top: 1px solid var(--bfrp-gold-500);
-  border-right: 1px solid var(--bfrp-gold-500);
-  transform: rotate(45deg);
+  top: -1px;
+  left: 0;
+  width: 16px;
+  height: 2px;
+  background: var(--bfrp-gold-500);
 }
 
 .bfrp-flow-index {
@@ -900,31 +1209,34 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 }
 
 .bfrp-flow-item h4 {
-  margin: 5px 0 5px;
+  margin: 5px 0 4px;
   color: var(--bfrp-navy-900);
   font-size: 12px;
+  font-weight: 650;
 }
 
 .bfrp-flow-item p {
   margin: 0;
   color: var(--bfrp-muted);
-  font-size: 9.7px;
-  line-height: 1.5;
-}
-
-.bfrp-note {
-  margin: 8px 0 0;
-  padding: 8px 10px;
-  border-radius: 5px;
-  background: #f6f8fb;
-  color: var(--bfrp-muted);
-  font-size: 9.7px;
+  font-size: 10.5px;
   line-height: 1.55;
 }
 
+/* v36 — ressalvas/observações: fundo cinza bem claro, tipografia menor, sem
+   borda — peso visual reduzido, como pedido, mantendo o conteúdo integral. */
+.bfrp-note {
+  margin: 8px 0 0;
+  padding: 9px 11px;
+  border-radius: 6px;
+  background: var(--bfrp-soft);
+  color: #5b6780;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
 .bfrp-note-danger {
-  border-left: 3px solid #b42318;
-  background: #fff6f5;
+  border-left: 2px solid #b42318;
+  background: #fdf6f5;
   color: #8f251b;
 }
 
@@ -932,14 +1244,14 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   width: 100%;
   overflow-x: auto;
   border: 1px solid var(--bfrp-line);
-  border-radius: 7px;
+  border-radius: var(--bfrp-radius);
 }
 
 .bfrp-table {
   width: 100%;
   border-collapse: collapse;
   color: var(--bfrp-ink);
-  font-size: 10px;
+  font-size: 10.5px;
 }
 
 .bfrp-table th {
@@ -947,7 +1259,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   border-bottom: 1px solid var(--bfrp-line);
   background: #f5f7fa;
   color: #536079;
-  font-size: 8.5px;
+  font-size: 9px;
   font-weight: 750;
   letter-spacing: 0.06em;
   text-align: left;
@@ -988,40 +1300,46 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   text-align: right;
 }
 
+/* v36 — mesmo tratamento discreto do bfrp-note (fundo cinza muito claro, sem
+   borda) — texto do cliente merece destaque tipográfico, não uma caixa. */
 .bfrp-observation {
-  padding: 12px 14px;
-  border: 1px solid var(--bfrp-line);
-  border-radius: 7px;
+  padding: 13px 15px;
+  border-radius: 6px;
+  background: var(--bfrp-soft);
   color: #435169;
-  font-size: 10.5px;
-  line-height: 1.65;
+  font-size: 11.2px;
+  line-height: 1.7;
 }
 
+/* v36.1 — item 7: a grade de 3 colunas ainda lembrava o mesmo padrão de
+   "Como o plano evolui" (3 blocos lado a lado competindo por atenção). Agora
+   é uma lista vertical única — número e texto na mesma linha, apoiados só na
+   régua superior — mais editorial, visivelmente distinta do fluxo horizontal
+   da seção anterior, sem caixas nem fundos. Mesmo texto de sempre. */
 .bfrp-next-steps {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
   margin: 0;
-  padding: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--bfrp-line);
   list-style: none;
   counter-reset: bfrp-step;
 }
 
 .bfrp-next-steps li {
   counter-increment: bfrp-step;
-  min-height: 21mm;
-  padding: 11px 10px;
-  border: 1px solid var(--bfrp-line);
-  border-radius: 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 13px;
   color: #4d5b72;
-  font-size: 9.7px;
-  line-height: 1.5;
+  font-size: 10.5px;
+  line-height: 1.55;
 }
 
 .bfrp-next-steps li::before {
   content: counter(bfrp-step, decimal-leading-zero);
-  display: block;
-  margin-bottom: 7px;
+  flex: 0 0 auto;
   color: var(--bfrp-gold-500);
   font-size: 9px;
   font-weight: 800;
@@ -1033,23 +1351,27 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
-  margin-top: 7mm;
+  margin-top: 9.5mm;
   padding-top: 4mm;
   border-top: 1px solid var(--bfrp-line);
 }
 
+/* v36.1 — item 8: rodapé institucional (BFR/administradora/ressalvas) estava
+   pequeno demais para leitura confortável em PDF/celular. Aumentado de forma
+   perceptível, mas segue subordinado ao conteúdo principal (mais leve, sem
+   negrito extra, cor discreta) — nenhuma ressalva vira destaque. */
 .bfrp-trust strong {
   display: block;
   color: var(--bfrp-navy-900);
-  font-size: 10.5px;
+  font-size: 11.5px;
 }
 
 .bfrp-trust span,
 .bfrp-trust p {
   margin: 3px 0 0;
   color: var(--bfrp-muted);
-  font-size: 8.8px;
-  line-height: 1.55;
+  font-size: 9.6px;
+  line-height: 1.6;
 }
 
 .bfrp-trust-meta {
@@ -1060,8 +1382,8 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .bfrp-legal {
   margin-top: 4mm;
   color: #7a8496;
-  font-size: 7.9px;
-  line-height: 1.45;
+  font-size: 8.6px;
+  line-height: 1.5;
   text-align: center;
 }
 
@@ -1109,11 +1431,27 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   }
 
   .bfrp-cover-summary,
-  .bfrp-financial-grid,
   .bfrp-flow,
-  .bfrp-next-steps,
   .bfrp-strategy {
     grid-template-columns: 1fr;
+  }
+
+  /* v36 — a faixa financeira era grid (grid-template-columns) e agora é flex;
+     em telas estreitas empilha em coluna e as divisórias verticais viram
+     divisórias horizontais, como já acontecia com bfrp-cover-fact. */
+  .bfrp-financial-grid {
+    flex-direction: column;
+  }
+
+  .bfrp-metric {
+    padding: 10px 0;
+    border-left: 0;
+    border-top: 1px solid var(--bfrp-line);
+  }
+
+  .bfrp-metric:first-child {
+    padding-top: 0;
+    border-top: 0;
   }
 
   .bfrp-cover-fact + .bfrp-cover-fact {
@@ -1130,10 +1468,6 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   .bfrp-trust-meta {
     max-width: none;
     text-align: left;
-  }
-
-  .bfrp-flow-item:not(:last-child)::after {
-    display: none;
   }
 }
 
@@ -1165,33 +1499,134 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
     min-height: 297mm;
   }
 
+  /* v36.1 — item 1: a capa impressa continua ocupando a página A4 inteira
+     (297mm é o padrão correto para uma capa full-bleed impressa), mas com o
+     mesmo padding reequilibrado da tela — sem isso, a impressão voltava a
+     usar os valores antigos (22mm/16mm) e perdia o ajuste feito acima. */
   .bfrp-cover {
     min-height: 297mm;
-    padding: 22mm 18mm 16mm;
+    padding: 19mm 18mm 15mm;
     break-after: page;
     page-break-after: always;
   }
 
+  /* v36.1 — item 9: sem min-height forçado, conteúdo e detalhes ocupam só a
+     altura real na impressão — deixa de reservar página cheia em branco.
+     Padding também um pouco mais enxuto na impressão especificamente (só
+     aqui — a prévia em tela mantém o espaçamento original): quando conteúdo
+     e detalhes acabam fluindo na mesma página física, isso reduz o vão entre
+     eles e ajuda o histórico/detalhamento a caber junto, sem página extra. */
   .bfrp-content-page,
   .bfrp-details-page {
-    padding: 14mm 15mm 13mm;
+    min-height: 0;
+    padding: 11mm 15mm 10mm;
   }
 
   .bfrp-section,
   .bfrp-metric,
   .bfrp-strategy,
+  .bfrp-strategy-extra,
   .bfrp-flow-item,
   .bfrp-observation,
   .bfrp-next-steps li,
-  .bfrp-trust {
+  .bfrp-trust,
+  .bfrp-note,
+  .bfrp-conditions,
+  .bfrp-conditions-item,
+  .bfrp-hero {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
+  /* v36.2 — item 5: ".bfrp-details-body" deixou de ter break-inside:avoid
+     bloqueando o bloco inteiro (cabeçalho+cotas+histórico) como unidade
+     atômica. Essa proteção rígida era a causa do desperdício editorial em
+     históricos pequenos/normais: quando o bloco quase cabia no espaço
+     restante da página anterior mas não perfeitamente, o navegador o
+     empurrava inteiro para a página seguinte, deixando as duas pontas
+     (fim da página anterior e início da nova) parcialmente vazias. Agora o
+     bloco flui naturalmente — se houver espaço, continua na própria página
+     do conteúdo; se não houver, cada peça pequena continua protegida
+     individualmente pelas regras abaixo (título nunca fica sozinho,
+     cabeçalho de tabela nunca fica sem ao menos a primeira linha, nenhuma
+     linha é cortada). O resultado é adaptativo por construção: histórico
+     pequeno tende a caber inteiro (nada o força para uma nova página);
+     histórico médio/grande quebra naturalmente entre páginas, com o
+     cabeçalho de coluna repetido (ver .bfrp-details-page .bfrp-section e
+     .bfrp-table tr abaixo). */
+  .bfrp-page-head,
   .bfrp-section-title,
   .bfrp-table thead {
     break-after: avoid;
     page-break-after: avoid;
+  }
+
+  .bfrp-page-head {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* v36.1 — item 9: descoberto ao testar TODOS os cenários (não só Lance Livre
+     com histórico) — mesmo Sorteio e Lance Fixo, sem nenhum detalhamento/
+     histórico, ficavam com "Seu plano em perspectiva" terminando poucos mm
+     antes do fim da página, e o bloco de confiança (.bfrp-trust) + rodapé
+     legal — que não podem ser cortados ao meio — sobravam sozinhos numa
+     página final quase vazia. Redução "inteligente de espaçamentos" (só na
+     impressão; a prévia em tela mantém o espaçamento maior aprovado na v36)
+     recupera essa margem sem remover conteúdo nem diminuir fonte. */
+  .bfrp-section {
+    margin-top: 6.5mm;
+  }
+
+  .bfrp-intro {
+    margin-bottom: 5.5mm;
+  }
+
+  .bfrp-trust {
+    margin-top: 5mm;
+    padding-top: 3mm;
+  }
+
+  .bfrp-strategy {
+    padding: 14px 18px;
+  }
+
+  .bfrp-flow {
+    padding-top: 10px;
+  }
+
+  .bfrp-next-steps {
+    padding-top: 9px;
+  }
+
+  .bfrp-content-page,
+  .bfrp-details-page {
+    padding-bottom: 8mm;
+  }
+
+  /* v36.2 — item 3/5: as seções de "Detalhamento das cotas" e "Histórico do
+     grupo" podem ser curtas ou muito longas — o break-inside:avoid herdado de
+     .bfrp-section (regra geral acima, pensada para blocos sempre curtos como
+     Estrutura financeira ou Estratégia) faria o Chromium tentar empurrar a
+     seção inteira para a página seguinte sempre que ela não coubesse por
+     completo no espaço restante, mesmo quando o histórico é pequeno e
+     caberia perfeitamente ali. Aqui a quebra é sempre natural: o conteúdo
+     começa a fluir assim que houver espaço (histórico pequeno tende a caber
+     inteiro, por ser curto) e, quando não cabe tudo, continua na página
+     seguinte sem reservar página em branco — linhas de tabela protegidas
+     individualmente e cabeçalho de coluna repetido (regras abaixo) evitam
+     qualquer corte no meio de uma linha. */
+  .bfrp-details-page .bfrp-section {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .bfrp-page-head {
+    margin-bottom: 6mm;
+  }
+
+  .bfrp-legal {
+    margin-top: 3mm;
   }
 
   .bfrp-table-wrap {
@@ -1205,6 +1640,41 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   .bfrp-table tr {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  /* v36.1 — item 9: sem isto, a linha final ".bfrp-legal" (rodapé de
+     "Informações complementares da proposta") podia ficar sozinha numa página
+     nova quando a seção anterior (histórico/cotas) preenchia quase toda a
+     página anterior — exatamente a "página quase vazia" citada no pedido.
+     "break-before:avoid" mantém a linha grudada ao bloco anterior sempre que
+     houver espaço; só quebra se for realmente impossível encaixar. */
+  .bfrp-legal {
+    break-before: avoid;
+    page-break-before: avoid;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* v36.2 — item 9/13: descoberto ao medir objetivamente o espaço vazio da
+     última página em cada cenário de teste — quando a tabela de histórico
+     termina exatamente perto do fim de uma página (sobra só o suficiente
+     para ela, mas não para a nota "Histórico informativo..." + o rodapé
+     ".bfrp-legal" logo depois), a dupla nota+rodapé migrava sozinha para uma
+     página nova quase inteiramente vazia (ex.: histórico de 10 e de 45
+     linhas). "break-before:avoid" na nota amarra ela ao rodapé (já preso
+     entre si); "break-after:avoid" nas duas últimas linhas de cada tabela
+     do detalhamento evita que a tabela "engula" sozinha todo o espaço
+     restante da página just antes desse ponto — se nota+rodapé não couberem
+     ali, essas últimas linhas migram junto com elas, formando uma página
+     final com conteúdo de tabela em vez de só duas linhas de texto soltas. */
+  .bfrp-details-page .bfrp-note {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .bfrp-details-page .bfrp-table tbody tr:nth-last-child(-n + 2) {
+    break-after: avoid;
+    page-break-after: avoid;
   }
 }
 
@@ -1912,7 +2382,11 @@ function normalizeDB(){
     if(p.observacoesInternas===undefined) p.observacoesInternas = p.observacoes||'';
     if(p.assessorResponsavel===undefined){ const lead=DB.leads.find(l=>l.id===p.leadId); p.assessorResponsavel = lead?lead.responsavel:''; }
     if(p.estrategiaEscolhida===undefined) p.estrategiaEscolhida = 'reduzirParcela';
-    if(p.comercial===undefined) p.comercial = {objetivoCliente:'', tituloEstrategia:'', mensagemAbertura:'', explicacaoEstrategia:'', mensagemEncerramento:''};
+    if(p.comercial===undefined) p.comercial = {objetivoCliente:'', tituloEstrategia:'', mensagemAbertura:'', explicacaoEstrategia:'', mensagemEncerramento:'', horizonteContemplacaoEstimado:''};
+    // v35 — campo novo, opcional, só existe se o analista preencher. Nunca inventado
+    // (não é resultado do motor); propostas antigas (v34 e anteriores) que já tinham
+    // "comercial" definido sem esta chave recebem string vazia (oculta na apresentação).
+    else if(p.comercial.horizonteContemplacaoEstimado===undefined) p.comercial.horizonteContemplacaoEstimado = '';
     if(p.exibirLanceOverride===undefined) p.exibirLanceOverride = null;
     if(p.modoCenario===undefined) p.modoCenario = 'unico';
     if(p.apresentarHistorico===undefined) p.apresentarHistorico = false;
@@ -2611,21 +3085,52 @@ function computeMapfreSimulation(inp){
 }
 
 // ---------------- EMBRACON / CNP ----------------
-// Fonte: Simulações.xlsx aba Aquisição_Curto (bloco RESUMO C22:F33) + Planilha4.
-// computeEmbraconSimulation e computeCnpSimulation são instâncias separadas do MESMO
-// modelo-base hoje (regra confirmada idêntica nas duas), prontas para divergir amanhã
-// sem tocar uma na outra.
-function computeCotaClubeBase(cota){
+// AUDITORIA 2026-08-20 — correção de fórmula (não apenas preservação de comportamento
+// anterior). O modelo antigo (computeCotaClubeBase, ver histórico em v32) aplicava o
+// redutor sobre o "bundle" inteiro (Fundo Comum + Taxa de Administração + Fundo de
+// Reserva somados) para CNP e Embracon igualmente. Confrontado com os regulamentos
+// oficiais anexados (auditoria financeira, ver RELATORIO_AUDITORIA_FINANCEIRA.md):
+//   CNP (Condições Gerais, Veículo item 4.4.3.6.1 / Imóvel item idêntico — "Parcela
+//   Reduzida"): "será aplicada proporcionalmente sobre os valores correspondentes a
+//   Taxa de administração (exceto a antecipada, quando houver) e Fundo comum." — o
+//   Fundo de Reserva NÃO é citado e permanece integral durante a fase de redutor.
+//   Embracon (Condições Gerais, Cláusula 3.4 "Mais Por Menos 25" / 3.4.1 "...50"):
+//   "o percentual de recolhimento mensal ao fundo comum E AO FUNDO DE RESERVA é
+//   reduzido..."; Parágrafo Segundo: "A taxa de administração e sua antecipação e o
+//   prêmio de seguro de vida se contratado, serão devidos... tendo sempre como base,
+//   desde a primeira contribuição, o crédito total contratado" — ou seja, a Taxa de
+//   Administração NÃO é reduzida.
+// Logo CNP e Embracon têm regras de redutor genuinamente diferentes uma da outra (e
+// diferentes do "bundle" usado até a v32) — cada administradora agora decompõe FC/TA/FR
+// com as MESMAS funções puras já usadas pela Porto (calculateCommonFundInstallment etc.,
+// linhas ~2424) e aplica o redutor apenas aos componentes que o regulamento confirma.
+// A "Parcela integral (referência)" continua sendo a soma cheia dos três componentes,
+// sem redutor — inalterada por esta correção.
+//
+// REVISÃO 20/08/2026 (v34) — reclassificação de confiança, sem nenhuma mudança de
+// cálculo (ver RELATORIO_AUDITORIA_FINANCEIRA_v34.md, itens 2 e 3):
+//   - CNP: `C·TA/N` (distribuição linear da Taxa de Administração ao longo do prazo)
+//     é a REGRA PADRÃO DO MOTOR, não uma fórmula universal do regulamento. O item
+//     4.5.3.1 da CNP diz que a Taxa de Administração é obtida pelo "percentual de
+//     amortização, FIXADO NA PROPOSTA DE ADESÃO" — o regulamento geral não garante
+//     que esse percentual mensal seja necessariamente linear (crédito×TA/N em cada
+//     mês). O motor assume distribuição linear por ser o padrão mais comum e por não
+//     haver, no CRM hoje, nenhum campo para modelar uma distribuição não-linear por
+//     Proposta de Adesão — não há dado suficiente para fazer diferente, e por isso o
+//     cálculo NÃO foi alterado (Regra de Ouro: sem dado suficiente, não se inventa).
+//   - Embracon: a fórmula `(FC+FR)·(1−R)+TA` abaixo está CONFIRMADA apenas para os
+//     planos "Mais Por Menos 25" (Cláusula 3.4) e "Mais Por Menos 50" (Cláusula 3.4.1).
+//     O regulamento também prevê "Plano Justo" (Cláusula 3.3 — zera a Taxa de
+//     Administração em vez de reduzir Fundo Comum/Reserva) e "Plano Justo Mais Por
+//     Menos" (Cláusula 3.4.2 — combina os dois mecanismos), que este motor NÃO modela
+//     (não há campo no CRM para escolher "qual plano de redução" — o campo `redutor`
+//     único hoje só representa o padrão Mais Por Menos). Não implementado nesta rodada.
+function _cotaClubeCommon(cota, parcelaIntegralSemRedutorUnitaria, parcelaInicialUnitaria){
   const { creditoUnitario:C, qtd:QTD, taxaAdministracao:TA, fundoReserva:FR, prazo:N,
-          redutor:R, percentualProprio:LP, percentualEmbutido:LE, mesesContemplacao:M } = cota;
+          percentualProprio:LP, percentualEmbutido:LE, mesesContemplacao:M } = cota;
 
   const creditoTotal = C * QTD;
-  // Parcela SEM o redutor — referência verdadeira, nunca deve ser confundida com a
-  // reduzida (bug encontrado: o cartão "Parcela integral (referência)" mostrava a
-  // reduzida por não existir este campo separado).
-  const parcelaIntegralSemRedutorUnitaria = C * (1 + TA + FR) / N;
   const parcelaIntegralSemRedutorTotal = parcelaIntegralSemRedutorUnitaria * QTD;
-  const parcelaInicialUnitaria = parcelaIntegralSemRedutorUnitaria * (1 - R);
   const parcelaInicialTotal = parcelaInicialUnitaria * QTD;
 
   const lanceProprioUnitario = LP * C;
@@ -2638,6 +3143,16 @@ function computeCotaClubeBase(cota){
   const creditoDisponivel = creditoTotal - lanceEmbutidoTotal;
   const saldoInicial = creditoTotal * (1 + TA + FR);
   const parcelasPagasAteContemplacao = parcelaInicialTotal * M;
+  // CENÁRIO DE INCORPORAÇÃO DA DIFERENÇA AO SALDO — SUPORTADO. A diferença entre a
+  // parcela integral e a reduzida (não paga durante a fase de redutor) é incorporada
+  // ao saldo devedor e diluída pelo prazo restante — é isto que a linha abaixo faz.
+  // Para a Embracon, a Cláusula 8ª do regulamento (Mais Por Menos) prevê, além desta,
+  // outras 3 formas de tratar essa diferença na contemplação: (I) pagamento com
+  // recursos próprios, (II) uso de parte do próprio crédito disponibilizado, (III)
+  // antecipação da diferença ANTES da contemplação para já acessar 100% do crédito —
+  // nenhuma dessas 3 está modelada neste motor; apenas a incorporação ao saldo devedor
+  // (equivalente ao mecanismo confirmado para a CNP, item 4.4.3.6.3) é suportada. Ver
+  // RELATORIO_AUDITORIA_FINANCEIRA_v34.md, item 3.
   const saldoPosContemplacao = saldoInicial - parcelasPagasAteContemplacao - lanceTotal;
   const prazoRestante = N - M;
   const parcelaPosContemplacao = safeDivStrict(saldoPosContemplacao, prazoRestante, 'parcelaPosContemplacao');
@@ -2661,8 +3176,32 @@ function computeCotaClubeBase(cota){
     indicadorLabel: 'Indicador simples do modelo, sem reajustes anuais'
   };
 }
-function computeEmbraconSimulation(cota){ return computeCotaClubeBase(cota); }
-function computeCnpSimulation(cota){ return computeCotaClubeBase(cota); }
+/** CNP — redutor incide sobre Fundo Comum + Taxa de Administração; Fundo de Reserva
+ *  permanece integral (Condições Gerais CNP, item 4.4.3.6.1, veículo e imóvel). */
+function computeCnpSimulation(cota){
+  const { creditoUnitario:C, taxaAdministracao:TA, fundoReserva:FR, prazo:N, redutor:R } = cota;
+  const fundoComum = calculateCommonFundInstallment(C, N);
+  const taxaAdministracaoInstallment = calculateAdministrationFeeInstallment(C, TA, N);
+  const fundoReservaInstallment = calculateReserveFundInstallment(C, FR, N);
+  // Parcela SEM o redutor — referência verdadeira, nunca deve ser confundida com a
+  // reduzida (bug histórico: o cartão "Parcela integral (referência)" mostrava a
+  // reduzida por não existir este campo separado) — mantida como soma cheia dos três.
+  const parcelaIntegralSemRedutorUnitaria = fundoComum + taxaAdministracaoInstallment + fundoReservaInstallment;
+  const parcelaInicialUnitaria = (fundoComum + taxaAdministracaoInstallment) * (1 - R) + fundoReservaInstallment;
+  return _cotaClubeCommon(cota, parcelaIntegralSemRedutorUnitaria, parcelaInicialUnitaria);
+}
+/** Embracon — redutor incide sobre Fundo Comum + Fundo de Reserva; Taxa de Administração
+ *  permanece integral (Condições Gerais Embracon, Cláusulas 3.4 e 3.4.1, Parágrafo
+ *  Segundo de cada uma). */
+function computeEmbraconSimulation(cota){
+  const { creditoUnitario:C, taxaAdministracao:TA, fundoReserva:FR, prazo:N, redutor:R } = cota;
+  const fundoComum = calculateCommonFundInstallment(C, N);
+  const taxaAdministracaoInstallment = calculateAdministrationFeeInstallment(C, TA, N);
+  const fundoReservaInstallment = calculateReserveFundInstallment(C, FR, N);
+  const parcelaIntegralSemRedutorUnitaria = fundoComum + taxaAdministracaoInstallment + fundoReservaInstallment;
+  const parcelaInicialUnitaria = (fundoComum + fundoReservaInstallment) * (1 - R) + taxaAdministracaoInstallment;
+  return _cotaClubeCommon(cota, parcelaIntegralSemRedutorUnitaria, parcelaInicialUnitaria);
+}
 
 /** Capacidade de pagamento — nunca inventa valor quando renda/faturamento não informados. */
 function computeCapacidadePagamento(parcelaPos, tipoPessoa, rendaOuFaturamento){
@@ -2743,6 +3282,28 @@ function validateCotaInputs(raw){
       if(isNum(raw[k]) && (raw[k]<0 || raw[k]>1)) errors.push(`${k}: percentual deve estar entre 0% e 100%.`);
     }
   });
+  // v35.2 — teto de 90% para o redutor: a interface e o motor (clamp(...,0,0.9) em
+  // computeCotaResult) trabalham com redutor máximo de 90%, mas a validação central
+  // ainda aceitava até 100% (checagem genérica acima, compartilhada com outros
+  // percentuais que legitimamente vão até 100%). O clamp no motor é só uma proteção
+  // defensiva contra crash — ele NUNCA pode ser o que decide se a entrada é válida,
+  // senão um redutor de 100% digitado pelo analista silenciosamente viraria "90%
+  // válido" sem nenhum aviso. Por isso a checagem aqui é sobre o valor EXATO digitado,
+  // antes de qualquer clamp. 90% exatos continuam válidos (limite inclusivo).
+  if(raw.redutorPct!==undefined && raw.redutorPct!==null && isNum(raw.redutorPct) && raw.redutorPct>0.9){
+    errors.push('Redutor não pode ultrapassar 90%.');
+  }
+  // v35.2 — parcelasAdesao (Porto): precisa ser número finito, inteiro e >=1. Só é
+  // validado quando o campo é de fato enviado (administradoras sem adesão nunca
+  // passam este campo — ver computeCotaResult) para não afetar CNP/Embracon/Mapfre.
+  // Nunca aceita fração nem zero/negativo como "quase certo" — não há arredondamento
+  // aqui, só rejeição explícita do valor exatamente como foi digitado.
+  if(raw.parcelasAdesao!==undefined && raw.parcelasAdesao!==null){
+    req(raw.parcelasAdesao,'Parcelas de adesão');
+    if(isNum(raw.parcelasAdesao) && (raw.parcelasAdesao<1 || !Number.isInteger(raw.parcelasAdesao))){
+      errors.push('Parcelas de adesão deve ser um número inteiro maior ou igual a 1.');
+    }
+  }
   ['recursoProprio','fgts','embutido','outroRecurso'].forEach(k=>{
     if(raw[k]!==undefined){ req(raw[k],k); if(isNum(raw[k]) && raw[k]<0) errors.push(`${k}: não pode ser negativo.`); }
   });
@@ -2935,6 +3496,10 @@ function computeCotaResult(cota, rates, administradoraNome, grupo, produto){
     taxaAdministracao: rates.taxaAdministracao, fundoReserva: rates.fundoReserva, taxaAdesao: rates.taxaAdesao,
     seguro: rates.seguro ? rates.seguro.valor : undefined,
     tcv: normalizeAdminKey(administradoraNome)==='mapfre' ? cota.tcv : undefined,
+    // v35.2 — só valida parcelasAdesao para administradoras que de fato usam adesão
+    // diluída (hoje, só a Porto — rule.hasAdesao). Nunca passa este campo para as
+    // demais, então CNP/Embracon/Mapfre continuam com comportamento idêntico ao v35.1.
+    parcelasAdesao: (rule && rule.hasAdesao) ? cota.parcelasAdesao : undefined,
     regraGrupoConfigurada: rule ? isGroupRuleConfirmed(administradoraNome, cota, grupo, produto) : false
   });
   avisos.push(...cotaValidation.errors);
@@ -5506,7 +6071,7 @@ function cloneDraftFromProposal(p){
     administradora:p.administradora, segmento:p.segmento, grupo:p.grupo, assessorResponsavel:p.assessorResponsavel,
     observacoesInternas:p.observacoesInternas, observacoesCliente:p.observacoesCliente,
     rates: p.rates, cotas: p.cotas, estrategiaEscolhida: p.estrategiaEscolhida||'reduzirParcela', personalizado: p.personalizado||{},
-    comercial: Object.assign({objetivoCliente:'', tituloEstrategia:'', mensagemAbertura:'', explicacaoEstrategia:'', mensagemEncerramento:''}, p.comercial||{}),
+    comercial: Object.assign({objetivoCliente:'', tituloEstrategia:'', mensagemAbertura:'', explicacaoEstrategia:'', mensagemEncerramento:'', horizonteContemplacaoEstimado:''}, p.comercial||{}),
     apresentarHistorico: !!p.apresentarHistorico, historicoGrupo: p.historicoGrupo||[],
     exibirLanceOverride: p.exibirLanceOverride===undefined ? null : p.exibirLanceOverride,
     modoCenario: p.modoCenario || 'unico'
@@ -5526,7 +6091,7 @@ function newProposalDraft(presetLeadId){
     rates: { taxaAdministracao:0.16, fundoReserva:0.02, taxaAdesao:0, seguro:{tipo:'semSeguro', valor:0} },
     cotas: [ Object.assign(blankCota('001'), { credito: (lead&&lead.valor)||0, recursoProprio: (lead&&lead.recursoLance)||0 }) ],
     estrategiaEscolhida: 'reduzirParcela', personalizado: {},
-    comercial: {objetivoCliente:'', tituloEstrategia:'', mensagemAbertura:'', explicacaoEstrategia:'', mensagemEncerramento:''},
+    comercial: {objetivoCliente:'', tituloEstrategia:'', mensagemAbertura:'', explicacaoEstrategia:'', mensagemEncerramento:'', horizonteContemplacaoEstimado:''},
     apresentarHistorico: false, historicoGrupo: [],
     exibirLanceOverride: null, // null = automático (segue a estratégia); true/false = decisão explícita do analista
     modoCenario: 'unico', // 'unico' | 'comparacao' | 'oculto'
@@ -6225,6 +6790,11 @@ function renderPersonalizadoResult(cons){
           <div class="field full"><label>Mensagem de abertura</label><textarea data-field="comercial.mensagemAbertura" placeholder="Texto opcional em destaque logo após a capa">${com.mensagemAbertura||''}</textarea></div>
           <div class="field full"><label>Título da estratégia</label><input data-field="comercial.tituloEstrategia" value="${com.tituloEstrategia||''}" placeholder="${defaultTituloEstrategia(dominant)}"></div>
           <div class="field full"><label>Explicação da estratégia</label><textarea data-field="comercial.explicacaoEstrategia" placeholder="${defaultExplicacaoEstrategia(dominant)}">${com.explicacaoEstrategia||''}</textarea></div>
+          <div class="field full">
+            <label>Horizonte estimado de contemplação <span class="small-note">(premissa do analista, opcional)</span></label>
+            <input data-field="comercial.horizonteContemplacaoEstimado" value="${escapeHtml(com.horizonteContemplacaoEstimado||'')}" placeholder="ex.: 12 meses · assembleia de março/2027 · 18ª assembleia">
+            <div class="small-note" style="margin-top:4px;">Não é um cálculo do motor — é uma premissa comercial livre (meses, assembleia ou data), usada só para organizar a seção "Até a contemplação". Deixe em branco para não exibir essa seção. Não se aplica a Sorteio nem a Lance Fixo.</div>
+          </div>
           <div class="field full"><label>Observações comerciais</label><textarea data-field="observacoesCliente">${draft.observacoesCliente||''}</textarea></div>
           <div class="field full"><label>Mensagem de encerramento</label><textarea data-field="comercial.mensagemEncerramento" placeholder="Texto opcional antes do rodapé">${com.mensagemEncerramento||''}</textarea></div>
         </div>
@@ -6628,6 +7198,44 @@ function buildProposalViewModel(draft, cons, lead){
   const prazoIndisponivel = !!cons.algumCenarioPrazoIndisponivel;
   const estrategiaBloqueada = draft.estrategiaEscolhida==='reduzirPrazo' && prazoIndisponivel;
   const avisoPrazosDiferentes = !cons.prazosIguais ? 'Esta proposta reúne cotas com prazos diferentes entre si. Os valores de parcela apresentados de forma consolidada (somados) representam apenas a fase inicial do plano — quando a cota de menor prazo se encerrar, ela deixa de contribuir com o valor da parcela consolidada. O prazo, a parcela e o resultado pós-contemplação de cada cota estão detalhados individualmente a seguir.' : '';
+
+  // ==== v35 — campos de apresentação (Proposta Premium) — leitura pura de cons/draft,
+  // nenhum cálculo financeiro novo é feito aqui (ver RELATORIO_AUDITORIA_FINANCEIRA_v34.md). ====
+  // "CARTA DE X" — mapeamento direto do produto/segmento já cadastrado na proposta.
+  const HERO_LABEL_POR_SEGMENTO = { 'Imóvel':'Carta de Imóvel', 'Veículo':'Carta de Veículo', 'Pesados':'Carta de Pesados', 'Serviços':'Carta de Serviços' };
+  const heroLabel = HERO_LABEL_POR_SEGMENTO[draft.segmento] || 'Carta de Consórcio';
+  // Redutor "uniforme": só vira selo comercial de percentual único quando TODAS as
+  // cotas compartilham o mesmo redutor. Caso contrário, o redutor aparece apenas no
+  // detalhamento por cota — nunca inventamos uma média.
+  const redutoresPct = (draft.cotas||[]).map(c=>Number(c.redutorPct)||0);
+  const redutorUniformePct = (showReducer && redutoresPct.length && redutoresPct.every(r=>r===redutoresPct[0])) ? redutoresPct[0] : null;
+  // Múltiplas cotas: só é seguro consolidar em "N cotas somadas" + "valor individual"
+  // quando crédito, prazo, estratégia e redutor são idênticos entre todas as linhas
+  // cadastradas (administradora/grupo/taxas já são únicos por proposta neste modelo de
+  // dados). Havendo qualquer diferença relevante, a consolidação por valor individual
+  // é desativada — o total ainda é mostrado, mas sem sugerir "N cotas iguais de R$X",
+  // e o detalhamento por cota (já existente) permanece como fonte de verdade.
+  const creditosCota = (draft.cotas||[]).map(c=>Number(c.credito)||0);
+  const estrategiasCota = (draft.cotas||[]).map(c=>c.estrategiaContemplacao);
+  const prazosCota = (draft.cotas||[]).map(c=>Number(c.prazoTotal)||0);
+  const cotasHomogeneas = draft.cotas.length>0 && creditosCota.every(v=>v===creditosCota[0])
+    && prazosCota.every(v=>v===prazosCota[0]) && estrategiasCota.every(v=>v===estrategiasCota[0])
+    && redutoresPct.every(v=>v===redutoresPct[0]);
+  const multiplasCotas = cons.quantidadeTotalCotas > 1;
+  const valorIndividualCota = (multiplasCotas && cotasHomogeneas && cons.quantidadeTotalCotas>0)
+    ? cons.creditoTotal / cons.quantidadeTotalCotas : null;
+  // Estratégia "pura" por administração de lance — usada para diferenciar o conteúdo
+  // de Lance Fixo x Lance Livre (nunca pelo texto do 1º campo de cota isoladamente,
+  // que pode não refletir uma proposta com estratégias mistas).
+  const bidStrategies = new Set((cons.results||[]).map(r=>r && r.bid ? r.bid.estrategia : undefined));
+  const isPureLanceFixo = bidStrategies.size===1 && bidStrategies.has('lanceFixo');
+  const isPureLanceLivre = bidStrategies.size===1 && bidStrategies.has('lanceLivre');
+  // Horizonte de contemplação: premissa comercial livre do analista (nunca calculada
+  // pelo motor). Não se aplica a Sorteio (não há lance) nem a Lance Fixo (o próprio
+  // enunciado da rodada veda estimar prazo/probabilidade de contemplação nessa
+  // modalidade) — protegido aqui mesmo que o campo tenha sido preenchido.
+  const horizonteEstimado = (com.horizonteContemplacaoEstimado||'').trim();
+  const showHorizonte = !!horizonteEstimado && !cons.todasSorteio && !isPureLanceFixo;
   return {
     rule, showCotasTable, dominant, com, tituloEstrategia, explicacaoEstrategia,
     temRedutor: showReducer, showLance: showBid,
@@ -6645,7 +7253,12 @@ function buildProposalViewModel(draft, cons, lead){
     postAwardInstallment: cons.parcelaCenarioATotal, remainingTerm: cons.prazoATotal,
     availableCredit: cons.creditoDisponivelTotal, totalBid: cons.lanceTotal,
     showBid, showReducer, showHistory: !!draft.apresentarHistorico, isMixedStrategy,
-    quotaBreakdown: cons.results
+    quotaBreakdown: cons.results,
+    // v35 — campos novos do ViewModel (ver bloco de comentário acima): apenas leitura/
+    // derivação de cons e draft, sem cálculo financeiro.
+    heroLabel, redutorUniformePct, multiplasCotas, cotasHomogeneas, valorIndividualCota,
+    isPureLanceFixo, isPureLanceLivre, horizonteEstimado, showHorizonte,
+    grupoNome: escapeHtml(draft.grupo||''), rates: draft.rates
   };
 }
 function buildApresentacaoHTML(draft, cons, lead, opts){
@@ -7146,34 +7759,57 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
 
   function coverHtml(draft, cons, vm, lead) {
     const rawClientName = lead && lead.nome ? lead.nome : 'Cliente';
-    const segment = segmentContent(draft.segmento, rawClientName);
     const objective = vm.com.objetivoCliente ? h(vm.com.objetivoCliente) : '';
     const validity = draft.validade ? global.fmtDate(draft.validade) : 'Consulte o analista';
-    const initialLabel = vm.temRedutor ? 'Parcela inicial reduzida' : 'Parcela inicial';
     const logo = global.LOGO_BFR_WHITE || '';
+
+    // v35 — hero principal: "CARTA DE X" + valor em destaque, com as variantes de
+    // múltiplas cotas homogêneas ("N COTAS SOMADAS" + valor individual) e de redutor
+    // uniforme (selo "PARCELA REDUZIDA XX%"), exatamente como especificado. Nada aqui
+    // é calculado: todos os valores vêm prontos de cons/vm.
+    const heroMultiTag = (vm.multiplasCotas && vm.cotasHomogeneas)
+      ? `<span class="bfrp-hero-multi">${h(vm.quantidadeTotalCotas)} COTAS SOMADAS</span>` : '';
+    const heroSubValue = (vm.multiplasCotas && vm.cotasHomogeneas && vm.valorIndividualCota !== null)
+      ? `<p class="bfrp-hero-sub">Valor individual: <b class="bfrp-num">${money(vm.valorIndividualCota)}</b></p>`
+      : (vm.multiplasCotas
+          ? `<p class="bfrp-hero-sub">${h(vm.quantidadeTotalCotas)} cotas nesta proposta — consulte o detalhamento individual a seguir.</p>`
+          : '');
+    const redutorBadge = vm.redutorUniformePct
+      ? `<div class="bfrp-hero-badge">Parcela reduzida ${pct(vm.redutorUniformePct)}</div>` : '';
 
     return `
       <section class="bfrp-page bfrp-cover">
         <div class="bfrp-cover-head">
           ${logo ? `<img class="bfrp-logo" src="${logo}" alt="BFR Investimentos">` : '<strong>BFR INVESTIMENTOS</strong>'}
-          <div class="bfrp-cover-brand">BFR Investimentos<br>${h(draft.administradora || '')}</div>
+          <div class="bfrp-cover-brand">
+            <span class="bfrp-cover-brand-tag">Proposta Comercial</span>
+            ${draft.grupo ? `<br>Grupo ${h(draft.grupo)}` : ''}
+            ${draft.administradora ? `<br>${h(draft.administradora)}` : ''}
+          </div>
         </div>
 
         <div class="bfrp-cover-main">
-          <p class="bfrp-eyebrow">${h(segment.category)}</p>
-          <h1>${segment.title}</h1>
-          <p class="bfrp-cover-subtitle">${segment.subtitle}</p>
+          <div class="bfrp-hero">
+            <p class="bfrp-eyebrow">${h(vm.heroLabel)}</p>
+            ${heroMultiTag}
+            <div class="bfrp-hero-value-row">
+              <h1 class="bfrp-num">${money(cons.creditoTotal)}</h1>
+              ${redutorBadge}
+            </div>
+            ${heroSubValue}
+          </div>
           ${objective ? `<p class="bfrp-cover-subtitle"><strong>Objetivo:</strong> ${objective}</p>` : ''}
+          ${rawClientName && rawClientName !== 'Cliente' ? `<p class="bfrp-cover-prepared">Proposta preparada para ${h(firstName(rawClientName))}</p>` : ''}
         </div>
 
         <div class="bfrp-cover-summary">
           <div class="bfrp-cover-fact bfrp-money">
-            <span>Crédito planejado</span>
-            <strong class="bfrp-num">${money(cons.creditoTotal)}</strong>
-          </div>
-          <div class="bfrp-cover-fact bfrp-money">
-            <span>${initialLabel}</span>
+            <span>${vm.temRedutor ? 'Parcela inicial reduzida' : 'Parcela inicial'}</span>
             <strong class="bfrp-num">${money(cons.primeiraParcelaTotal)}</strong>
+          </div>
+          <div class="bfrp-cover-fact">
+            <span>Prazo${vm.prazosIguais ? '' : ' (maior cota)'}</span>
+            <strong>${term(cons.prazoOriginalTotal)}</strong>
           </div>
           <div class="bfrp-cover-fact">
             <span>Validade</span>
@@ -7182,22 +7818,32 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
         </div>
 
         <div class="bfrp-cover-foot">
-          <span>Preparada para ${h(rawClientName)}</span>
+          <span>${draft.numeroProposta ? `Proposta ${h(draft.numeroProposta)}` : `Preparada para ${h(rawClientName)}`}</span>
           <span>${h(draft.segmento || 'Consórcio')} · ${h(draft.administradora || '')}</span>
         </div>
       </section>`;
   }
 
   function financialGridHtml(draft, cons, vm, selected) {
-    const scenarioVisible = draft.modoCenario !== 'oculto';
-    const quantityCard = vm.showCotasTable
+    // Sorteio deve permanecer estritamente simples (item 5 do escopo v35): nenhum
+    // cartão de projeção pós-contemplação aparece — só dados essenciais da carta.
+    const scenarioVisible = draft.modoCenario !== 'oculto' && !cons.todasSorteio;
+    // O selo "N COTAS SOMADAS" já cobre a quantidade no hero quando as cotas são
+    // homogêneas — evita repetir a mesma informação em dois lugares (item 4: nunca
+    // duplicar informação). Quando as cotas NÃO são homogêneas, o cartão continua
+    // aparecendo aqui, pois o hero não expõe a contagem nesse caso.
+    const quantityCard = (vm.showCotasTable && !(vm.multiplasCotas && vm.cotasHomogeneas))
       ? `<div class="bfrp-metric"><span>Quantidade de cotas</span><strong class="bfrp-num">${h(vm.quantidadeTotalCotas)}</strong></div>`
       : '';
+    // v36.1 — item 3: resultados pós-contemplação recebem destaque intermediário
+    // (classe bfrp-metric-accent, ver CSS) — nem no mesmo nível de Crédito/
+    // Parcela (que são os dois indicadores mais fortes), nem tão apagados
+    // quanto Prazo/Quantidade. Mesmos dados, mesma condição de exibição.
     const afterAwardCard = scenarioVisible && !selected.unavailable
-      ? `<div class="bfrp-metric"><span>Após a contemplação</span><strong class="bfrp-num">${money(selected.installment)}</strong><small>${h(selected.label)} · ${term(selected.remainingTerm)}</small></div>`
+      ? `<div class="bfrp-metric bfrp-metric-accent"><span>Após a contemplação</span><strong class="bfrp-num">${money(selected.installment)}</strong><small>${h(selected.label)} · ${term(selected.remainingTerm)}</small></div>`
       : '';
-    const availableCreditCard = vm.showLance
-      ? `<div class="bfrp-metric"><span>Crédito disponível</span><strong class="bfrp-num">${money(cons.creditoDisponivelTotal)}</strong><small>Após eventual lance embutido</small></div>`
+    const availableCreditCard = (vm.showLance && positive(cons.embutidoTotal))
+      ? `<div class="bfrp-metric bfrp-metric-accent"><span>Crédito líquido</span><strong class="bfrp-num">${money(cons.creditoDisponivelTotal)}</strong><small>Após o lance embutido</small></div>`
       : '';
 
     return `
@@ -7221,11 +7867,60 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
       </div>`;
   }
 
+  /* v35 — "CONDIÇÕES DA CARTA": leitura direta de draft.rates e da regra da
+   * administradora, sem nenhum cálculo novo. Nunca mostra seguro R$0,00, redutor
+   * (já aparece no hero/cartões, evita duplicidade) ou informação técnica irrelevante
+   * ao cliente. */
+  function conditionsHtml(draft, cons, vm) {
+    const rates = vm.rates || {};
+    const rule = vm.rule || {};
+    const items = [];
+    if (finite(rates.taxaAdministracao) && rates.taxaAdministracao > 0) {
+      items.push(['Taxa de administração total', pct(rates.taxaAdministracao)]);
+    }
+    if (finite(rates.fundoReserva) && rates.fundoReserva > 0) {
+      items.push(['Fundo de reserva', pct(rates.fundoReserva)]);
+    }
+    if (rule.hasAdesao && finite(rates.taxaAdesao) && rates.taxaAdesao > 0) {
+      items.push(['Taxa de adesão', pct(rates.taxaAdesao)]);
+    }
+    items.push(['Prazo', term(cons.prazoOriginalTotal)]);
+    if (draft.administradora) items.push(['Administradora', h(draft.administradora)]);
+    if (draft.grupo) items.push(['Grupo', h(draft.grupo)]);
+    if (rule.supportedStrategies && rule.supportedStrategies.includes('lanceFixo')) {
+      items.push(['Lance fixo', 'Permitido, conforme regras do grupo']);
+    }
+    if (rule.allowsEmbeddedBid) items.push(['Lance embutido', 'Permitido, conforme regras do grupo']);
+    if (rates.seguro && rates.seguro.tipo !== 'semSeguro' && positive(rates.seguro.valor)) {
+      const seguroLabelMap = { pctSaldo: '% mensal sobre o saldo devedor', pctCredito: '% mensal sobre o crédito', pctParcela: '% sobre a parcela', valorFixo: 'Valor fixo mensal' };
+      const seguroValor = rates.seguro.tipo === 'valorFixo' ? money(rates.seguro.valor) : pct(rates.seguro.valor);
+      items.push(['Seguro', `${seguroValor} (${seguroLabelMap[rates.seguro.tipo] || rates.seguro.tipo})`]);
+    }
+    if (!items.length) return '';
+    return `
+      <div class="bfrp-section">
+        <h2 class="bfrp-section-title">Condições da carta</h2>
+        <div class="bfrp-conditions">
+          ${items.map(([label, value]) => `<div class="bfrp-conditions-item"><span>${h(label)}</span><b>${value}</b></div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  // v36 — cada modalidade ganha um pequeno rótulo de identidade acima do título
+  // (.bfrp-strategy-tag), mantendo os quatro ramos dentro do mesmo padrão visual
+  // (mesma classe .bfrp-strategy, mesma grade texto/valores). Nenhum texto ou
+  // valor financeiro foi adicionado, removido ou recalculado — só reorganizado.
+  // "Até a contemplação" (horizonteHtml) passa a ser injetado DENTRO do mesmo
+  // bloco de estratégia (spanning as duas colunas), para ler como extensão
+  // natural dele em vez de uma seção nova — ver .bfrp-strategy-extra no CSS.
   function strategyHtml(draft, cons, vm) {
+    const horizonteExtra = horizonteHtml(draft, cons, vm);
+
     if (cons.todasSorteio) {
       return `
         <div class="bfrp-strategy">
           <div>
+            <p class="bfrp-strategy-tag">Sorteio</p>
             <h3>Participação por sorteio</h3>
             <p>O plano participa das assembleias conforme as regras da administradora, preservando o crédito integral para utilização após a contemplação.</p>
           </div>
@@ -7233,6 +7928,7 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
             <div class="bfrp-strategy-value"><span>Modalidade</span><b>Sorteio</b></div>
             <div class="bfrp-strategy-value"><span>Crédito</span><b class="bfrp-num">${money(cons.creditoTotal)}</b></div>
           </div>
+          ${horizonteExtra}
         </div>`;
     }
 
@@ -7242,6 +7938,7 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
       return `
         <div class="bfrp-strategy">
           <div>
+            <p class="bfrp-strategy-tag">Estratégia combinada</p>
             <h3>Estratégia combinada de contemplação</h3>
             <p>As cotas utilizam modalidades diferentes. A composição individual aparece no detalhamento técnico desta proposta.</p>
           </div>
@@ -7249,15 +7946,23 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
             <div class="bfrp-strategy-value"><span>Total planejado</span><b class="bfrp-num">${money(cons.lanceTotal)}</b></div>
             <div class="bfrp-strategy-value"><span>Percentual médio</span><b class="bfrp-num">${pct(cons.percentualLanceMedio)}</b></div>
           </div>
+          ${horizonteExtra}
         </div>`;
     }
 
-    const components = [
-      positive(cons.recursoProprioTotal) ? ['Recurso próprio', money(cons.recursoProprioTotal)] : null,
-      positive(cons.embutidoTotal) ? ['Embutido', money(cons.embutidoTotal)] : null,
-      positive(cons.fgtsTotal) ? ['FGTS', money(cons.fgtsTotal)] : null,
-      positive(cons.outroTotal) ? ['Outro recurso', money(cons.outroTotal)] : null
+    // v35 — item 13: lance embutido NUNCA é uma estratégia própria, é composição do
+    // lance. Por isso "LANCE TOTAL" sempre aparece com o "sendo: ..." explicando a
+    // composição, e "CRÉDITO LÍQUIDO" só aparece quando há embutido de fato.
+    const composicao = [
+      positive(cons.recursoProprioTotal) ? `${money(cons.recursoProprioTotal)} recurso próprio` : null,
+      positive(cons.embutidoTotal) ? `${money(cons.embutidoTotal)} lance embutido` : null,
+      positive(cons.fgtsTotal) ? `${money(cons.fgtsTotal)} FGTS` : null,
+      positive(cons.outroTotal) ? `${money(cons.outroTotal)} outro recurso` : null
     ].filter(Boolean);
+    const composicaoHtml = composicao.length
+      ? `<div class="bfrp-strategy-value bfrp-strategy-value-wide"><span>Composição</span><b>${h('sendo: ' + composicao.join(' / '))}</b></div>` : '';
+    const creditoLiquidoHtml = positive(cons.embutidoTotal)
+      ? `<div class="bfrp-strategy-value"><span>Crédito líquido</span><b class="bfrp-num">${money(cons.creditoDisponivelTotal)}</b></div>` : '';
     const fixedInfo = (cons.results || []).filter(item => item && item.bid && item.bid.fixedInfo);
     const fixedNote = fixedInfo.length
       ? (fixedInfo.every(item => item.bid.fixedInfo.atingido)
@@ -7265,18 +7970,79 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
           : 'A composição deve ser revisada antes do envio definitivo.')
       : '';
 
+    // Item 6 — Lance Fixo: bloco próprio, título com o percentual, texto comercial
+    // curto, e proibição explícita de estimar prazo/probabilidade de contemplação
+    // (por isso nenhuma menção a horizonte/projeção aparece aqui — vm.showHorizonte
+    // já é false para lance fixo puro, então horizonteExtra sempre vem vazio).
+    if (vm.isPureLanceFixo) {
+      return `
+        <div class="bfrp-strategy">
+          <div>
+            <p class="bfrp-strategy-tag">Lance fixo</p>
+            <h3>Lance fixo: ${pct(cons.percentualLanceMedio)}</h3>
+            <p>A participação nesta modalidade ocorre por meio do percentual de lance fixo definido pelo grupo a cada assembleia, com prioridade sobre os lances livres, conforme o regulamento da administradora.</p>
+            ${fixedNote ? `<p style="margin-top:6px;">${h(fixedNote)}</p>` : ''}
+          </div>
+          <div class="bfrp-strategy-values">
+            <div class="bfrp-strategy-value"><span>Lance total</span><b class="bfrp-num">${money(cons.lanceTotal)}</b></div>
+            ${composicaoHtml}
+            ${creditoLiquidoHtml}
+          </div>
+          ${horizonteExtra}
+        </div>`;
+    }
+
+    // v36.1 — item 4: o percentual de lance passa a ser o dado mais evidente do
+    // bloco (número isolado, grande, no topo da coluna de valores) — "o
+    // percentual deve ser imediatamente identificado como o principal dado da
+    // estratégia". Lance total, composição e crédito líquido continuam
+    // presentes, só reorganizados como secundários logo abaixo, exatamente como
+    // pedido. Nenhum valor ou regra mudou — mesmos cons.percentualLanceMedio /
+    // cons.lanceTotal de sempre.
     return `
       <div class="bfrp-strategy">
         <div>
+          <p class="bfrp-strategy-tag">Lance livre</p>
           <h3>${vm.tituloEstrategia}</h3>
           ${vm.explicacaoEstrategia ? `<p>${vm.explicacaoEstrategia}</p>` : ''}
           ${fixedNote ? `<p style="margin-top:6px;">${h(fixedNote)}</p>` : ''}
         </div>
         <div class="bfrp-strategy-values">
-          <div class="bfrp-strategy-value"><span>Total planejado</span><b class="bfrp-num">${money(cons.lanceTotal)}</b></div>
-          <div class="bfrp-strategy-value"><span>Percentual</span><b class="bfrp-num">${pct(cons.percentualLanceMedio)}</b></div>
-          ${components.map(([label, value]) => `<div class="bfrp-strategy-value"><span>${h(label)}</span><b class="bfrp-num">${value}</b></div>`).join('')}
+          <div class="bfrp-strategy-percent"><span>Percentual de lance</span><strong class="bfrp-num">${pct(cons.percentualLanceMedio)}</strong></div>
+          <div class="bfrp-strategy-value"><span>Lance total</span><b class="bfrp-num">${money(cons.lanceTotal)}</b></div>
+          ${composicaoHtml}
+          ${creditoLiquidoHtml}
         </div>
+        ${horizonteExtra}
+      </div>`;
+  }
+
+  /* v35 — "ATÉ A CONTEMPLAÇÃO": só existe quando o analista preencheu
+   * comercial.horizonteContemplacaoEstimado (premissa comercial, nunca calculada) e a
+   * estratégia permite esse tipo de projeção (não Sorteio, não Lance Fixo puro — ver
+   * vm.showHorizonte). Mostra só o que o motor já sustenta: parcela em uso e redutor
+   * vigente; nunca reajuste percentual (não implementado no motor — ver §10/§21).
+   * v36 — deixou de ser uma seção própria (com h2/borda) e passa a ser renderizada
+   * DENTRO do próprio bloco de estratégia (ver strategyHtml), como extensão visual
+   * natural dele — mesmo conteúdo, mesmos dados, só reorganizado. */
+  function horizonteHtml(draft, cons, vm) {
+    if (!vm.showHorizonte) return '';
+    const parcelaUsada = vm.temRedutor ? cons.primeiraParcelaTotal : cons.parcelaNormalTotal;
+    return `
+      <div class="bfrp-strategy-extra">
+        <p class="bfrp-strategy-extra-head"><span class="bfrp-strategy-extra-kicker">Premissa utilizada</span> · Até a contemplação</p>
+        <div class="bfrp-financial-grid">
+          <div class="bfrp-metric">
+            <span>Horizonte utilizado na simulação</span>
+            <strong>${h(vm.horizonteEstimado)}</strong>
+          </div>
+          <div class="bfrp-metric">
+            <span>Parcela utilizada no período</span>
+            <strong class="bfrp-num">${money(parcelaUsada)}</strong>
+          </div>
+          ${vm.temRedutor ? `<div class="bfrp-metric"><span>Redutor vigente</span><strong class="bfrp-num">${vm.redutorUniformePct ? pct(vm.redutorUniformePct) : 'Ver detalhamento por cota'}</strong></div>` : ''}
+        </div>
+        <div class="bfrp-note">Estimativa utilizada exclusivamente para projeção financeira. A contemplação depende do resultado das assembleias e não é garantida. Sujeito ao reajuste previsto no regulamento do grupo.</div>
       </div>`;
   }
 
@@ -7294,8 +8060,12 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
       contemplationText = `${money(cons.lanceTotal)} estruturados conforme a estratégia selecionada.`;
     }
 
+    // Sorteio nunca mostra projeção pós-contemplação (item 5) — nem aqui, no resumo
+    // do "como o plano evolui".
     let finalText = 'Continuidade do plano conforme as condições contratadas.';
-    if (draft.modoCenario !== 'oculto') {
+    if (cons.todasSorteio) {
+      finalText = 'Uso do crédito integral conforme as regras da administradora, após a contemplação por sorteio.';
+    } else if (draft.modoCenario !== 'oculto') {
       finalText = selected.unavailable
         ? 'Cenário pendente de nova seleção antes da emissão definitiva.'
         : `${money(selected.installment)} por ${term(selected.remainingTerm).toLowerCase()}.`;
@@ -7315,14 +8085,15 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
         </div>
         <div class="bfrp-flow-item">
           <span class="bfrp-flow-index">03</span>
-          <h4>Após a contemplação</h4>
+          <h4>${cons.todasSorteio ? 'Uso do crédito' : 'Após a contemplação'}</h4>
           <p>${finalText}</p>
         </div>
       </div>`;
   }
 
   function scenariosHtml(draft, cons, selected) {
-    if (draft.modoCenario === 'oculto') return '';
+    // Sorteio nunca mostra tabela de cenários pós-contemplação (item 5).
+    if (draft.modoCenario === 'oculto' || cons.todasSorteio) return '';
     const rows = draft.modoCenario === 'comparacao'
       ? comparisonScenarios(draft, cons)
       : [selected];
@@ -7370,6 +8141,30 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
       </div>`;
   }
 
+  /* v35 — avisos de confiança por administradora (ver os 4 níveis do relatório de
+   * auditoria v34). Só aparecem quando a informação exibida na proposta realmente
+   * depende da ressalva — nunca em bloco genérico solto. Reduções de prazo do
+   * CNP/Embracon já são bloqueadas pelo mecanismo existente (selected.unavailable /
+   * scenariosHtml) e não são repetidas aqui. Mapfre não recebe nenhum texto novo
+   * (nenhum regulamento oficial confirmado até esta rodada — ver relatório v34). */
+  function confidenceCaveatsHtml(draft, cons, vm) {
+    const key = vm.rule && vm.rule.key;
+    const notes = [];
+    if (key === 'porto' && vm.showLance && !cons.todasSorteio) {
+      if (cons.algumPisoAplicado) {
+        notes.push('O piso mínimo contratual de redução de parcela foi aplicado neste cálculo. A confirmação definitiva do piso e da base de cálculo do lance livre depende das condições específicas do grupo.');
+      }
+    }
+    if (key === 'embracon' && vm.temRedutor) {
+      notes.push('Simulação de redutor de parcela válida para o plano Mais Por Menos (25% ou 50%). Para outros planos Embracon, confirme a compatibilidade com o analista antes do envio.');
+    }
+    if (key === 'cnp') {
+      notes.push('A composição mensal da parcela pode variar conforme a Proposta de Adesão específica deste grupo.');
+    }
+    if (!notes.length) return '';
+    return notes.map(n => `<div class="bfrp-note">${h(n)}</div>`).join('');
+  }
+
   function contentPageHtml(draft, cons, vm, lead, selected) {
     const rawClientName = lead && lead.nome ? lead.nome : 'Cliente';
     const opening = vm.com.mensagemAbertura
@@ -7402,7 +8197,10 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
           ${financialGridHtml(draft, cons, vm, selected)}
           ${differentTerms}
           ${scenarioWarning}
+          ${confidenceCaveatsHtml(draft, cons, vm)}
         </div>
+
+        ${conditionsHtml(draft, cons, vm)}
 
         ${strategy ? `<div class="bfrp-section"><h2 class="bfrp-section-title">Estratégia de contemplação</h2>${strategy}</div>` : ''}
 
@@ -7430,7 +8228,8 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
   }
 
   function quotaRowsHtml(draft, cons, vm) {
-    const showPostAward = draft.modoCenario !== 'oculto';
+    // Sorteio nunca mostra coluna de projeção pós-contemplação (item 5).
+    const showPostAward = draft.modoCenario !== 'oculto' && !cons.todasSorteio;
     const chosen = draft.estrategiaEscolhida || 'manutencao';
     const rows = [];
 
@@ -7487,22 +8286,28 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
 
   function quotaSectionHtml(draft, cons, vm) {
     if (!vm.showCotasTable) return '';
+    // v36 — item 7: mais destaque só quando há múltiplas cotas; com uma única
+    // cota, o mesmo conteúdo aparece com peso visual reduzido (ver .bfrp-section-quiet).
+    const sectionClass = vm.multiplasCotas ? 'bfrp-section' : 'bfrp-section bfrp-section-quiet';
     return `
-      <div class="bfrp-section">
+      <div class="${sectionClass}">
         <h2 class="bfrp-section-title">Detalhamento das cotas</h2>
         ${vm.avisoPrazosDiferentes ? '<div class="bfrp-note" style="margin:0 0 10px;">Os valores consolidados representam a fase em que todas as cotas estão ativas. Consulte cada prazo individual abaixo.</div>' : ''}
         <div class="bfrp-table-wrap">
           <table class="bfrp-table">
-            <thead><tr><th>Cota</th><th>Estratégia</th><th>Crédito</th><th>Prazo</th><th>Parcela inicial</th>${vm.showLanceColumnCotas ? '<th>Total planejado</th>' : ''}${draft.modoCenario !== 'oculto' ? '<th>Após contemplação</th>' : ''}</tr></thead>
+            <thead><tr><th>Cota</th><th>Estratégia</th><th>Crédito</th><th>Prazo</th><th>Parcela inicial</th>${vm.showLanceColumnCotas ? '<th>Total planejado</th>' : ''}${(draft.modoCenario !== 'oculto' && !cons.todasSorteio) ? '<th>Após contemplação</th>' : ''}</tr></thead>
             <tbody>${quotaRowsHtml(draft, cons, vm)}</tbody>
           </table>
         </div>
       </div>`;
   }
 
-  function historySectionHtml(draft, vm) {
+  function historySectionHtml(draft, cons, vm) {
+    // Histórico de lances não se aplica a Sorteio (item 5 — não há lance nessa
+    // modalidade) nem a Lance Fixo puro (item 9 — histórico é contexto de lance
+    // livre; o grupo já define o percentual fixo, sem relação com o histórico).
     const history = Array.isArray(draft.historicoGrupo) ? draft.historicoGrupo : [];
-    if (!vm.showHistory || !history.length) return '';
+    if (!vm.showHistory || !history.length || cons.todasSorteio || vm.isPureLanceFixo) return '';
     return `
       <div class="bfrp-section">
         <h2 class="bfrp-section-title">Histórico do grupo${draft.grupo ? ` ${h(draft.grupo)}` : ''}</h2>
@@ -7523,18 +8328,55 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
       </div>`;
   }
 
+  // v36.1 — item 9: "bfrp-page-break" (quebra forçada) foi removido daqui. Antes,
+  // Detalhes do planejamento SEMPRE começava em página nova, mesmo quando a
+  // página do conteúdo principal ainda tinha espaço sobrando — em cenários com
+  // histórico curto, isso deixava a página final quase vazia. Agora a seção flui
+  // normalmente após "Seu plano em perspectiva": se houver espaço, o
+  // detalhamento/histórico continua na mesma página impressa; se não houver,
+  // a paginação natural do navegador (respeitando break-inside:avoid em cada
+  // bloco/linha de tabela, ver CSS) decide onde quebrar — sem reservar página
+  // cheia previamente (ver .bfrp-content-page/.bfrp-details-page min-height:0).
+  //
+  // v36.2 — item 1: classificação puramente de apresentação (não é regra
+  // financeira) do tamanho do histórico do grupo, usada só para rotular o
+  // wrapper e permitir ajuste fino de CSS por faixa se a inspeção visual
+  // revelar necessidade — o comportamento de quebra em si (item 5) já é
+  // adaptativo por natureza, pois o wrapper não usa mais break-inside:avoid
+  // (ver comentário da regra .bfrp-page-head/.bfrp-details-body no CSS).
+  function detailsHistorySizeClass(draft) {
+    const len = Array.isArray(draft.historicoGrupo) ? draft.historicoGrupo.length : 0;
+    if (len <= 6) return 'bfrp-details-compact';
+    if (len <= 15) return 'bfrp-details-medium';
+    return 'bfrp-details-large';
+  }
+
   function detailsPageHtml(draft, cons, vm) {
     const quotas = quotaSectionHtml(draft, cons, vm);
-    const history = historySectionHtml(draft, vm);
+    const history = historySectionHtml(draft, cons, vm);
     if (!quotas && !history) return '';
+    // v36.2 — item 5: o wrapper continua existindo para agrupar visualmente
+    // cabeçalho + cotas + histórico, mas NÃO tem mais break-inside:avoid — essa
+    // proteção rígida forçava o bloco inteiro (mesmo um histórico pequeno) a
+    // migrar por completo para a página seguinte sempre que não coubesse por
+    // completo no espaço restante da página anterior, desperdiçando esse
+    // espaço e deixando a nova página quase vazia. Agora o conteúdo flui
+    // naturalmente: histórico pequeno tende a caber inteiro (nada o força para
+    // uma página nova); título e cabeçalho de tabela nunca ficam sozinhos
+    // (break-after:avoid em .bfrp-page-head/.bfrp-section-title/thead); nenhuma
+    // linha é cortada (break-inside:avoid em cada <tr>); cabeçalho de coluna
+    // repete nas páginas seguintes quando o histórico é longo.
+    const sizeClass = detailsHistorySizeClass(draft);
     return `
-      <section class="bfrp-page bfrp-details-page bfrp-page-break">
-        <header class="bfrp-page-head">
-          <strong>Detalhes do planejamento</strong>
-          <span>${vm.nomeCliente} · ${vm.administradoraNome}</span>
-        </header>
-        ${quotas}
-        ${history}
+      <section class="bfrp-page bfrp-details-page">
+        <div class="bfrp-details-body ${sizeClass}">
+          <header class="bfrp-page-head">
+            <strong>Detalhes do planejamento</strong>
+            <span>${vm.nomeCliente} · ${vm.administradoraNome}</span>
+          </header>
+          ${quotas}
+          ${history}
+        </div>
         <div class="bfrp-legal">BFR Investimentos · Informações complementares da proposta.</div>
       </section>`;
   }
