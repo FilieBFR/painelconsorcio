@@ -1306,6 +1306,127 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   text-align: right;
 }
 
+/* v36.5 — item 3/6/7 (hardening): investigação desta rodada reproduziu overflow
+   horizontal real (via scrollWidth/getBoundingClientRect em Chromium headless — ver
+   RELATORIO_HARDENING_PROPOSTA_v36_5.md) em três pontos, todos com a MESMA causa raiz:
+   um texto livre SEM espaços (nome de cliente, grupo, identificador de cota,
+   observação) mede sua "largura mínima de conteúdo" pela palavra inteira quando não
+   pode quebrar — e nem flex/grid (min-width:auto por padrão) nem table-layout:auto
+   (que também usa a maior palavra ininterrupta de cada célula) protegem contra isso
+   sozinhos. A correção é cirúrgica e comprovada pelos mesmos testes que reproduziram
+   o problema: min-width:0 permite que o item de flex/grid encolha abaixo do
+   conteúdo, e overflow-wrap:anywhere é o último recurso (só entra em ação quando a
+   palavra realmente não cabe) para quebrar uma sequência sem espaços — nunca afeta
+   texto normal, que continua quebrando nos espaços como sempre. Aplicado somente aos
+   contêineres de texto livre e aos filhos diretos de flex/grid identificados na
+   investigação (cabeçalhos, condições da carta, estratégia, cartões financeiros,
+   fluxo, próximos passos, confiança/rodapé, observações, células de tabela) — não
+   em .bfrp-num (que preserva white-space:nowrap e continua sem quebrar valores
+   monetários, ver item 5) nem em nenhum elemento de cor/tipografia/estrutura.
+   Deliberadamente NÃO incluído: rótulos fixos curtos que nunca carregam texto livre
+   do analista/cliente (ex.: os "span" de .bfrp-strategy-value e o "b" de
+   .bfrp-conditions-item que já é .bfrp-num) — a primeira versão desta correção
+   havia incluído .bfrp-strategy-value por engano, o que encolhia a coluna de
+   rótulo ("Composição") a ponto de quebrá-la desnecessariamente mesmo sem
+   nenhum texto livre longo por perto; removido após o teste visual (ver
+   RELATORIO_HARDENING_PROPOSTA_v36_5.md, "antes × depois"). .bfrp-metric já
+   tinha min-width:38mm proposital (ver regra original acima) — por isso só os
+   FILHOS de texto (span/strong/small) entram aqui, nunca o cartão inteiro. */
+.bfrp-cover-brand,
+.bfrp-cover-fact,
+.bfrp-cover-fact span,
+.bfrp-cover-fact strong,
+.bfrp-cover-foot span,
+.bfrp-cover-subtitle,
+.bfrp-cover-prepared,
+.bfrp-hero-sub,
+.bfrp-page-head span,
+.bfrp-page-head strong,
+.bfrp-conditions-item,
+.bfrp-conditions-item b,
+.bfrp-metric span,
+.bfrp-metric strong,
+.bfrp-metric small,
+.bfrp-strategy h3,
+.bfrp-strategy p,
+.bfrp-flow-item,
+.bfrp-flow-item p,
+.bfrp-flow-item h4,
+.bfrp-next-steps li,
+.bfrp-trust,
+.bfrp-trust strong,
+.bfrp-trust span,
+.bfrp-trust p,
+.bfrp-observation,
+.bfrp-note,
+.bfrp-legal,
+.bfrp-table td {
+  /* v36.5: cabeçalhos (th) ficaram de fora deliberadamente — são sempre rótulos
+     fixos curtos ("Cota", "Assembleia", "Observação"...), nunca texto livre; um
+     teste visual desta rodada mostrou que incluí-los aqui os deixava quebrando no
+     meio da palavra sempre que a coluna ficava um pouco mais estreita (ex.:
+     "Assembleia" virando "ASSE/MBLEI/A"), mesmo sem overflow real — corrigido
+     removendo-os daqui (ver "antes × depois" no relatório). */
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* v36.5 — item 6/7 (continuação): overflow-wrap é uma propriedade herdada — o
+   .bfrp-conditions-item acima precisa dela para proteger o VALOR (b, ex.: nome de
+   grupo digitado sem espaços), mas isso também é herdado pelo rótulo fixo (span,
+   ex.: "Grupo", "Prazo") dentro da mesma linha flex. Rótulos são sempre texto
+   curto controlado (nunca vêm do cliente/analista como texto livre) — por isso
+   recebem nowrap explicitamente, o que os protege de quebrar no meio da palavra
+   quando a linha fica espremida pelo valor longo ao lado (reproduzido e corrigido
+   nesta rodada — ver "antes × depois" no relatório). */
+.bfrp-conditions-item span {
+  white-space: nowrap;
+}
+
+/* v36.5 — item 4: "Detalhamento das cotas" pode chegar a 7 colunas simultâneas
+   (Cota/Estratégia/Crédito/Prazo/Parcela inicial/Total planejado/Após contemplação).
+   Testado o cenário máximo de colunas ANTES de decidir (ver relatório): sem
+   table-layout:fixed, um valor livre incomum em uma única coluna (ex.: identificador
+   de cota digitado sem espaços) redistribui a largura das colunas vizinhas de forma
+   imprevisível, encolhendo "Estratégia"/"Prazo" a ponto de ficarem ilegíveis mesmo
+   sem chegar a vazar da página. table-layout:fixed com <colgroup> (gerado no
+   renderer conforme as colunas realmente presentes, ver cotasColgroupHtml) resolve
+   isso com uma largura coerente e estável por coluna, evitando exatamente o caso que
+   o pedido descreve: "não deixar a coluna Prazo consumir a mesma largura que valores
+   financeiros". Escopo estrito a esta tabela — as demais (.bfrp-table de cenários e
+   histórico) continuam em table-layout:auto, que já se mostrou robusto para elas
+   nos mesmos testes e cujas colunas de texto livre (Observação) precisam da
+   flexibilidade do auto-layout para não desperdiçar espaço. */
+.bfrp-table-cotas {
+  table-layout: fixed;
+}
+
+/* v36.5 — item 5: células que combinam dois valores atômicos (parcela pós-
+   contemplação + prazo restante, ex.: "R$ 11.386,62 · 969 meses") não podem usar
+   nowrap na célula inteira (isso é o que causava o risco de vazamento em créditos
+   muito altos) nem podem quebrar UM dos dois valores no meio (isso violaria o item
+   5 — nunca partir "R$ 1.234.567,89"). A célula em si permite quebra (para o caso
+   extremo em que os dois valores juntos não cabem), mas cada valor individual
+   continua com white-space:nowrap via .bfrp-num (ver acima) — a quebra, se
+   necessária, só pode acontecer no espaço entre os dois, nunca dentro de um deles. */
+.bfrp-table td.bfrp-compound {
+  text-align: right;
+  white-space: normal;
+}
+
+/* v36.5 — item 12-15: nota secundária vinculada ao Lance Embutido (ver strategyHtml).
+   Deliberadamente SEM borda, sem negrito e com tamanho menor que .bfrp-strategy-value
+   — não pode competir visualmente com os valores/percentuais, que continuam sendo a
+   informação principal da estratégia (ver relatório, "antes × depois"). */
+.bfrp-strategy-note {
+  margin-top: 2px;
+  color: var(--bfrp-muted);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
 /* v36 — mesmo tratamento discreto do bfrp-note (fundo cinza muito claro, sem
    borda) — texto do cliente merece destaque tipográfico, não uma caixa. */
 .bfrp-observation {
@@ -3209,6 +3330,22 @@ function computeMapfreSimulation(inp){
 //     Menos" (Cláusula 3.4.2 — combina os dois mecanismos), que este motor NÃO modela
 //     (não há campo no CRM para escolher "qual plano de redução" — o campo `redutor`
 //     único hoje só representa o padrão Mais Por Menos). Não implementado nesta rodada.
+//
+// CORREÇÃO v36.4 (auditoria do redutor CNP, ver RELATORIO_CORRECAO_REDUTOR_CNP_v36_4.md)
+//   — a leitura acima do item 4.4.3.6.1 ("Fundo de Reserva NÃO é citado e permanece
+//   integral") NÃO se confirmou nos dados reais dos grupos CNP analisados. Trata-se de
+//   uma leitura textual do item, não de uma citação literal do regulamento geral sobre a
+//   incidência exata do redutor em cada componente — e diverge do comportamento
+//   observado (ex.: grupo 1048 — crédito R$ 156.266,70, TA 18%, FR 3,7%, redutor 50%,
+//   prazo restante 182 meses — parcela registrada ≈ R$ 522,46, valor incompatível com
+//   manter o Fundo de Reserva integral). A partir da v36.4, o redutor CNP incide sobre
+//   Fundo Comum + Taxa de Administração + Fundo de Reserva (parcela reduzida = parcela
+//   integral × (1−R)) — regra operacional validada pelos dados reais dos grupos CNP
+//   analisados, e não uma citação literal do regulamento geral, que não detalha a
+//   incidência do redutor sobre cada componente individualmente. A distribuição exata de
+//   TA e demais componentes pode depender da Proposta de Adesão de cada grupo. Esta
+//   correção é exclusiva da CNP: a fórmula da Embracon (`(FC+FR)·(1−R)+TA`, linhas acima)
+//   permanece inalterada e fora do escopo desta rodada.
 function _cotaClubeCommon(cota, parcelaIntegralSemRedutorUnitaria, parcelaInicialUnitaria){
   const { creditoUnitario:C, qtd:QTD, taxaAdministracao:TA, fundoReserva:FR, prazo:N,
           percentualProprio:LP, percentualEmbutido:LE, mesesContemplacao:M } = cota;
@@ -3260,8 +3397,27 @@ function _cotaClubeCommon(cota, parcelaIntegralSemRedutorUnitaria, parcelaInicia
     indicadorLabel: 'Indicador simples do modelo, sem reajustes anuais'
   };
 }
-/** CNP — redutor incide sobre Fundo Comum + Taxa de Administração; Fundo de Reserva
- *  permanece integral (Condições Gerais CNP, item 4.4.3.6.1, veículo e imóvel). */
+/** CNP — nos grupos operacionais analisados, o redutor incide sobre a composição
+ *  completa da parcela: Fundo Comum + Taxa de Administração + Fundo de Reserva.
+ *
+ *  v36.4 — CORREÇÃO DE FÓRMULA (auditoria do redutor CNP): até a v36.3, o motor
+ *  mantinha o Fundo de Reserva INTEGRAL fora do redutor —
+ *  `(fundoComum + taxaAdministracao) * (1-R) + fundoReserva` — replicando uma
+ *  leitura do item 4.4.3.6.1 das Condições Gerais CNP que NÃO é confirmada pelo
+ *  regulamento geral e que diverge dos dados reais observados nos grupos CNP
+ *  analisados (ex.: grupo 1048 — crédito R$ 156.266,70, TA 18%, FR 3,7%, redutor
+ *  50%, prazo restante 182 meses — parcela registrada ≈ R$ 522,46; a fórmula
+ *  antiga produzia um valor sistematicamente maior, por não reduzir o FR).
+ *  A regra correta, validada empiricamente contra os grupos analisados, é
+ *  esta: regra operacional validada pelos dados reais dos grupos CNP
+ *  analisados — não uma citação literal do regulamento geral, que não
+ *  detalha a incidência do redutor sobre cada componente. A distribuição
+ *  exata de TA e demais componentes pode depender da Proposta de Adesão de
+ *  cada grupo. Ver RELATORIO_CORRECAO_REDUTOR_CNP_v36_4.md.
+ *  Fórmula corrigida: a parcela reduzida é a parcela integral (FC+TA+FR)
+ *  multiplicada pelo fator do redutor — reaproveita a mesma variável
+ *  canônica `parcelaIntegralSemRedutorUnitaria` já calculada logo abaixo,
+ *  sem duplicar a soma dos três componentes. */
 function computeCnpSimulation(cota){
   const { creditoUnitario:C, taxaAdministracao:TA, fundoReserva:FR, prazo:N, redutor:R } = cota;
   const fundoComum = calculateCommonFundInstallment(C, N);
@@ -3271,7 +3427,8 @@ function computeCnpSimulation(cota){
   // reduzida (bug histórico: o cartão "Parcela integral (referência)" mostrava a
   // reduzida por não existir este campo separado) — mantida como soma cheia dos três.
   const parcelaIntegralSemRedutorUnitaria = fundoComum + taxaAdministracaoInstallment + fundoReservaInstallment;
-  const parcelaInicialUnitaria = (fundoComum + taxaAdministracaoInstallment) * (1 - R) + fundoReservaInstallment;
+  // v36.4: FR agora sofre o mesmo redutor que FC e TA — ver comentário da função.
+  const parcelaInicialUnitaria = parcelaIntegralSemRedutorUnitaria * (1 - R);
   return _cotaClubeCommon(cota, parcelaIntegralSemRedutorUnitaria, parcelaInicialUnitaria);
 }
 /** Embracon — redutor incide sobre Fundo Comum + Fundo de Reserva; Taxa de Administração
@@ -7972,10 +8129,19 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
     items.push(['Prazo', term(cons.prazoOriginalTotal)]);
     if (draft.administradora) items.push(['Administradora', h(draft.administradora)]);
     if (draft.grupo) items.push(['Grupo', h(draft.grupo)]);
-    if (rule.supportedStrategies && rule.supportedStrategies.includes('lanceFixo')) {
-      items.push(['Lance fixo', 'Permitido, conforme regras do grupo']);
-    }
-    if (rule.allowsEmbeddedBid) items.push(['Lance embutido', 'Permitido, conforme regras do grupo']);
+    // v36.5 — item 12 do pedido: os itens "Lance fixo: Permitido, conforme regras do
+    // grupo" e "Lance embutido: Permitido, conforme regras do grupo" saíram daqui.
+    // Eram um FATO GENÉRICO da administradora (rule.supportedStrategies/
+    // allowsEmbeddedBid), exibido em "Condições da carta" com a MESMA hierarquia
+    // visual (rótulo + valor em negrito) de fatos numéricos reais (Taxa de
+    // administração, Fundo de reserva) — e apareciam mesmo quando a proposta não
+    // usava lance fixo nem lance embutido (inclusive em Sorteio), o que o pedido
+    // classificou como informação principal indevida, sem relação com a proposta em
+    // questão. A partir da v36.5, a única nota relacionada a lance embutido é a
+    // secundária dentro de "Estratégia de contemplação", exibida somente quando ESTA
+    // proposta de fato tem lance embutido (ver strategyHtml -> embutidoNoteHtml) —
+    // nunca mais como fato genérico da administradora. Nenhum dado do ViewModel foi
+    // alterado; só o texto/local de apresentação.
     if (rates.seguro && rates.seguro.tipo !== 'semSeguro' && positive(rates.seguro.valor)) {
       const seguroLabelMap = { pctSaldo: '% mensal sobre o saldo devedor', pctCredito: '% mensal sobre o crédito', pctParcela: '% sobre a parcela', valorFixo: 'Valor fixo mensal' };
       const seguroValor = rates.seguro.tipo === 'valorFixo' ? money(rates.seguro.valor) : pct(rates.seguro.valor);
@@ -8048,6 +8214,16 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
       ? `<div class="bfrp-strategy-value bfrp-strategy-value-wide"><span>Composição</span><b>${h('sendo: ' + composicao.join(' / '))}</b></div>` : '';
     const creditoLiquidoHtml = positive(cons.embutidoTotal)
       ? `<div class="bfrp-strategy-value"><span>Crédito líquido</span><b class="bfrp-num">${money(cons.creditoDisponivelTotal)}</b></div>` : '';
+    // v36.5 — itens 12-15 do pedido: nota secundária do Lance Embutido. Só aparece
+    // quando ESTA proposta de fato tem lance embutido (positive(cons.embutidoTotal)) —
+    // nunca em Sorteio (nem chega a este ponto do código) nem em Lance Fixo/Lance
+    // Livre sem embutido. Fica DEPOIS do valor (crédito líquido, quando existe, ou a
+    // composição), nunca dentro de badge/selo, com estilo tipográfico visivelmente
+    // menor (.bfrp-strategy-note) para não competir com os valores — que continuam
+    // sendo a informação principal. Não é mais "Permitido" (garantia); é uma
+    // subordinação às regras do grupo, conforme frase final pedida pelo usuário.
+    const embutidoNoteHtml = positive(cons.embutidoTotal)
+      ? `<div class="bfrp-strategy-note">Lance embutido sujeito às regras e limites do grupo.</div>` : '';
     const fixedInfo = (cons.results || []).filter(item => item && item.bid && item.bid.fixedInfo);
     const fixedNote = fixedInfo.length
       ? (fixedInfo.every(item => item.bid.fixedInfo.atingido)
@@ -8072,6 +8248,7 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
             <div class="bfrp-strategy-value"><span>Lance total</span><b class="bfrp-num">${money(cons.lanceTotal)}</b></div>
             ${composicaoHtml}
             ${creditoLiquidoHtml}
+            ${embutidoNoteHtml}
           </div>
           ${horizonteExtra}
         </div>`;
@@ -8097,6 +8274,7 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
           <div class="bfrp-strategy-value"><span>Lance total</span><b class="bfrp-num">${money(cons.lanceTotal)}</b></div>
           ${composicaoHtml}
           ${creditoLiquidoHtml}
+          ${embutidoNoteHtml}
         </div>
         ${horizonteExtra}
       </div>`;
@@ -8312,6 +8490,30 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
       </section>`;
   }
 
+  // v36.5 — item 5: célula "Após contemplação" combina dois valores atômicos
+  // (parcela + prazo restante). Cada um mantém seu próprio white-space:nowrap via
+  // .bfrp-num (nunca parte "R$ 1.234.567,89" nem "220 meses" ao meio); a célula em
+  // si (classe bfrp-compound, ver CSS) permite quebrar SÓ no espaço entre os dois,
+  // caso os dois juntos não caibam — nunca dentro de um valor. Mesmo dado de sempre
+  // (money(...)/term(...)), só a marcação HTML mudou.
+  function postAwardCellHtml(value, prazo){
+    return `<td class="bfrp-compound"><span class="bfrp-num">${money(value)}</span> <span class="bfrp-num">${term(prazo)}</span></td>`;
+  }
+
+  // v36.5 — item 4: larguras coerentes por coluna para a tabela de "Detalhamento das
+  // cotas" (table-layout:fixed, ver .bfrp-table-cotas no CSS). Pesos fixos por tipo de
+  // coluna, normalizados para somar 100% conforme as colunas opcionais (Total
+  // planejado / Após contemplação) estejam presentes ou não nesta proposta — nunca
+  // deixa "Prazo" com a mesma largura que uma coluna de valor financeiro, e reserva
+  // mais espaço para "Após contemplação" por ser um valor composto (parcela + prazo).
+  function cotasColgroupHtml(showBid, showPostAward){
+    const cols = [['cota',10], ['estrategia',14], ['credito',15], ['prazo',9], ['parcelaInicial',15]];
+    if (showBid) cols.push(['totalPlanejado', 15]);
+    if (showPostAward) cols.push(['aposContemplacao', 22]);
+    const sum = cols.reduce((acc, [, w]) => acc + w, 0);
+    return `<colgroup>${cols.map(([, w]) => `<col style="width:${(w / sum * 100).toFixed(2)}%">`).join('')}</colgroup>`;
+  }
+
   function quotaRowsHtml(draft, cons, vm) {
     // Sorteio nunca mostra coluna de projeção pós-contemplação (item 5).
     const showPostAward = draft.modoCenario !== 'oculto' && !cons.todasSorteio;
@@ -8339,7 +8541,7 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
               <td class="bfrp-num">${term(quota.prazoTotal)}</td>
               <td class="bfrp-num">${money(initialUnit)}</td>
               ${vm.showLanceColumnCotas ? `<td class="bfrp-num">${money(bidUnit)}</td>` : ''}
-              ${showPostAward ? `<td class="bfrp-num">${postUnit === null ? 'Cenário consolidado' : `${money(postUnit)} · ${term(quotaScenario.prazo)}`}</td>` : ''}
+              ${showPostAward ? (postUnit === null ? '<td class="bfrp-compound">Cenário consolidado</td>' : postAwardCellHtml(postUnit, quotaScenario.prazo)) : ''}
             </tr>`);
         }
         rows.push(`
@@ -8350,7 +8552,7 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
             <td class="bfrp-num">${term(quota.prazoTotal)}</td>
             <td class="bfrp-num">${money(initialTotal)}</td>
             ${vm.showLanceColumnCotas ? `<td class="bfrp-num">${money(bidTotal)}</td>` : ''}
-            ${showPostAward ? `<td class="bfrp-num">${quotaScenario && finite(quotaScenario.parcela) ? `${money(quotaScenario.parcela)} · ${term(quotaScenario.prazo)}` : 'Cenário consolidado'}</td>` : ''}
+            ${showPostAward ? (quotaScenario && finite(quotaScenario.parcela) ? postAwardCellHtml(quotaScenario.parcela, quotaScenario.prazo) : '<td class="bfrp-compound">Cenário consolidado</td>') : ''}
           </tr>`);
         return;
       }
@@ -8363,7 +8565,7 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
           <td class="bfrp-num">${term(quota.prazoTotal)}</td>
           <td class="bfrp-num">${money(initialTotal)}</td>
           ${vm.showLanceColumnCotas ? `<td class="bfrp-num">${money(bidTotal)}</td>` : ''}
-          ${showPostAward ? `<td class="bfrp-num">${quotaScenario && finite(quotaScenario.parcela) ? `${money(quotaScenario.parcela)} · ${term(quotaScenario.prazo)}` : 'Cenário consolidado'}</td>` : ''}
+          ${showPostAward ? (quotaScenario && finite(quotaScenario.parcela) ? postAwardCellHtml(quotaScenario.parcela, quotaScenario.prazo) : '<td class="bfrp-compound">Cenário consolidado</td>') : ''}
         </tr>`);
     });
     return rows.join('');
@@ -8379,7 +8581,8 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
         <h2 class="bfrp-section-title">Detalhamento das cotas</h2>
         ${vm.avisoPrazosDiferentes ? '<div class="bfrp-note" style="margin:0 0 10px;">Os valores consolidados representam a fase em que todas as cotas estão ativas. Consulte cada prazo individual abaixo.</div>' : ''}
         <div class="bfrp-table-wrap">
-          <table class="bfrp-table">
+          <table class="bfrp-table bfrp-table-cotas">
+            ${cotasColgroupHtml(vm.showLanceColumnCotas, draft.modoCenario !== 'oculto' && !cons.todasSorteio)}
             <thead><tr><th>Cota</th><th>Estratégia</th><th>Crédito</th><th>Prazo</th><th>Parcela inicial</th>${vm.showLanceColumnCotas ? '<th>Total planejado</th>' : ''}${(draft.modoCenario !== 'oculto' && !cons.todasSorteio) ? '<th>Após contemplação</th>' : ''}</tr></thead>
             <tbody>${quotaRowsHtml(draft, cons, vm)}</tbody>
           </table>
