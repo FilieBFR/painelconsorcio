@@ -927,24 +927,31 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   border-left: 0;
 }
 
-/* v36.1 — item 3: "Estrutura financeira" ganha 3 níveis reais de hierarquia
-   (antes todos os indicadores tinham exatamente o mesmo peso visual):
-     1) .bfrp-metric-primary  — Crédito contratado e Parcela inicial (maior
-        destaque: tique dourado, tamanho e peso maiores, navy mais escuro).
-     2) .bfrp-metric-accent   — resultados pós-contemplação (Após a
-        contemplação, Crédito líquido): destaque intermediário.
-     3) .bfrp-metric (padrão) — Prazo, Quantidade de cotas: nível secundário.
-   Mesmos dados, mesma função financialGridHtml; só a classe/CSS mudou. */
-.bfrp-metric-primary {
-  padding-top: 2px;
-}
-
-.bfrp-metric-primary::before {
+/* v36.6 — causa raiz do desalinhamento apontado nesta rodada: só os cards
+   .bfrp-metric-primary reservavam, em FLUXO normal, 11px de altura no topo
+   (padding-top:2px + a barrinha dourada de 2px + margin-bottom:7px) antes do
+   rótulo (span) começar. Os cards .bfrp-metric-accent/.bfrp-metric comuns não
+   tinham essa reserva — o rótulo deles começava 11px mais acima. Resultado:
+   mesmo com align-items:stretch (mesma ALTURA de card), os rótulos "CRÉDITO
+   CONTRATADO"/"PARCELA INICIAL" (primary) ficavam visivelmente mais baixos que
+   "PRAZO DO PLANO"/"APÓS A CONTEMPLAÇÃO" na mesma linha. Corrigido reservando
+   essa mesma faixa de 11px em TODOS os cards (::before abaixo, transparente
+   por padrão) — só a cor muda por tier (dourado no primary), a altura
+   reservada e a posição do rótulo ficam idênticas em qualquer combinação de
+   cards. Escopo: só .bfrp-metric/.bfrp-metric-primary da grade financeira —
+   excluído explicitamente do bloco "Premissa utilizada" (.bfrp-strategy-extra
+   .bfrp-metric, ver override abaixo), que nunca teve essa reserva e não deve
+   ganhá-la agora. */
+.bfrp-metric::before {
   content: "";
   display: block;
   width: 18px;
   height: 2px;
   margin-bottom: 7px;
+  background: transparent;
+}
+
+.bfrp-metric-primary::before {
   background: var(--bfrp-gold-500);
 }
 
@@ -990,6 +997,53 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   color: var(--bfrp-muted);
   font-size: 9.2px;
   line-height: 1.4;
+}
+
+/* v36.6 — ver comentário em financialGridHtml (quantityCard/Prazo): largura
+   mínima reduzida só para os 2 cards de valor curto, permitindo até 5 cards na
+   mesma linha sem forçar min-width menor nos cards de valor monetário (que
+   continuam em 38mm). Escopo restrito à classe — nunca casa com o bloco
+   reaproveitado "Premissa utilizada" (horizonteHtml), que não usa esta classe. */
+.bfrp-metric-compact {
+  min-width: 28mm;
+}
+
+/* v36.6 — faixa secundária do "Crédito líquido" (ver financialGridHtml): fica
+   fora da grade de cards principais, com peso tipográfico claramente menor —
+   não é mais um card com o mesmo tratamento visual de Crédito contratado/
+   Parcela inicial/Prazo/Após a contemplação, é uma linha de resumo discreta
+   logo abaixo deles. min-width:0 + flex-wrap:wrap por segurança (mesmo padrão
+   de hardening da v36.5), embora o conteúdo aqui seja sempre curto e limitado
+   (rótulo fixo + um valor monetário + uma nota curta). */
+.bfrp-financial-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  min-width: 0;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bfrp-line-soft);
+}
+
+.bfrp-financial-secondary span {
+  color: var(--bfrp-muted);
+  font-size: 9px;
+  font-weight: 680;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.bfrp-financial-secondary b {
+  color: var(--bfrp-navy-800);
+  font-size: 12.5px;
+  font-weight: 640;
+  white-space: nowrap;
+}
+
+.bfrp-financial-secondary small {
+  color: var(--bfrp-muted);
+  font-size: 9.2px;
 }
 
 /* v36 — bloco de "grande destaque" pedido para a estratégia de contemplação,
@@ -1097,12 +1151,58 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 }
 
 /* v35 — variante do bfrp-strategy-value para a composição do lance ("sendo: ...");
-   texto mais longo, então quebra linha em vez de forçar nowrap. */
+   texto mais longo, então quebra linha em vez de forçar nowrap.
+   v36.6 — deixou de ser usada (a composição agora é lista estruturada, ver
+   .bfrp-strategy-composicao abaixo); mantida sem uso porque não é uma correção
+   pedida nesta rodada e a regra é inofensiva (não casa com nenhum elemento). */
 .bfrp-strategy-value-wide b {
   white-space: normal;
   font-size: 10.5px;
   font-weight: 650;
   text-align: right;
+}
+
+/* v36.6 — item 2 do pedido: composição do lance como lista estruturada em vez de
+   frase corrida. Só entra em cena com 2+ componentes (1 componente cai no
+   .bfrp-strategy-value comum, ver strategyHtml); por isso o rótulo "Composição"
+   fica claramente subordinado (mesmo tom apagado do rótulo padrão, sem negrito)
+   e cada componente vira sua própria linha compacta rótulo/valor — nenhum valor
+   monetário quebra no meio, nenhuma linha nasce vazia (mesmo filter(Boolean) de
+   sempre no JS). */
+.bfrp-strategy-composicao {
+  display: block;
+}
+
+.bfrp-strategy-composicao > span {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.bfrp-strategy-composicao-list {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.bfrp-strategy-composicao-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bfrp-strategy-composicao-item span {
+  color: var(--bfrp-muted);
+  font-size: 9.6px;
+  white-space: nowrap;
+}
+
+.bfrp-strategy-composicao-item b {
+  color: var(--bfrp-navy-900);
+  font-size: 11.5px;
+  font-weight: 640;
+  white-space: nowrap;
 }
 
 /* v36 — "Até a contemplação" como extensão natural do bloco de estratégia: mesma
@@ -1143,6 +1243,15 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 
 .bfrp-strategy-extra .bfrp-metric:first-child {
   padding-left: 0;
+}
+
+/* v36.6 — o bloco "Premissa utilizada" (horizonteHtml) reaproveita .bfrp-metric
+   mas nunca teve o tique dourado nem a reserva de espaço acima do rótulo; a
+   nova reserva uniforme adicionada em .bfrp-metric::before (ver bloco
+   principal acima) é cancelada aqui para preservar exatamente a aparência
+   compacta que este bloco já tinha. */
+.bfrp-strategy-extra .bfrp-metric::before {
+  content: none;
 }
 
 /* v35 — "CONDIÇÕES DA CARTA": grade compacta de pares rótulo/valor, mesmo padrão
@@ -8074,8 +8183,15 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
     // homogêneas — evita repetir a mesma informação em dois lugares (item 4: nunca
     // duplicar informação). Quando as cotas NÃO são homogêneas, o cartão continua
     // aparecendo aqui, pois o hero não expõe a contagem nesse caso.
+    // v36.6 — "bfrp-metric-compact" (ver CSS): Prazo e Quantidade de cotas mostram
+    // valores bem mais curtos ("100 meses", "3") que os demais cards desta grade
+    // (sempre valores monetários) — por isso aceitam uma largura mínima menor sem
+    // perder legibilidade, liberando espaço para até 5 cards (2 primary + 1 accent
+    // + estes 2 compact) caberem numa única linha mesmo no cenário mais denso
+    // (cotas heterogêneas + Após a contemplação). Só estes 2 cards ganham a classe;
+    // Crédito contratado/Parcela inicial/Após a contemplação não mudam de tamanho.
     const quantityCard = (vm.showCotasTable && !(vm.multiplasCotas && vm.cotasHomogeneas))
-      ? `<div class="bfrp-metric"><span>Quantidade de cotas</span><strong class="bfrp-num">${h(vm.quantidadeTotalCotas)}</strong></div>`
+      ? `<div class="bfrp-metric bfrp-metric-compact"><span>Quantidade de cotas</span><strong class="bfrp-num">${h(vm.quantidadeTotalCotas)}</strong></div>`
       : '';
     // v36.1 — item 3: resultados pós-contemplação recebem destaque intermediário
     // (classe bfrp-metric-accent, ver CSS) — nem no mesmo nível de Crédito/
@@ -8084,8 +8200,30 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
     const afterAwardCard = scenarioVisible && !selected.unavailable
       ? `<div class="bfrp-metric bfrp-metric-accent"><span>Após a contemplação</span><strong class="bfrp-num">${money(selected.installment)}</strong><small>${h(selected.label)} · ${term(selected.remainingTerm)}</small></div>`
       : '';
-    const availableCreditCard = (vm.showLance && positive(cons.embutidoTotal))
-      ? `<div class="bfrp-metric bfrp-metric-accent"><span>Crédito líquido</span><strong class="bfrp-num">${money(cons.creditoDisponivelTotal)}</strong><small>Após o lance embutido</small></div>`
+    // v36.6 — causa raiz do "quinto card mal encaixado" apontado nesta rodada:
+    // com Após a contemplação + Crédito líquido + Quantidade de cotas
+    // simultâneos, a faixa financeira chegava a 5 cards (min-width:38mm cada);
+    // não cabiam todos numa linha só, e o flex-wrap jogava um deles sozinho
+    // para a linha de baixo, deslocado e com o mesmo traço divisório vertical
+    // de quem está "no meio" de uma linha cheia. "Crédito líquido" é o que mais
+    // sobra nessa conta (é o único dos 4 indicadores citados no pedido do
+    // usuário como "principal" que NÃO está nesta lista), e já aparece de
+    // novo — como informação principal da modalidade, não duplicada aqui —
+    // dentro de "Estratégia de contemplação" (ver strategyHtml). Por isso ele
+    // sai da grade principal e volta como uma faixa secundária discreta logo
+    // abaixo (bfrp-financial-secondary), só com Crédito contratado, Parcela
+    // inicial, Prazo do plano, Após a contemplação e Quantidade de cotas
+    // disputando a linha principal — exatamente os 4 indicadores citados como
+    // "principais" pelo usuário, mais o selo de quantidade quando aplicável
+    // (já existia antes, fora do escopo desta rodada). Mesma condição de
+    // exibição de sempre (vm.showLance && positive(cons.embutidoTotal)) — só
+    // o local mudou, nenhum dado novo, nenhum removido.
+    const availableCreditStrip = (vm.showLance && positive(cons.embutidoTotal))
+      ? `<div class="bfrp-financial-secondary">
+          <span>Crédito líquido</span>
+          <b class="bfrp-num">${money(cons.creditoDisponivelTotal)}</b>
+          <small>Após o lance embutido</small>
+        </div>`
       : '';
 
     return `
@@ -8099,14 +8237,14 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
           <strong class="bfrp-num">${money(cons.primeiraParcelaTotal)}</strong>
           ${vm.temRedutor ? '<small>Valor previsto para a fase inicial</small>' : ''}
         </div>
-        <div class="bfrp-metric">
+        <div class="bfrp-metric bfrp-metric-compact">
           <span>Prazo do plano${vm.prazosIguais ? '' : ' (maior cota)'}</span>
           <strong class="bfrp-num">${term(cons.prazoOriginalTotal)}</strong>
         </div>
         ${afterAwardCard}
-        ${availableCreditCard}
         ${quantityCard}
-      </div>`;
+      </div>
+      ${availableCreditStrip}`;
   }
 
   /* v35 — "CONDIÇÕES DA CARTA": leitura direta de draft.rates e da regra da
@@ -8202,16 +8340,37 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
     }
 
     // v35 — item 13: lance embutido NUNCA é uma estratégia própria, é composição do
-    // lance. Por isso "LANCE TOTAL" sempre aparece com o "sendo: ..." explicando a
-    // composição, e "CRÉDITO LÍQUIDO" só aparece quando há embutido de fato.
-    const composicao = [
-      positive(cons.recursoProprioTotal) ? `${money(cons.recursoProprioTotal)} recurso próprio` : null,
-      positive(cons.embutidoTotal) ? `${money(cons.embutidoTotal)} lance embutido` : null,
-      positive(cons.fgtsTotal) ? `${money(cons.fgtsTotal)} FGTS` : null,
-      positive(cons.outroTotal) ? `${money(cons.outroTotal)} outro recurso` : null
+    // lance. Por isso "LANCE TOTAL" sempre aparece com sua composição explicada, e
+    // "CRÉDITO LÍQUIDO" só aparece quando há embutido de fato.
+    // v36.6 — a composição deixou de ser uma única frase corrida ("sendo: R$X
+    // recurso próprio / R$Y lance embutido") dentro de uma coluna estreita
+    // (minmax(56mm, 0.7fr) — ver .bfrp-strategy grid-template-columns): com dois
+    // ou mais componentes, o texto quebrava de forma feia, cortando no meio de
+    // um valor monetário ou do rótulo do componente. Agora cada componente é um
+    // par rótulo/valor próprio (mesmo padrão de "Lance total"/"Crédito líquido"),
+    // nunca quebrando dentro de um valor. Regras pedidas: só recurso próprio ->
+    // mostra só essa linha, sem o rótulo genérico "Composição" (não há nada a
+    // decompor); dois ou mais componentes -> "Composição" vira um rótulo
+    // subordinado (pequeno, maiúsculo) seguido da lista; nenhum componente com
+    // valor zerado/ausente gera linha vazia (mesmo filter(Boolean) de sempre).
+    // Mesmos valores de sempre (cons.recursoProprioTotal/embutidoTotal/
+    // fgtsTotal/outroTotal) — nenhum cálculo novo, só a apresentação.
+    const composicaoItems = [
+      positive(cons.recursoProprioTotal) ? ['Recurso próprio', money(cons.recursoProprioTotal)] : null,
+      positive(cons.embutidoTotal) ? ['Lance embutido', money(cons.embutidoTotal)] : null,
+      positive(cons.fgtsTotal) ? ['FGTS', money(cons.fgtsTotal)] : null,
+      positive(cons.outroTotal) ? ['Outro recurso', money(cons.outroTotal)] : null
     ].filter(Boolean);
-    const composicaoHtml = composicao.length
-      ? `<div class="bfrp-strategy-value bfrp-strategy-value-wide"><span>Composição</span><b>${h('sendo: ' + composicao.join(' / '))}</b></div>` : '';
+    const composicaoHtml = composicaoItems.length === 1
+      ? `<div class="bfrp-strategy-value"><span>${h(composicaoItems[0][0])}</span><b class="bfrp-num">${composicaoItems[0][1]}</b></div>`
+      : composicaoItems.length
+        ? `<div class="bfrp-strategy-value bfrp-strategy-composicao">
+            <span>Composição</span>
+            <div class="bfrp-strategy-composicao-list">
+              ${composicaoItems.map(([label, value]) => `<div class="bfrp-strategy-composicao-item"><span>${h(label)}</span><b class="bfrp-num">${value}</b></div>`).join('')}
+            </div>
+          </div>`
+        : '';
     const creditoLiquidoHtml = positive(cons.embutidoTotal)
       ? `<div class="bfrp-strategy-value"><span>Crédito líquido</span><b class="bfrp-num">${money(cons.creditoDisponivelTotal)}</b></div>` : '';
     // v36.5 — itens 12-15 do pedido: nota secundária do Lance Embutido. Só aparece
