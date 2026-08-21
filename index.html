@@ -961,14 +961,42 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   font-weight: 700;
 }
 
-.bfrp-metric-accent strong {
+/* v36.7 — item 2 do pedido: causa raiz encontrada do card "Após a contemplação"
+   parecer "mal resolvido" — as regras .bfrp-metric-accent strong/span abaixo
+   NUNCA chegavam a se aplicar. Elas têm a MESMA especificidade CSS de
+   .bfrp-metric strong/.bfrp-metric span (uma classe + um elemento cada) e essas
+   regras genéricas vêm DEPOIS no arquivo (ver mais abaixo) — em empate de
+   especificidade, quem vem depois no CSS vence. Resultado prático, confirmado
+   por medição real (getBoundingClientRect/getComputedStyle em Chromium): o
+   valor de "Após a contemplação" renderizava a 15px/620/navy-800, IDÊNTICO ao
+   de um card comum (Prazo do plano), nunca nos 17,5px/680/navy-900 pretendidos
+   — o card "importante" tinha peso visual de card secundário, exatamente a
+   queixa relatada. Corrigido elevando a especificidade (duas classes,
+   .bfrp-metric.bfrp-metric-accent, em vez de uma) para garantir a
+   sobreposição de forma robusta — não depende mais da ordem das regras no
+   arquivo. Aproveitado para reforçar um pouco mais o peso (18,5px/700, entre os
+   15px do nível comum e os 21px do nível primary), atendendo ao pedido de
+   "aparência de indicador importante". */
+.bfrp-metric.bfrp-metric-accent strong {
   color: var(--bfrp-navy-900);
-  font-size: 17.5px;
-  font-weight: 680;
+  font-size: 18.5px;
+  font-weight: 700;
 }
 
-.bfrp-metric-accent span {
+.bfrp-metric.bfrp-metric-accent span {
   color: #7c8aa3;
+}
+
+/* v36.7 — mesma causa raiz acima, agora para a linha de explicação complementar
+   ("Redução de parcela · 70 meses"): margem/entrelinha levemente maiores só
+   neste card (nunca no .bfrp-metric small comum, que seria afetado se eu
+   tocasse na regra genérica) — dá mais respiro entre o valor principal e o
+   texto secundário, evitando a aparência "espremida" relatada quando esse
+   texto é mais longo (ex.: "Parcela mínima permitida · 999 meses") e precisa
+   quebrar em duas linhas. */
+.bfrp-metric.bfrp-metric-accent small {
+  margin-top: 6px;
+  line-height: 1.55;
 }
 
 .bfrp-metric span {
@@ -1522,6 +1550,39 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .bfrp-table td.bfrp-compound {
   text-align: right;
   white-space: normal;
+}
+
+/* v36.7 — item 1 do pedido: "Cenário apresentado" (e "Cenários comparados", mesma
+   tabela) ganha acabamento mais premium — mais respiro interno e alinhamento
+   vertical central, que fica mais evidente no caso mais comum (modoCenario:
+   'unico', uma linha só): antes, padding 8px/9px + vertical-align:top idêntico
+   ao usado em "Histórico do grupo" (uma tabela densa, de muitas linhas, onde
+   isso é o correto) fazia essa tabela — normalmente com 1 única linha — parecer
+   apertada/"solta" dentro do quadro com cantos arredondados, em contraste com o
+   respiro generoso do resto da proposta. Escopo estrito a esta tabela via
+   classe própria — NUNCA a .bfrp-table base, que continua exatamente igual para
+   "Detalhamento das cotas" e "Histórico do grupo" (evita qualquer risco de
+   regressão de paginação nessas tabelas, que já foram endurecidas em rodadas
+   anteriores). vertical-align:middle também resolve o caso em que a coluna
+   Observação preenchida quebra em 2 linhas (modo "Cenários comparados"): as
+   demais colunas da mesma linha ficam centralizadas com ela, em vez de
+   ancoradas no topo com um vão vazio embaixo. */
+.bfrp-table-scenario th,
+.bfrp-table-scenario td {
+  padding: 12px 15px;
+}
+
+.bfrp-table-scenario td {
+  vertical-align: middle;
+}
+
+/* v36.7 — Observação vazia (o caso mais comum: nem toda estratégia tem uma nota)
+   não pode "sumir" e deixar a célula com aparência de buraco assimétrico — vira
+   um traço discreto, mesmo tratamento já usado nesta função para as colunas de
+   Parcela/Prazo quando o cenário está indisponível (row.unavailable, ver
+   scenariosHtml). Puramente visual: nenhum dado novo, nenhuma nota removida. */
+.bfrp-table-scenario td.bfrp-empty {
+  color: var(--bfrp-muted);
 }
 
 /* v36.5 — item 12-15: nota secundária vinculada ao Lance Embutido (ver strategyHtml).
@@ -8197,8 +8258,14 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
     // (classe bfrp-metric-accent, ver CSS) — nem no mesmo nível de Crédito/
     // Parcela (que são os dois indicadores mais fortes), nem tão apagados
     // quanto Prazo/Quantidade. Mesmos dados, mesma condição de exibição.
+    // v36.7 — "· 70 meses" (ou "· 999 meses") vai dentro de um span próprio com
+    // .bfrp-num (nowrap): quando o rótulo (selected.label) é mais longo e a
+    // linha precisa quebrar, a quebra acontece ANTES de "· NN meses" — nunca
+    // separando o prazo do seu próprio "·", o que deixava esse texto com
+    // aparência improvisada (ex.: "...permitida ·\n70 meses" virando um
+    // "meses" órfão isolado). Mesmo texto de sempre, só a marcação mudou.
     const afterAwardCard = scenarioVisible && !selected.unavailable
-      ? `<div class="bfrp-metric bfrp-metric-accent"><span>Após a contemplação</span><strong class="bfrp-num">${money(selected.installment)}</strong><small>${h(selected.label)} · ${term(selected.remainingTerm)}</small></div>`
+      ? `<div class="bfrp-metric bfrp-metric-accent"><span>Após a contemplação</span><strong class="bfrp-num">${money(selected.installment)}</strong><small>${h(selected.label)} <span class="bfrp-num">· ${term(selected.remainingTerm)}</span></small></div>`
       : '';
     // v36.6 — causa raiz do "quinto card mal encaixado" apontado nesta rodada:
     // com Após a contemplação + Crédito líquido + Quantidade de cotas
@@ -8513,6 +8580,17 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
       </div>`;
   }
 
+  // v36.7 — item 1 do pedido: Observação vazia deixa de virar uma <td> em branco
+  // (o "buraco" que contribuía para a linha parecer desequilibrada quando é a
+  // única linha da tabela, o caso mais comum) e passa a mostrar um traço
+  // discreto — mesma classe/tom já usado para Parcela/Prazo quando o cenário
+  // está indisponível (row.unavailable, ver abaixo). Puramente visual: quando
+  // há observação de fato, o conteúdo é exatamente o mesmo de sempre.
+  function scenarioNoteCellHtml(note) {
+    const text = note ? h(note) : '';
+    return text ? `<td>${text}</td>` : `<td class="bfrp-empty">—</td>`;
+  }
+
   function scenariosHtml(draft, cons, selected) {
     // Sorteio nunca mostra tabela de cenários pós-contemplação (item 5).
     if (draft.modoCenario === 'oculto' || cons.todasSorteio) return '';
@@ -8525,12 +8603,12 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
       <div class="bfrp-section">
         <h2 class="bfrp-section-title">${draft.modoCenario === 'comparacao' ? 'Cenários comparados' : 'Cenário apresentado'}</h2>
         <div class="bfrp-table-wrap">
-          <table class="bfrp-table">
+          <table class="bfrp-table bfrp-table-scenario">
             <thead><tr><th>Cenário</th><th>Parcela</th><th>Prazo restante</th><th>Observação</th></tr></thead>
             <tbody>
               ${rows.map(row => row.unavailable
-                ? `<tr class="${row.key === draft.estrategiaEscolhida ? 'is-selected' : ''}"><td>${h(row.label)}</td><td class="bfrp-num">—</td><td class="bfrp-num">—</td><td>${h(row.note)}</td></tr>`
-                : `<tr class="${row.key === draft.estrategiaEscolhida ? 'is-selected' : ''}"><td>${h(row.label)}</td><td class="bfrp-num">${money(row.installment)}</td><td class="bfrp-num">${term(row.remainingTerm)}</td><td>${h(row.note || '')}</td></tr>`
+                ? `<tr class="${row.key === draft.estrategiaEscolhida ? 'is-selected' : ''}"><td>${h(row.label)}</td><td class="bfrp-num">—</td><td class="bfrp-num">—</td>${scenarioNoteCellHtml(row.note)}</tr>`
+                : `<tr class="${row.key === draft.estrategiaEscolhida ? 'is-selected' : ''}"><td>${h(row.label)}</td><td class="bfrp-num">${money(row.installment)}</td><td class="bfrp-num">${term(row.remainingTerm)}</td>${scenarioNoteCellHtml(row.note)}</tr>`
               ).join('')}
             </tbody>
           </table>
