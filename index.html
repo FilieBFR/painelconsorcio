@@ -566,14 +566,49 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 }
 
 /* ===== SIMULADOR DE PROPOSTAS ===== */
+/* v36.21 — item 2 do pedido: rótulo de grupo de mais alto nível (Oferta /
+   Estratégia de contemplação / Destaques / Personalização) — mesma
+   linguagem visual do .bfrp-eyebrow da Proposta Premium (dourado, caixa
+   alta, tracking largo), para o Estúdio e o documento final lerem como o
+   mesmo sistema. Nunca usado para os subtítulos já existentes (.section-title
+   continua servindo "Taxas do grupo"/"Seguro"/"Cotas" etc.) — só marca onde
+   um novo grupo principal começa. */
+.studio-group-label{grid-column:1/-1;margin:0 0 4px;color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;}
+/* v36.22 — item 22 do pedido: mesmo rótulo de grupo, versão para DENTRO do
+   corpo do cartão de cota (grid de 3 colunas) — separa visualmente OFERTA
+   (crédito/prazo/redutor/campos por administradora) de ESTRATÉGIA DE
+   CONTEMPLAÇÃO (select + campos de lance), sem mover nenhum campo entre
+   grupos e sem duplicar nenhum data-field. Divisor fino acima, nunca uma
+   caixa nova. */
+.cota-card-body .studio-group-label{margin-top:16px;padding-top:14px;border-top:1px solid var(--border);}
+.cota-card-body .studio-group-label:first-child{margin-top:0;padding-top:0;border-top:0;}
+/* v36.22 — item 20/21 do pedido: painel da Aba 3 (Estúdio) reorganizado em 4
+   grupos recolhíveis (<details> nativo — foco/teclado/estado de graça, sem
+   JS de acessibilidade próprio). Cabeçalho no mesmo idioma visual do
+   .studio-group-label (dourado, caixa alta) para ler como o mesmo sistema
+   de agrupamento já usado na Aba 1. Marcador de abrir/fechar é o triângulo
+   nativo do navegador (::marker), nunca um ícone customizado. */
+.studio-group{border-bottom:1px solid var(--border);}
+.studio-group:last-child{border-bottom:none;}
+.studio-group-summary{padding:14px 2px;color:var(--brand-navy);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;list-style:revert;}
+.studio-group-summary::marker{color:var(--gold);}
+.studio-group[open] .studio-group-summary{padding-bottom:10px;}
+.studio-group-body{padding:2px 2px 18px;display:grid;gap:12px;}
+.studio-group-body .field.full{margin:0;}
 .sim-grid{display:grid;grid-template-columns:1.15fr 1fr;gap:24px;align-items:start;}
 .sim-side{position:sticky;top:16px;align-self:start;}
-.cota-card{border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden;background:#fff;}
-.cota-card-header{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;background:#F7F9FC;cursor:pointer;gap:10px;flex-wrap:wrap;}
+/* v36.21 — item 3/21 do pedido: cabeçalho do card de cota tinha fundo cinza
+   sólido (#F7F9FC), lendo como "caixa dentro de caixa" dentro do painel do
+   Estúdio. Removido o preenchimento — a borda do card e o divisor abaixo do
+   cabeçalho (quando expandido) já bastam para separar visualmente, sem somar
+   mais uma camada de cor. Raio e espaçamento levemente ajustados para
+   respiro mais generoso. */
+.cota-card{border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;background:#fff;}
+.cota-card-header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:transparent;cursor:pointer;gap:10px;flex-wrap:wrap;}
 .cota-card-title{font-weight:700;font-size:13.5px;color:var(--brand-navy);}
 .cota-card-summary{font-size:12.5px;color:var(--text-secondary);margin-top:2px;}
 .cota-card-actions{display:flex;gap:6px;align-items:center;}
-.cota-card-body{padding:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;border-top:1px solid var(--border);}
+.cota-card-body{padding:18px 16px 16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 16px;border-top:1px solid var(--border);}
 @media(max-width:1100px){ .cota-card-body{grid-template-columns:repeat(2,minmax(0,1fr));} }
 @media(max-width:640px){ .cota-card-body{grid-template-columns:1fr;} }
 @media(max-width:768px){
@@ -586,9 +621,16 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   .cal-dow{font-size:10px;}
   .cal-cell{min-height:0;}
 }
-.result-group{background:#F7F9FC;border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:14px;}
+/* v36.21 — item 3/21/32 do pedido: .result-group/.result-card/.scenario-card
+   compartilhavam o mesmo preenchimento cinza sólido do cota-card — três
+   variações do mesmo "bloco pesado" empilhadas na mesma tela. Convertidas
+   para fundo branco + borda sutil + raio único (12px, mesmo do cota-card) +
+   espaçamento mais generoso — a hierarquia passa a vir da tipografia
+   (rg-title em caixa alta, result-line.highlight em dourado/19px) e não mais
+   de uma caixa cinza atrás de cada bloco. */
+.result-group{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:12px;}
 .result-group .rg-title{font-size:12px;font-weight:700;color:var(--brand-navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;}
-.result-card{background:#F7F9FC;border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:14px;}
+.result-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:12px;}
 .result-line{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;padding:6px 0;border-bottom:1px dashed var(--border);gap:10px;}
 .result-line:last-child{border-bottom:none;}
 .result-line span{color:var(--text-secondary);}
@@ -597,7 +639,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .result-line.highlight b{color:var(--gold);font-size:19px;font-weight:800;}
 .scenario-compare{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 .scenario-compare.cols3{grid-template-columns:1fr 1fr 1fr;}
-.scenario-card{border:1px solid var(--border);border-radius:14px;padding:16px 18px;background:#fff;}
+.scenario-card{border:1px solid var(--border);border-radius:12px;padding:18px 20px;background:#fff;}
 .scenario-card h4{margin:0 0 12px;font-size:13.5px;font-weight:700;color:var(--brand-navy);}
 .warn-banner{background:var(--red-soft);color:#8A2E22;border-radius:10px;padding:12px 14px;font-size:12.5px;margin-bottom:12px;line-height:1.5;}
 .base-tag{display:inline-block;background:var(--brand-blue-soft);color:var(--brand-blue);font-size:12px;font-weight:700;padding:5px 12px;border-radius:7px;margin-bottom:8px;}
@@ -672,8 +714,13 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   .pp-page2-header{display:block !important;font-size:10.5px;color:var(--text-secondary);border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:14px;}
 }
 
-/* Estúdio de Proposta (Etapa 3): painel de personalização + prévia ao vivo */
-.studio-grid{display:grid;grid-template-columns:.95fr 1.15fr;gap:24px;align-items:start;}
+/* Estúdio de Proposta (Etapa 3): painel de personalização + prévia ao vivo.
+   v36.21 — item 4 do pedido de redesign comercial: painel ocupava quase metade
+   da tela (.95fr de ~2.1fr ≈ 45%), disputando espaço com a prévia — que é o
+   que de fato importa mostrar (é a proposta real que o cliente vai receber).
+   Proporção ajustada para ~38%/62% (dentro da faixa 36–40%/60–64% pedida),
+   mantendo o breakpoint de empilhamento em 1100px intocado. */
+.studio-grid{display:grid;grid-template-columns:38% 1fr;gap:24px;align-items:start;}
 .studio-panel{position:sticky;top:16px;}
 .studio-preview{min-width:0;}
 @media(max-width:1100px){
@@ -821,23 +868,45 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   max-width: 151mm;
 }
 
-/* v36.1 — item 10: "Proposta preparada para X" reposicionado logo abaixo do
-   objetivo (mais pessoal/elegante do que só no rodapé da capa). Quando usado,
-   o rodapé (.bfrp-cover-foot) deixa de repetir o nome do cliente — ver coverHtml. */
-.bfrp-cover-prepared {
-  margin: 10px 0 0;
-  color: rgba(244, 247, 251, 0.62);
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-}
-
 .bfrp-eyebrow {
   margin: 0 0 10px;
   color: var(--bfrp-gold-300);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* v36.22 — item 4 do pedido: nome do cliente passa a fazer parte da abertura
+   executiva (logo abaixo de "Seu plano de consórcio"), em vez de uma linha
+   pequena e tardia perto do rodapé — mesmo dado (lead.nome), só reposicionado
+   e com peso tipográfico condizente com "isto é sobre você". */
+.bfrp-cover-client {
+  margin: 0 0 16px;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* v36.22 — "CARTA DE X" deixa de usar a mesma classe do rótulo de topo
+   (.bfrp-eyebrow, agora ocupado por "Seu plano de consórcio") — kicker próprio,
+   um degrau abaixo em peso, para não competir com o rótulo mais alto do bloco. */
+.bfrp-hero-kicker {
+  margin: 0 0 8px;
+  color: rgba(228, 212, 155, 0.85);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.bfrp-hero-caption {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
@@ -878,19 +947,20 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   max-width: none;
 }
 
-/* v36 — selo sem borda (preenchido, discreto) — menos "chip de dashboard",
-   mais rótulo editorial em destaque secundário. */
+/* v36.22 — item 5 do pedido: era um selo inline pequeno, só quando havia
+   redutor. Agora é o ÚNICO destaque comercial da capa (heroHighlightBadge
+   escolhe um por prioridade — nunca mais de um), por isso ganhou presença
+   própria: linha independente logo abaixo do hero, com marcador dourado à
+   esquerda (mesma linguagem do bfrp-strategy, nunca borda ao redor do texto
+   inteiro — "moderar dourado, não decorar"), em vez de um chip/pílula. */
 .bfrp-hero-badge {
-  margin-bottom: 6px;
-  padding: 6px 13px;
-  border-radius: 999px;
-  background: rgba(197, 168, 90, 0.16);
+  margin: 14px 0 0;
+  padding: 9px 0 9px 14px;
+  border-left: 2px solid var(--bfrp-gold-500);
   color: var(--bfrp-gold-300);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
 }
 
 .bfrp-hero-sub {
@@ -914,9 +984,14 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
    limitado — reduz o vão sem comprimir nenhum elemento; o espaço que sobra
    passa a ficar como margem inferior discreta da capa (abaixo do rodapé),
    em vez de um buraco no meio. */
+/* v36.22 — item 4 do pedido: "Validade" saiu desta faixa (mudou para o rodapé
+   da capa, junto com o número da proposta — é metadado, não decisão
+   comercial) e a faixa passou de 3 para 2 colunas. Menos itens disputando a
+   mesma linha, e Parcela (o "segundo maior número", ver item 4) ganha mais
+   largura relativa (1.4fr) que Prazo (1fr, dado secundário). */
 .bfrp-cover-summary {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 0.8fr;
+  grid-template-columns: 1.4fr 1fr;
   gap: 0;
   margin-top: 28mm;
   border-top: 1px solid rgba(228, 212, 155, 0.5);
@@ -1118,7 +1193,17 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   background: var(--bfrp-gold-500);
 }
 
-.bfrp-metric-primary strong {
+/* v36.21 — mesma causa raiz documentada no v36.7 abaixo (.bfrp-metric-accent),
+   nunca corrigida aqui: .bfrp-metric-primary strong e .bfrp-metric strong
+   (mais abaixo no arquivo) têm a MESMA especificidade (uma classe + um
+   elemento) — a regra genérica, por vir depois, vencia o empate e os dois
+   números mais importantes do documento (Crédito contratado, Parcela
+   inicial) renderizavam a 15px, idênticos a um card comum como "Prazo do
+   plano". Isso contraria diretamente o pedido comercial de que o crédito seja
+   o maior número visual da proposta e a parcela o segundo. Corrigido elevando
+   a especificidade (duas classes) exatamente como já feito para
+   .bfrp-metric-accent. */
+.bfrp-metric.bfrp-metric-primary strong {
   color: var(--bfrp-navy-950);
   font-size: 21px;
   font-weight: 700;
@@ -1382,6 +1467,75 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   font-size: 11.5px;
   font-weight: 640;
   white-space: nowrap;
+}
+
+/* v36.22 — item 8 do pedido: cadeia visual crédito contratado → lance
+   embutido → crédito disponível. Vertical (a coluna de valores da estratégia
+   é estreita — minmax(56mm,0.7fr) — uma cadeia horizontal não caberia sem
+   comprimir os valores). A relação matemática fica evidente pela ORDEM e
+   pelo sinal "−" no meio, nunca por texto explicativo. */
+.bfrp-bid-chain {
+  display: grid;
+  gap: 2px;
+}
+
+.bfrp-bid-chain-step {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bfrp-bid-chain-step span {
+  color: var(--bfrp-muted);
+  font-size: 9.6px;
+  white-space: nowrap;
+}
+
+.bfrp-bid-chain-step b {
+  color: var(--bfrp-navy-900);
+  font-size: 11.5px;
+  font-weight: 640;
+  white-space: nowrap;
+}
+
+.bfrp-bid-chain-negative b {
+  color: #9a5a2a;
+}
+
+.bfrp-bid-chain-result {
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--bfrp-line);
+}
+
+.bfrp-bid-chain-result span {
+  color: var(--bfrp-navy-800);
+  font-weight: 650;
+}
+
+.bfrp-bid-chain-result b {
+  color: var(--bfrp-gold-500);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.bfrp-bid-chain-arrow {
+  padding-left: 2px;
+  color: var(--bfrp-muted);
+  font-size: 8.6px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bfrp-bid-chain-arrow::before {
+  content: "↓ ";
+}
+
+.bfrp-bid-chain-arrow:empty {
+  display: none;
 }
 
 /* v36 — "Até a contemplação" como extensão natural do bloco de estratégia: mesma
@@ -1736,6 +1890,95 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   color: var(--bfrp-muted);
 }
 
+/* v36.22 — item 13/14 do pedido: comparação "até × depois" em duas colunas,
+   para o caso de cenário único (o mais comum) — substitui a tabela por algo
+   lido em segundos, sem precisar interpretar uma linha de relatório. Os dois
+   lados são diferenciados por peso tipográfico (rótulo do lado "depois" em
+   navy, não cinza) e por um fundo muito sutil só no lado "depois"
+   (var(--bfrp-soft)) — nunca cor saturada, nunca borda colorida ao redor de
+   um dos lados inteiros. */
+.bfrp-compare {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
+.bfrp-compare-col {
+  display: grid;
+  gap: 11px;
+}
+
+.bfrp-compare-label {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--bfrp-line);
+  color: var(--bfrp-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.bfrp-compare-after {
+  margin: -14px -16px -14px 0;
+  padding: 14px 16px 14px 16px;
+  border-radius: var(--bfrp-radius);
+  background: var(--bfrp-soft);
+}
+
+.bfrp-compare-after .bfrp-compare-label {
+  border-bottom-color: rgba(197, 168, 90, 0.35);
+  color: var(--bfrp-navy-800);
+}
+
+.bfrp-compare-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bfrp-compare-item span {
+  color: var(--bfrp-muted);
+  font-size: 10.5px;
+}
+
+.bfrp-compare-item b {
+  color: var(--bfrp-navy-900);
+  font-size: 13px;
+  font-weight: 650;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bfrp-compare-after .bfrp-compare-item b {
+  color: var(--bfrp-navy-950);
+}
+
+.bfrp-compare-arrow {
+  align-self: center;
+  color: var(--bfrp-gold-500);
+  font-size: 15px;
+}
+
+.bfrp-compare-arrow::before {
+  content: "→";
+}
+
+@media screen and (max-width: 760px) {
+  .bfrp-compare {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .bfrp-compare-arrow {
+    display: none;
+  }
+  .bfrp-compare-after {
+    margin: 0;
+  }
+}
+
 /* v36.5 — item 12-15: nota secundária vinculada ao Lance Embutido (ver strategyHtml).
    Deliberadamente SEM borda, sem negrito e com tamanho menor que .bfrp-strategy-value
    — não pode competir visualmente com os valores/percentuais, que continuam sendo a
@@ -1998,7 +2241,9 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   .bfrp-note,
   .bfrp-conditions,
   .bfrp-conditions-item,
-  .bfrp-hero {
+  .bfrp-hero,
+  .bfrp-bid-chain,
+  .bfrp-compare {
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -4510,6 +4755,20 @@ function completeTask(taskId){
   saveDB();
   return t;
 }
+/** v36_20 — quando um contato comercial real é registrado (ver
+ *  leadHasRealContact/REAL_CONTACT_TIMELINE_ACTIONS), a tarefa automática de
+ *  "primeiro contato" (regraAuto:'primeiro_contato', criada ao cadastrar o
+ *  lead) deixa de representar uma pendência real — o contato já aconteceu.
+ *  Conclui essa tarefa pelo mesmo caminho canônico de qualquer outra
+ *  conclusão (completeTask, "ÚNICA função para concluir uma tarefa" — ver
+ *  comentário acima dela), preservando timeline/idempotência/histórico.
+ *  Nunca exclui a tarefa, nunca marca como não concluída, nunca mexe no
+ *  status do lead. Se não houver tarefa 'primeiro_contato' aberta para este
+ *  cliente, não faz nada. */
+function neutralizePrimeiroContatoTask(lead){
+  const t = DB.tasks.find(x=>x.clientId===lead.id && x.regraAuto==='primeiro_contato' && !x.done);
+  if(t) completeTask(t.id);
+}
 /** Desfaz a conclusão de uma tarefa — usado pelo botão "Desfazer" da
  *  confirmação visual (showToastWithAction). Idempotente: chamar numa tarefa
  *  que já não está concluída não faz nada. */
@@ -5000,6 +5259,29 @@ function filterBarHTML(){
   </div>`;
 }
 function activeLeads(){ return DB.leads.filter(l=>!['Fechado','Perdido'].includes(l.status)); }
+/** v36_20 — conjunto FECHADO de ações de timeline que representam contato
+ *  comercial real com o cliente. Levantado por auditoria de TODOS os
+ *  addTimeline() do arquivo (ver leadHasRealContact abaixo) — são as únicas
+ *  três ações que hoje registram uma interação de fato com o cliente:
+ *  'Ligação registrada' e 'WhatsApp aberto' (ações rápidas da ficha e da
+ *  lista de Clientes) e 'Interação registrada' (registro manual livre na
+ *  aba Interações da ficha — cobre reunião, e-mail ou qualquer contato sem
+ *  tipo dedicado no sistema, já que não existe hoje um tipo de interação
+ *  específico para eles). Deliberadamente NÃO inclui: "Cliente criado"
+ *  (evento administrativo do cadastro, não contato), "Dados do cliente
+ *  atualizados", "Responsável alterado de X para Y", "Tarefa concluída: X",
+ *  "Próxima ação definida/removida", nem nenhum evento de
+ *  proposta/contrato/cota/comissão/assembleia/campanha/inadimplência — todos
+ *  são administrativos ou automáticos, nunca contato real. Não inventa
+ *  nenhum tipo de interação novo. */
+const REAL_CONTACT_TIMELINE_ACTIONS = new Set(['Ligação registrada', 'WhatsApp aberto', 'Interação registrada']);
+/** v36_20 — único helper que decide se um lead já teve contato comercial
+ *  real. Usado por getPendencias().novosLeadsAguardando (e, por
+ *  consequência automática, por buildPriorityFeed(), que só consome a lista
+ *  já pronta de novosLeadsAguardando — nenhuma lógica duplicada lá). */
+function leadHasRealContact(lead){
+  return (lead.timeline||[]).some(t=> REAL_CONTACT_TIMELINE_ACTIONS.has(t.acao));
+}
 /* ================= PENDÊNCIAS DE HOJE / PRIORIDADES / SAÚDE DO PIPELINE =================
    Tudo aqui é derivado de regras objetivas (datas, status, contagens) —
    nada de nota artificial. */
@@ -5011,7 +5293,12 @@ function getPendencias(){
   // só computada uma vez em vez de uma vez por lead.
   const leadIdsComPropostaSemResposta = new Set();
   DB.proposals.forEach(p=>{ if(['Enviada','Visualizada'].includes(p.status)) leadIdsComPropostaSemResposta.add(p.leadId); });
-  const novosLeadsAguardando = active.filter(l=> l.status==='Novo Lead');
+  // v36_20 — status==='Novo Lead' sozinho não basta: um lead pode continuar
+  // com esse status mesmo depois de já ter recebido contato real (a
+  // correção é separar STATUS COMERCIAL de PENDÊNCIA DE PRIMEIRO CONTATO —
+  // o status nunca é alterado automaticamente por isso). leadHasRealContact
+  // exclui quem já tem ligação/WhatsApp/interação registrada na timeline.
+  const novosLeadsAguardando = active.filter(l=> l.status==='Novo Lead' && !leadHasRealContact(l));
   const retornosAtrasados = active.filter(l=> l.nextAction && !l.nextAction.done && l.nextAction.data && l.nextAction.data < todayISO());
   const propostasSemResposta = active.filter(l=> l.status==='Aguardando Resposta' || leadIdsComPropostaSemResposta.has(l.id));
   const propostasEmElaboracao = DB.proposals.filter(p=>p.status==='Rascunho');
@@ -7276,8 +7563,8 @@ function renderInteracoesTab(l){
 }
 function wireTabHandlers(t, l, setActiveTab, renderTab){
   if(t==='resumo'){
-    const qw=document.getElementById('qaWhats'); if(qw) qw.onclick=()=>{ const digits=normalizePhone(l.telefone); if(!digits){showToast('Cliente sem telefone cadastrado');return;} addTimeline(l,'WhatsApp aberto'); saveDB(); window.open(`https://wa.me/55${digits}`,'_blank'); };
-    const qc=document.getElementById('qaCall'); if(qc) qc.onclick=()=>{ addTimeline(l,'Ligação registrada'); saveDB(); showToast('Ligação registrada na timeline'); setActiveTab('interacoes'); };
+    const qw=document.getElementById('qaWhats'); if(qw) qw.onclick=()=>{ const digits=normalizePhone(l.telefone); if(!digits){showToast('Cliente sem telefone cadastrado');return;} addTimeline(l,'WhatsApp aberto'); neutralizePrimeiroContatoTask(l); saveDB(); window.open(`https://wa.me/55${digits}`,'_blank'); };
+    const qc=document.getElementById('qaCall'); if(qc) qc.onclick=()=>{ addTimeline(l,'Ligação registrada'); neutralizePrimeiroContatoTask(l); saveDB(); showToast('Ligação registrada na timeline'); setActiveTab('interacoes'); };
     const qa=document.getElementById('qaAgenda'); if(qa) qa.onclick=()=>{ closeModalFn(); openTaskForm(null, l.id); };
     const qp=document.getElementById('qaProposta'); if(qp) qp.onclick=()=>{ closeModalFn(); openNewProposalChooser(l.id); };
     const qs=document.getElementById('qaGoProposta'); if(qs) qs.onclick=()=>setActiveTab('propostas');
@@ -7286,7 +7573,7 @@ function wireTabHandlers(t, l, setActiveTab, renderTab){
   if(t==='interacoes'){
     const btn=document.getElementById('addTlBtn'); if(btn) btn.onclick=()=>{
       const note=document.getElementById('tlNote').value.trim(); if(!note) return;
-      addTimeline(l,'Interação registrada', note); saveDB(); renderTab('interacoes'); showToast('Registro adicionado');
+      addTimeline(l,'Interação registrada', note); neutralizePrimeiroContatoTask(l); saveDB(); renderTab('interacoes'); showToast('Registro adicionado');
     };
   }
   wireClientSubTabHandlers(t, l, renderTab);
@@ -7883,6 +8170,14 @@ function openProposalForm(id, presetLeadId){
   let draft = p ? cloneDraftFromProposal(p) : newProposalDraft(presetLeadId);
   let ptab = 'dados';
   let expandedCotas = new Set([0]);
+  // v36.22 — item 21 do pedido: estado de quais grupos do painel da Aba 3
+  // estão abertos — mesmo padrão de expandedCotas acima (Set local, nunca
+  // persistido, nunca gravado em draft/DB). "Apresentação" começa aberto,
+  // os demais fechados. Rastreado aqui (não só via atributo `open` no HTML)
+  // para sobreviver a um re-render completo da aba (ex.: adicionar/excluir
+  // registro de histórico chama renderTabBody() inteiro) sem colapsar de
+  // volta ao estado inicial a cada clique nesses botões.
+  let expandedStudioGroups = new Set(['apresentacao']);
   // Se a proposta foi aberta de dentro da ficha do cliente (selectedClientId já setado
   // e correspondendo ao cliente da proposta), "Fechar" deve voltar para lá — nunca para
   // a relação geral de clientes.
@@ -7991,6 +8286,7 @@ function openProposalForm(id, presetLeadId){
     return `
     <div class="sim-grid">
       <div>
+        <div class="studio-group-label">Oferta</div>
         <div class="form-grid cols3">
           <div class="field full lead-picker">
             <label>Cliente*</label>
@@ -8044,8 +8340,8 @@ function openProposalForm(id, presetLeadId){
           ) : ''}
         </div>
 
-        <div class="section-title" style="font-size:13px;margin:16px 0 8px;">Cotas <button class="pill-btn sm ghost" id="pBtnAddCota" style="margin-left:8px;">+ Adicionar cota</button></div>
-        <div class="small-note" style="margin:-4px 0 10px;">Cada cota escolhe sua própria estratégia de contemplação — isso muda quais campos de lance aparecem.</div>
+        <div class="section-title" style="font-size:13px;margin:22px 0 8px;">Cotas <button class="pill-btn sm ghost" id="pBtnAddCota" style="margin-left:8px;">+ Adicionar cota</button></div>
+        <div class="small-note" style="margin:-4px 0 10px;">Cada cartão separa a oferta (crédito, prazo, redutor) da estratégia de contemplação — a escolha da modalidade muda quais campos de lance aparecem.</div>
         ${draft.cotas.map((c,i)=>{
           const open = expandedCotas.has(i);
           const estLabel = (ESTRATEGIAS_CONTEMPLACAO.find(e=>e.value===c.estrategiaContemplacao)||{}).label || '—';
@@ -8062,6 +8358,7 @@ function openProposalForm(id, presetLeadId){
               </div>
             </div>
             ${open? `<div class="cota-card-body">
+              <div class="studio-group-label">Oferta</div>
               <div class="field"><label>Crédito</label><input data-money min="0" data-field="cota.credito" data-idx="${i}" value="${moneyStr(c.credito)}"></div>
               <div class="field"><label>Prazo (meses)</label><input type="number" min="1" step="1" data-field="cota.prazoTotal" data-idx="${i}" value="${c.prazoTotal}"></div>
               <div class="field"><label>Parcelas já pagas</label><input type="number" min="0" step="1" data-field="cota.parcelasPagas" data-idx="${i}" value="${c.parcelasPagas}"></div>
@@ -8095,6 +8392,7 @@ function openProposalForm(id, presetLeadId){
                 ${c.modalidadeEspecial!=='nenhuma' ? `<div class="field"><label>Percentual da modalidade especial (%)</label><input type="number" min="0" max="100" step="0.1" data-field="cota.percentualEspecial" data-idx="${i}" data-pct="1" value="${(c.percentualEspecial*100).toFixed(1)}"></div>` : ''}
                 <div class="field"><label>Upgrade (%)</label><input type="number" min="0" max="100" step="0.1" data-field="cota.percentualUpgrade" data-idx="${i}" data-pct="1" value="${(c.percentualUpgrade*100).toFixed(1)}"></div>
               ` : ''}
+              <div class="studio-group-label">Estratégia de contemplação</div>
               <div class="field full"><label>Estratégia de contemplação*</label><select data-estrselect="${i}">
                 ${ESTRATEGIAS_CONTEMPLACAO.map(e=>`<option value="${e.value}" ${c.estrategiaContemplacao===e.value?'selected':''}>${e.label}</option>`).join('')}
               </select></div>
@@ -8221,10 +8519,25 @@ function renderPersonalizadoResult(cons){
     const com = draft.comercial;
     const hist = draft.historicoGrupo||[];
     const lanceExibidoAtual = shouldShowLance(draft, cons);
-    return `
-    <div class="studio-grid">
-      <div class="studio-panel">
-        <div class="section-title" style="font-size:13px;">Configuração da apresentação</div>
+    // v36.22 — item 20/21 do pedido: painel reorganizado em 4 grupos claros
+    // (Apresentação / Destaques / Personalização / Histórico), cada um um
+    // <details> nativo — foco/teclado/abrir-fechar de graça, sem estado JS
+    // novo além do Set que só lembra QUAIS grupos estão abertos entre
+    // re-renders (expandedStudioGroups, ver declaração no topo da função
+    // externa). Nenhum campo mudou de data-field, nenhum campo foi
+    // duplicado — só reagrupados. "Apresentação" começa aberto.
+    const studioGroup = (key, title, bodyHtml) => `
+        <details class="studio-group" data-studiogroup="${key}" ${expandedStudioGroups.has(key)?'open':''}>
+          <summary class="studio-group-summary">${title}</summary>
+          <div class="studio-group-body">${bodyHtml}</div>
+        </details>`;
+
+    const apresentacaoBody = `
+        <div class="field full"><label>Título da estratégia</label><input data-field="comercial.tituloEstrategia" value="${escapeHtml(com.tituloEstrategia||'')}" placeholder="${defaultTituloEstrategia(dominant)}"></div>
+        <div class="field full"><label>Mensagem de abertura</label><textarea data-field="comercial.mensagemAbertura" placeholder="Texto opcional em destaque logo após a capa">${escapeHtml(com.mensagemAbertura||'')}</textarea></div>
+        <div class="field full"><label>Mensagem de encerramento</label><textarea data-field="comercial.mensagemEncerramento" placeholder="Texto opcional antes do rodapé">${escapeHtml(com.mensagemEncerramento||'')}</textarea></div>`;
+
+    const destaquesBody = `
         <div class="field full"><label>Exibir informações de lance na proposta</label><select id="selExibirLance">
           <option value="auto" ${draft.exibirLanceOverride===null?'selected':''}>Automático (segue a estratégia — atualmente: ${lanceExibidoAtual?'exibindo':'ocultando'})</option>
           <option value="sim" ${draft.exibirLanceOverride===true?'selected':''}>Sempre exibir</option>
@@ -8235,25 +8548,19 @@ function renderPersonalizadoResult(cons){
           <option value="comparacao" ${draft.modoCenario==='comparacao'?'selected':''}>Mostrar comparação de cenários</option>
           <option value="oculto" ${draft.modoCenario==='oculto'?'selected':''}>Não mostrar cenários pós-contemplação</option>
         </select></div>
-        <div class="small-note" style="margin:-2px 0 16px;">Quando desativado, o conteúdo de lance não é apenas escondido — ele não entra no documento gerado.</div>
+        <div class="small-note" style="margin:-2px 0 0;">Quando desativado, o conteúdo de lance não é apenas escondido — ele não entra no documento gerado.</div>`;
 
-        <div class="section-title" style="font-size:13px;">Personalização comercial</div>
-        <div class="small-note" style="margin:-4px 0 10px;">Estes textos aparecem exatamente assim na proposta ao cliente — ficam salvos junto com a proposta.</div>
-        <div class="form-grid">
-          <div class="field full"><label>Objetivo do cliente</label><input data-field="comercial.objetivoCliente" value="${escapeHtml(com.objetivoCliente||'')}" placeholder="ex.: Aquisição de imóvel para moradia"></div>
-          <div class="field full"><label>Mensagem de abertura</label><textarea data-field="comercial.mensagemAbertura" placeholder="Texto opcional em destaque logo após a capa">${escapeHtml(com.mensagemAbertura||'')}</textarea></div>
-          <div class="field full"><label>Título da estratégia</label><input data-field="comercial.tituloEstrategia" value="${escapeHtml(com.tituloEstrategia||'')}" placeholder="${defaultTituloEstrategia(dominant)}"></div>
-          <div class="field full"><label>Explicação da estratégia</label><textarea data-field="comercial.explicacaoEstrategia" placeholder="${defaultExplicacaoEstrategia(dominant)}">${escapeHtml(com.explicacaoEstrategia||'')}</textarea></div>
-          <div class="field full">
-            <label>Horizonte estimado de contemplação <span class="small-note">(premissa do analista, opcional)</span></label>
-            <input data-field="comercial.horizonteContemplacaoEstimado" value="${escapeHtml(com.horizonteContemplacaoEstimado||'')}" placeholder="ex.: 12 meses · assembleia de março/2027 · 18ª assembleia">
-            <div class="small-note" style="margin-top:4px;">Não é um cálculo do motor — é uma premissa comercial livre (meses, assembleia ou data), usada só para organizar a seção "Até a contemplação". Deixe em branco para não exibir essa seção. Não se aplica a Sorteio nem a Lance Fixo.</div>
-          </div>
-          <div class="field full"><label>Observações comerciais</label><textarea data-field="observacoesCliente">${escapeHtml(draft.observacoesCliente||'')}</textarea></div>
-          <div class="field full"><label>Mensagem de encerramento</label><textarea data-field="comercial.mensagemEncerramento" placeholder="Texto opcional antes do rodapé">${escapeHtml(com.mensagemEncerramento||'')}</textarea></div>
+    const personalizacaoBody = `
+        <div class="field full"><label>Objetivo do cliente</label><input data-field="comercial.objetivoCliente" value="${escapeHtml(com.objetivoCliente||'')}" placeholder="ex.: Aquisição de imóvel para moradia"></div>
+        <div class="field full"><label>Explicação da estratégia</label><textarea data-field="comercial.explicacaoEstrategia" placeholder="${defaultExplicacaoEstrategia(dominant)}">${escapeHtml(com.explicacaoEstrategia||'')}</textarea></div>
+        <div class="field full">
+          <label>Horizonte estimado de contemplação <span class="small-note">(premissa do analista, opcional)</span></label>
+          <input data-field="comercial.horizonteContemplacaoEstimado" value="${escapeHtml(com.horizonteContemplacaoEstimado||'')}" placeholder="ex.: 12 meses · assembleia de março/2027 · 18ª assembleia">
+          <div class="small-note" style="margin-top:4px;">Não é um cálculo do motor — é uma premissa comercial livre (meses, assembleia ou data), usada só para organizar a seção "Até a contemplação". Deixe em branco para não exibir essa seção. Não se aplica a Sorteio nem a Lance Fixo.</div>
         </div>
+        <div class="field full"><label>Observações comerciais</label><textarea data-field="observacoesCliente">${escapeHtml(draft.observacoesCliente||'')}</textarea></div>`;
 
-        <div class="section-title" style="font-size:13px;margin-top:20px;">Histórico de contemplações do grupo</div>
+    const historicoBody = `
         <div class="checkrow" style="margin-bottom:6px;"><label><input type="checkbox" id="chkApresentarHistorico" ${draft.apresentarHistorico?'checked':''}> Apresentar histórico na proposta</label></div>
         <div class="small-note" style="margin-bottom:10px;">Histórico meramente informativo. Resultados anteriores não representam garantia de contemplação futura.</div>
         <button class="pill-btn sm ghost" id="pBtnAddHistorico" style="margin-bottom:10px;">+ Adicionar registro de assembleia</button>
@@ -8267,7 +8574,15 @@ function renderPersonalizadoResult(cons){
             <td><input data-field="historico.observacao" data-idx="${i}" value="${escapeHtml(h.observacao||'')}"></td>
             <td><button class="icon-btn" data-delhistorico="${i}">✕</button></td>
           </tr>`).join('')}</tbody>
-        </table></div>` : '<div class="small-note">Nenhum registro cadastrado ainda.</div>'}
+        </table></div>` : '<div class="small-note">Nenhum registro cadastrado ainda.</div>'}`;
+
+    return `
+    <div class="studio-grid">
+      <div class="studio-panel">
+        ${studioGroup('apresentacao', 'Apresentação', apresentacaoBody)}
+        ${studioGroup('destaques', 'Destaques', destaquesBody)}
+        ${studioGroup('personalizacao', 'Personalização', personalizacaoBody)}
+        ${studioGroup('historico', 'Histórico', historicoBody)}
       </div>
 
       <div class="studio-preview">
@@ -8386,6 +8701,14 @@ function renderPersonalizadoResult(cons){
       if(sel.value==='nenhuma') draft.cotas[idx].percentualEspecial = 0;
       renderTabBody();
     });
+    // v36.22 — mantém expandedStudioGroups em sincronia com o que o usuário
+    // realmente abriu/fechou na Aba 3 — sem isso, uma ação que force um
+    // renderTabBody() completo (ex.: adicionar registro de histórico)
+    // recolheria os grupos de volta ao estado inicial do template.
+    container.querySelectorAll('[data-studiogroup]').forEach(det=> det.addEventListener('toggle', ()=>{
+      const key = det.dataset.studiogroup;
+      if(det.open) expandedStudioGroups.add(key); else expandedStudioGroups.delete(key);
+    }));
     const chkHist = document.getElementById('chkApresentarHistorico');
     if(chkHist) chkHist.onchange = ()=>{ draft.apresentarHistorico = chkHist.checked; refreshStudioPreview(); };
     const selLance = document.getElementById('selExibirLance');
@@ -9211,6 +9534,30 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
     return result.installments.normal || 0;
   }
 
+  // v36.22 — item 5 do pedido: a v36.21 só produzia um selo de destaque quando
+  // havia redutor — qualquer outra modalidade (lance fixo, lance embutido,
+  // lance livre) chegava à capa sem NENHUM destaque comercial. Generalizado
+  // para escolher exatamente UM destaque por cenário, por prioridade, sempre
+  // a partir de dados já existentes (nunca uma fórmula nova):
+  // 1) redutor uniforme (mesmo dado de sempre, vm.redutorUniformePct);
+  // 2) lance fixo puro — reaproveita cons.percentualLanceMedio, o MESMO valor
+  //    já usado como "o" percentual do lance fixo dentro de strategyHtml
+  //    (h3 "Lance fixo: X%") — não é um número novo, só repetido em destaque;
+  // 3) lance embutido — nunca inventa um percentual (o dado bruto mais
+  //    próximo, limiteEmbutidoPct, é um LIMITE configurado, não o valor
+  //    efetivamente usado — usar um rótulo qualitativo evita risco de exibir
+  //    um percentual que não bate com cons.embutidoTotal real);
+  // 4) lance livre — idem, rótulo qualitativo (um dos exemplos do próprio
+  //    pedido, "Estratégia de lance livre", já é sem número);
+  // Sorteio nunca recebe selo (já é a modalidade mais simples, sem lance).
+  function heroHighlightBadge(cons, vm) {
+    if (vm.redutorUniformePct) return `Parcela reduzida ${pct(vm.redutorUniformePct)} até a contemplação`;
+    if (cons.todasSorteio || !vm.showLance) return '';
+    if (vm.isPureLanceFixo) return `Lance fixo de ${pct(cons.percentualLanceMedio)}`;
+    if (positive(cons.embutidoTotal)) return 'Lance embutido na composição';
+    return 'Estratégia de lance livre';
+  }
+
   function coverHtml(draft, cons, vm, lead) {
     const rawClientName = lead && lead.nome ? lead.nome : 'Cliente';
     const objective = vm.com.objetivoCliente ? h(vm.com.objetivoCliente) : '';
@@ -9228,8 +9575,14 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
       : (vm.multiplasCotas
           ? `<p class="bfrp-hero-sub">${h(vm.quantidadeTotalCotas)} cotas nesta proposta — consulte o detalhamento individual a seguir.</p>`
           : '');
-    const redutorBadge = vm.redutorUniformePct
-      ? `<div class="bfrp-hero-badge">Parcela reduzida ${pct(vm.redutorUniformePct)}</div>` : '';
+    // v36.22 — item 4: nome do cliente sobe para dentro do próprio hero (era só
+    // uma linha pequena abaixo do objetivo) — "Cliente" passa a ler junto com
+    // "Crédito"/"Parcela"/"Prazo" como parte da mesma abertura executiva, em
+    // vez de uma informação separada e secundária.
+    const clientLine = (rawClientName && rawClientName !== 'Cliente')
+      ? `<p class="bfrp-cover-client">${h(rawClientName)}</p>` : '';
+    const highlight = heroHighlightBadge(cons, vm);
+    const highlightBadge = highlight ? `<div class="bfrp-hero-badge">${h(highlight)}</div>` : '';
 
     return `
       <section class="bfrp-page bfrp-cover">
@@ -9243,17 +9596,19 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
         </div>
 
         <div class="bfrp-cover-main">
+          <p class="bfrp-eyebrow">Seu plano de consórcio</p>
+          ${clientLine}
           <div class="bfrp-hero">
-            <p class="bfrp-eyebrow">${h(vm.heroLabel)}</p>
+            <p class="bfrp-hero-kicker">${h(vm.heroLabel)}</p>
             ${heroMultiTag}
             <div class="bfrp-hero-value-row">
               <h1 class="bfrp-num">${money(cons.creditoTotal)}</h1>
-              ${redutorBadge}
             </div>
+            <p class="bfrp-hero-caption">Crédito</p>
             ${heroSubValue}
           </div>
+          ${highlightBadge}
           ${objective ? `<p class="bfrp-cover-subtitle"><strong>Objetivo:</strong> ${objective}</p>` : ''}
-          ${rawClientName && rawClientName !== 'Cliente' ? `<p class="bfrp-cover-prepared">Proposta preparada para ${h(firstName(rawClientName))}</p>` : ''}
         </div>
 
         <div class="bfrp-cover-summary">
@@ -9261,18 +9616,14 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
             <span>${vm.temRedutor ? 'Parcela inicial reduzida' : 'Parcela inicial'}</span>
             <strong class="bfrp-num">${money(cons.primeiraParcelaTotal)}</strong>
           </div>
-          <div class="bfrp-cover-fact">
+          <div class="bfrp-cover-fact bfrp-cover-fact-term">
             <span>Prazo${vm.prazosIguais ? '' : ' (maior cota)'}</span>
-            <strong>${term(cons.prazoOriginalTotal)}</strong>
-          </div>
-          <div class="bfrp-cover-fact">
-            <span>Validade</span>
-            <strong>${h(validity)}</strong>
+            <strong class="bfrp-num">${term(cons.prazoOriginalTotal)}</strong>
           </div>
         </div>
 
         <div class="bfrp-cover-foot">
-          <span>${draft.numeroProposta ? `Proposta ${h(draft.numeroProposta)}` : `Preparada para ${h(rawClientName)}`}</span>
+          <span>${draft.numeroProposta ? `Proposta ${h(draft.numeroProposta)}` : `Preparada para ${h(rawClientName)}`} · Validade: ${h(validity)}</span>
           <span>${h(draft.segmento || 'Consórcio')} · ${h(draft.administradora || '')}</span>
         </div>
       </section>`;
@@ -9480,8 +9831,31 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
             </div>
           </div>`
         : '';
+    // v36.22 — item 8 do pedido: "Crédito líquido" era uma única linha
+    // rótulo/valor, igual a qualquer outra da composição — a relação
+    // matemática (crédito contratado menos o embutido = crédito disponível)
+    // não ficava visualmente evidente, só numérica. Substituída por uma
+    // cadeia vertical de 3 passos com setas — mesmos três valores de sempre
+    // (cons.creditoTotal / cons.embutidoTotal / cons.creditoDisponivelTotal),
+    // nenhuma fórmula nova: a subtração já é feita pelo motor, aqui só é
+    // mostrada em vez de calculada.
     const creditoLiquidoHtml = positive(cons.embutidoTotal)
-      ? `<div class="bfrp-strategy-value"><span>Crédito líquido</span><b class="bfrp-num">${money(cons.creditoDisponivelTotal)}</b></div>` : '';
+      ? `<div class="bfrp-bid-chain">
+          <div class="bfrp-bid-chain-step">
+            <span>Crédito contratado</span>
+            <b class="bfrp-num">${money(cons.creditoTotal)}</b>
+          </div>
+          <div class="bfrp-bid-chain-arrow">Lance embutido</div>
+          <div class="bfrp-bid-chain-step bfrp-bid-chain-negative">
+            <span>Lance embutido</span>
+            <b class="bfrp-num">− ${money(cons.embutidoTotal)}</b>
+          </div>
+          <div class="bfrp-bid-chain-arrow"></div>
+          <div class="bfrp-bid-chain-step bfrp-bid-chain-result">
+            <span>Crédito disponível</span>
+            <b class="bfrp-num">${money(cons.creditoDisponivelTotal)}</b>
+          </div>
+        </div>` : '';
     // v36.5 — itens 12-15 do pedido: nota secundária do Lance Embutido. Só aparece
     // quando ESTA proposta de fato tem lance embutido (positive(cons.embutidoTotal)) —
     // nunca em Sorteio (nem chega a este ponto do código) nem em Lance Fixo/Lance
@@ -9633,17 +10007,78 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
     return text ? `<td>${text}</td>` : `<td class="bfrp-empty">—</td>`;
   }
 
-  function scenariosHtml(draft, cons, selected) {
-    // Sorteio nunca mostra tabela de cenários pós-contemplação (item 5).
+  // v36.22 — item 35 do pedido: a tabela "Cenário apresentado" (v36.21)
+  // funcionava, mas lia como relatório (linha de tabela técnica), não como
+  // "até × depois" compreensível em segundos. Rótulo curto da estratégia
+  // reaproveita EXATAMENTE as mesmas condições/textos já usados como
+  // .bfrp-strategy-tag dentro de strategyHtml — não é uma regra nova, é o
+  // mesmo rótulo lido em outro lugar.
+  function strategyShortLabel(cons, vm) {
+    if (cons.todasSorteio) return 'Sorteio';
+    if (cons.estrategiasMistas) return 'Estratégia combinada';
+    if (vm.isPureLanceFixo) return 'Lance fixo';
+    if (vm.showLance) return 'Lance livre';
+    return '—';
+  }
+
+  // v36.22 — item 13/14 do pedido: redesenho completo (não só estilo) do
+  // "antes × depois". Para um único cenário (modoCenario==='unico', o caso
+  // mais comum), a comparação vira duas colunas lado a lado — "Até a
+  // contemplação" (parcela atual, redutor quando existe, estratégia) e
+  // "Após a contemplação" (parcela estimada, crédito disponível quando há
+  // embutido, prazo remanescente) — no máximo 3 pontos por lado, exatamente
+  // os exemplos do pedido. Nenhum valor novo: mesmos cons.primeiraParcelaTotal
+  // / cons.parcelaNormalTotal / vm.redutorUniformePct / selected.installment /
+  // selected.remainingTerm / cons.creditoDisponivelTotal de sempre. Para
+  // "comparacao" (3+ cenários hipotéticos lado a lado), uma tabela continua
+  // sendo o formato certo — mantida, só com leitura visual mais leve.
+  function beforeAfterHtml(draft, cons, vm, selected) {
+    const parcelaAtual = vm.temRedutor ? cons.primeiraParcelaTotal : cons.parcelaNormalTotal;
+    const redutorRow = vm.temRedutor
+      ? `<div class="bfrp-compare-item"><span>Redutor</span><b class="bfrp-num">${vm.redutorUniformePct ? pct(vm.redutorUniformePct) : 'Ver detalhamento por cota'}</b></div>`
+      : '';
+    const creditoDisponivelRow = positive(cons.embutidoTotal)
+      ? `<div class="bfrp-compare-item"><span>Crédito disponível</span><b class="bfrp-num">${money(cons.creditoDisponivelTotal)}</b></div>`
+      : '';
+    const afterInstallment = selected.unavailable ? '—' : money(selected.installment);
+    const afterTerm = selected.unavailable ? '—' : term(selected.remainingTerm);
+    const note = selected.unavailable
+      ? `<div class="bfrp-note bfrp-note-danger">${h(selected.note)}</div>`
+      : (selected.note ? `<div class="bfrp-note">${h(selected.note)}</div>` : '');
+
+    return `
+      <div class="bfrp-section">
+        <h2 class="bfrp-section-title">Até × depois da contemplação</h2>
+        <div class="bfrp-compare">
+          <div class="bfrp-compare-col">
+            <span class="bfrp-compare-label">Até a contemplação</span>
+            <div class="bfrp-compare-item"><span>Parcela</span><b class="bfrp-num">${money(parcelaAtual)}</b></div>
+            ${redutorRow}
+            <div class="bfrp-compare-item"><span>Estratégia</span><b>${h(strategyShortLabel(cons, vm))}</b></div>
+          </div>
+          <div class="bfrp-compare-arrow" aria-hidden="true"></div>
+          <div class="bfrp-compare-col bfrp-compare-after">
+            <span class="bfrp-compare-label">Após a contemplação</span>
+            <div class="bfrp-compare-item"><span>Parcela estimada</span><b class="bfrp-num">${afterInstallment}</b></div>
+            ${creditoDisponivelRow}
+            <div class="bfrp-compare-item"><span>Prazo remanescente</span><b class="bfrp-num">${afterTerm}</b></div>
+          </div>
+        </div>
+        ${note}
+      </div>`;
+  }
+
+  function scenariosHtml(draft, cons, vm, selected) {
+    // Sorteio nunca mostra comparação pós-contemplação (item 5).
     if (draft.modoCenario === 'oculto' || cons.todasSorteio) return '';
-    const rows = draft.modoCenario === 'comparacao'
-      ? comparisonScenarios(draft, cons)
-      : [selected];
+    if (draft.modoCenario !== 'comparacao') return beforeAfterHtml(draft, cons, vm, selected);
+
+    const rows = comparisonScenarios(draft, cons);
     if (!rows.length) return '';
 
     return `
       <div class="bfrp-section">
-        <h2 class="bfrp-section-title">${draft.modoCenario === 'comparacao' ? 'Cenários comparados' : 'Cenário apresentado'}</h2>
+        <h2 class="bfrp-section-title">Cenários comparados</h2>
         <div class="bfrp-table-wrap">
           <table class="bfrp-table bfrp-table-scenario">
             <thead><tr><th>Cenário</th><th>Parcela</th><th>Prazo restante</th><th>Observação</th></tr></thead>
@@ -9751,7 +10186,7 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
           ${flowHtml(draft, cons, vm, selected)}
         </div>
 
-        ${scenariosHtml(draft, cons, selected)}
+        ${scenariosHtml(draft, cons, vm, selected)}
 
         ${draft.observacoesCliente ? `<div class="bfrp-section"><h2 class="bfrp-section-title">Observações do planejamento</h2><div class="bfrp-observation">${h(draft.observacoesCliente)}</div></div>` : ''}
 
@@ -13477,12 +13912,13 @@ function attachViewHandlers(){
   c.querySelectorAll('[data-newtask]').forEach(btn=> btn.onclick=()=> openTaskForm(null, btn.dataset.newtask, null));
   c.querySelectorAll('[data-logcall]').forEach(btn=> btn.onclick=()=>{
     const lead = DB.leads.find(l=>l.id===btn.dataset.logcall); if(!lead) return;
-    addTimeline(lead, 'Ligação registrada'); saveDB(); showToast('Ligação registrada'); renderView();
+    addTimeline(lead, 'Ligação registrada'); neutralizePrimeiroContatoTask(lead); saveDB(); showToast('Ligação registrada'); renderView();
   });
   c.querySelectorAll('[data-whatsapplead]').forEach(btn=> btn.onclick=()=>{
     const lead = DB.leads.find(l=>l.id===btn.dataset.whatsapplead); if(!lead) return;
     const digits = normalizePhone(lead.telefone||''); if(!digits) return;
     addTimeline(lead, 'WhatsApp aberto');
+    neutralizePrimeiroContatoTask(lead);
     window.open(`https://wa.me/55${digits}`,'_blank');
     saveDB(); renderView();
   });
