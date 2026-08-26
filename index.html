@@ -206,8 +206,16 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .lead-picker-item b{color:var(--brand-navy);display:block;}
 .lead-picker-item .lp-meta{font-size:11.5px;color:var(--text-secondary);margin-top:2px;}
 .lead-picker-new{padding:12px 14px;border-top:1px solid var(--border);background:var(--background);}
+/* v36.23 — item 2 do pedido: nome empresarial longo + telefone + assessor no
+   mesmo <span> podiam comprimir o botão "Trocar" ou estourar o container (o
+   flex não tinha min-width:0 no texto nem flex-shrink:0 no botão — o padrão
+   clássico que causa esse tipo de overflow em flex row). Texto agora pode
+   quebrar linha; botão nunca encolhe nem é comprimido. Nenhum comportamento
+   do lead picker foi alterado, só a blindagem visual. */
 .lead-picker-selected{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--brand-blue-soft);border:1px solid #CFE0F2;border-radius:var(--radius-sm);padding:9px 14px;font-size:13px;}
 .lead-picker-selected b{color:var(--brand-navy);}
+.lead-picker-selected>span{min-width:0;overflow-wrap:anywhere;}
+.lead-picker-selected>.link-btn{flex-shrink:0;}
 .form-grid.cols3{grid-template-columns:1fr 1fr 1fr;}
 .form-grid .full{grid-column:1/-1;}
 .field label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:600;}
@@ -1153,9 +1161,19 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   padding: 2px 0;
 }
 
+/* v36.23 — hardening visual: min-width fixo (38mm) era MENOR que a largura
+   mínima real de valores extremos (ex.: "R$ 499.999.999,95" a 21px/700 em
+   .bfrp-metric-primary strong) — como min-width explícito substitui o piso
+   automático de conteúdo do item flex, o texto (nowrap por decisão de design,
+   ver .bfrp-num) podia vazar da caixa em vez de acionar o flex-wrap:wrap já
+   existente em .bfrp-financial-grid. min-content restaura esse piso pelo
+   conteúdo real de cada card — em valores normais o resultado é idêntico
+   (o flex-grow já preenchia o espaço disponível), em valores extremos o card
+   agora quebra para a linha seguinte corretamente, sem vazar. Confirmado via
+   medição real (scrollWidth/clientWidth) em cenários normais e extremos. */
 .bfrp-metric {
   flex: 1 1 0;
-  min-width: 38mm;
+  min-width: min-content;
   padding: 0 18px;
   border-left: 1px solid var(--bfrp-line);
 }
@@ -1373,9 +1391,11 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 
 .bfrp-strategy-value {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 2px 12px;
+  min-width: 0;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(13, 42, 82, 0.08);
   color: var(--bfrp-muted);
@@ -1388,6 +1408,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 }
 
 .bfrp-strategy-value b {
+  margin-left: auto;
   color: var(--bfrp-navy-900);
   font-size: 13px;
   font-weight: 650;
@@ -1450,19 +1471,27 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 
 .bfrp-strategy-composicao-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 2px 10px;
   min-width: 0;
 }
 
+/* v36.23 — item 3 do pedido: rótulo ("Recurso próprio"/"Lance embutido"/
+   "FGTS"/"Outro recurso") tinha nowrap igual ao valor ao lado — com valores
+   monetários extremos (ex.: R$ 99.999.999,99) numa coluna estreita
+   (minmax(56mm,0.7fr), ver .bfrp-strategy), o rótulo podia disputar largura
+   com o valor em vez de ceder. Rótulo agora pode quebrar; valor (b, abaixo)
+   continua nowrap — nunca parte um número no meio. */
 .bfrp-strategy-composicao-item span {
+  min-width: 0;
   color: var(--bfrp-muted);
   font-size: 9.6px;
-  white-space: nowrap;
 }
 
 .bfrp-strategy-composicao-item b {
+  margin-left: auto;
   color: var(--bfrp-navy-900);
   font-size: 11.5px;
   font-weight: 640;
@@ -1481,19 +1510,26 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 
 .bfrp-bid-chain-step {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 2px 10px;
   min-width: 0;
 }
 
+/* v36.23 — item 3/4 do pedido: mesmo ajuste do composicao-item acima —
+   "Crédito contratado"/"Crédito disponível" são rótulos mais longos que
+   cabiam bem com valores normais, mas competiam por espaço com valores
+   extremos (R$ 99.999.999,99) na mesma coluna estreita. Rótulo pode quebrar;
+   valor (b, abaixo) continua nowrap. */
 .bfrp-bid-chain-step span {
+  min-width: 0;
   color: var(--bfrp-muted);
   font-size: 9.6px;
-  white-space: nowrap;
 }
 
 .bfrp-bid-chain-step b {
+  margin-left: auto;
   color: var(--bfrp-navy-900);
   font-size: 11.5px;
   font-weight: 640;
@@ -1597,11 +1633,19 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   gap: 2px 24px;
 }
 
+/* v36.23 — hardening visual: rótulo (nowrap, ver .bfrp-conditions-item span
+   abaixo) mais longo (ex.: "Taxa de administração total") vazava ~5px da
+   coluna da grade de 2 colunas especificamente na faixa mobile (375px), onde
+   cada coluna tem menos de 155px. flex-wrap:wrap deixa a linha quebrar
+   inteira (rótulo em cima, valor embaixo) só quando as duas partes não cabem
+   lado a lado — nenhuma quebra no meio de uma palavra, nenhuma mudança em
+   telas onde já cabia. */
 .bfrp-conditions-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 2px 10px;
   padding: 7px 0;
   border-bottom: 1px solid var(--bfrp-line-soft);
 }
@@ -1919,9 +1963,17 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   text-transform: uppercase;
 }
 
+/* v36.23 — item 5 do pedido: a versão anterior "sangrava" o fundo sutil além
+   da coluna via margem negativa (margin-right:-16px compensada por
+   padding-right:16px) — um efeito puramente decorativo que fazia
+   .bfrp-compare relatar scrollWidth maior que clientWidth mesmo em uso
+   normal (confirmado: nunca causava overflow real da página, pois o padding
+   do container absorvia a sobra, mas é um risco residual desnecessário).
+   Removida a margem negativa — o fundo agora fica inteiramente contido na
+   própria coluna do grid, mesmo efeito visual (diferenciar o lado "depois"),
+   zero risco geométrico. */
 .bfrp-compare-after {
-  margin: -14px -16px -14px 0;
-  padding: 14px 16px 14px 16px;
+  padding: 14px 16px;
   border-radius: var(--bfrp-radius);
   background: var(--bfrp-soft);
 }
@@ -1931,11 +1983,22 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   color: var(--bfrp-navy-800);
 }
 
+/* v36.23 — item 5 do pedido: testado com valores extremos (crédito ~R$100
+   milhões) na faixa 1101-1366px — o lado "depois" (.bfrp-compare-after) tem
+   16px a menos de largura útil que o lado "até" (efeito do padding que
+   "sangra" o fundo sutil além da coluna, ver regra acima), e rótulos mais
+   longos como "Prazo remanescente" podiam empurrar o container inteiro para
+   overflow horizontal. flex-wrap permite que valor e rótulo se empilhem
+   nessa situação (em vez de forçar os dois na mesma linha); margin-left:auto
+   no valor mantém o alinhamento à direita quando isso acontece. Em uso normal
+   (valores e rótulos de tamanho comum) o layout continua idêntico — a
+   quebra só entra em cena quando realmente não cabe. */
 .bfrp-compare-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 2px 10px;
   min-width: 0;
 }
 
@@ -1945,6 +2008,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 }
 
 .bfrp-compare-item b {
+  margin-left: auto;
   color: var(--bfrp-navy-900);
   font-size: 13px;
   font-weight: 650;
@@ -1973,9 +2037,6 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   }
   .bfrp-compare-arrow {
     display: none;
-  }
-  .bfrp-compare-after {
-    margin: 0;
   }
 }
 
@@ -10220,8 +10281,15 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
   // planejado / Após contemplação) estejam presentes ou não nesta proposta — nunca
   // deixa "Prazo" com a mesma largura que uma coluna de valor financeiro, e reserva
   // mais espaço para "Após contemplação" por ser um valor composto (parcela + prazo).
+  // v36.23 — hardening visual: medição real (scrollWidth/clientWidth) reproduziu
+  // "180 meses" cortado por ~4px na coluna Prazo em QUALQUER cenário (não só
+  // valores extremos) — 9% era estreito demais para o conteúdo nowrap dessa
+  // coluna (.bfrp-num). Redistribuído +2 de "estrategia" (texto com quebra
+  // normal, tolera coluna mais estreita sem vazar) para "prazo" (nowrap, não
+  // pode ceder). Soma total inalterada; nenhuma coluna de valor financeiro
+  // tocada.
   function cotasColgroupHtml(showBid, showPostAward){
-    const cols = [['cota',10], ['estrategia',14], ['credito',15], ['prazo',9], ['parcelaInicial',15]];
+    const cols = [['cota',10], ['estrategia',12], ['credito',15], ['prazo',11], ['parcelaInicial',15]];
     if (showBid) cols.push(['totalPlanejado', 15]);
     if (showPostAward) cols.push(['aposContemplacao', 22]);
     const sum = cols.reduce((acc, [, w]) => acc + w, 0);
