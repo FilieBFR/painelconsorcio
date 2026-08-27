@@ -176,6 +176,31 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .modal{background:#fff;border-radius:16px;width:100%;max-width:720px;padding:28px 30px;box-shadow:0 24px 70px rgba(7,27,58,.28);}
 .modal.wide{max-width:920px;}
 .modal.xwide{width:min(1280px, calc(100vw - 40px));max-width:1280px;}
+/* v36_24 — modal "Pipeline aberto": resumo (valor + clientes/propostas),
+   controles de ordenação e tabela de oportunidades. Reaproveita .table-wrap/
+   table/.pill-btn/.link-btn/.empty já existentes — só o necessário é novo. */
+.pipeline-modal-summary{padding:14px 18px;background:var(--brand-blue-soft);border-radius:var(--radius);margin:14px 0 16px;}
+.pipeline-modal-summary-value{font-size:clamp(22px,3vw,30px);font-weight:800;color:var(--brand-navy);letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+.pipeline-modal-summary-sub{font-size:12.5px;color:var(--text-secondary);margin-top:4px;}
+.pipeline-modal-summary-sub b{color:var(--ink);}
+.pipeline-modal-sort{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:12.5px;color:var(--text-secondary);}
+.pipeline-sort-btn{background:#fff;border:1px solid var(--border);border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;color:var(--text-secondary);cursor:pointer;transition:background .15s,color .15s,border-color .15s;}
+.pipeline-sort-btn:hover{border-color:var(--brand-blue);color:var(--brand-blue);}
+.pipeline-sort-btn.active{background:var(--brand-navy);border-color:var(--brand-navy);color:#fff;}
+.pipeline-modal-table th,.pipeline-modal-table td{white-space:nowrap;}
+.pipeline-modal-table td[data-label="Cliente"]{white-space:normal;min-width:120px;}
+.pipeline-modal-actions-cell{display:flex;gap:10px;flex-wrap:wrap;}
+.pipeline-modal-actions-cell .link-btn{font-size:12px;}
+@media (max-width:760px){
+  .pipeline-modal-table thead{display:none;}
+  .pipeline-modal-table, .pipeline-modal-table tbody, .pipeline-modal-table tr, .pipeline-modal-table td{display:block;width:100%;}
+  .pipeline-modal-table tr{border-bottom:1px solid var(--border);padding:10px 0;}
+  .pipeline-modal-table tr:last-child{border-bottom:0;}
+  .pipeline-modal-table td{white-space:normal;padding:3px 0;border:0;}
+  .pipeline-modal-table td[data-label]::before{content:attr(data-label) ": ";font-weight:700;color:var(--text-secondary);}
+  .pipeline-modal-table td[data-label="Cliente"]::before{display:none;}
+  .pipeline-modal-actions-cell{margin-top:4px;}
+}
 .modal.xwide.proposal-modal{display:flex;flex-direction:column;max-height:calc(100vh - 32px);padding:0;}
 .proposal-modal-header{padding:26px 30px 0;flex-shrink:0;}
 .proposal-modal-header .tabbar{margin-bottom:0;}
@@ -481,7 +506,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 @media (max-width:800px){ .dashx-prod-panel{grid-column:auto;} }
 .dashx-hero-eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);font-weight:700;}
 .dashx-hero-figure{font-size:clamp(28px,3.6vw,46px);font-weight:800;color:var(--brand-navy);letter-spacing:-.02em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;line-height:1.05;margin-top:6px;overflow-wrap:anywhere;}
-.dashx-hero-spark{height:40px;margin-top:10px;}
+.dashx-hero-spark{height:46px;margin-top:10px;}
 .dashx-hero-foot{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary);}
 .dashx-hero-foot b{color:var(--ink);font-variant-numeric:tabular-nums;}
 
@@ -5227,6 +5252,29 @@ function proposalMatchesFilterBarDims(p, excludeDims, idx){
   }
   return true;
 }
+/** Valor de uma proposta para fins de pipeline/produção — crédito pretendido
+ *  para simulação simples, valor total para simulação completa. Única fonte
+ *  de verdade: reaproveitada por computeCoreKPIs e pelo modal de detalhamento
+ *  do pipeline (v36_24), nunca duplicada. */
+function proposalPipelineValue(p){
+  return Number((p.tipoProposta==='simples' ? p.creditoPretendido : p.valorTotal) || 0);
+}
+/** v36_24 — fonte única do universo "Pipeline aberto": propostas 'Em
+ *  negociação', sem contrato gerado, respeitando as DIMENSÕES do filtro
+ *  (assessor/segmento/administradora/origem) — nunca o período, pois pipeline
+ *  aberto é fotografia do estoque atual, não fluxo do período (ver comentário
+ *  completo da regra em computeCoreKPIs, mantido intacto). Reaproveitada por
+ *  computeCoreKPIs (KPI), computeProposalAging (envelhecimento) e pelo modal
+ *  de detalhamento — os três SEMPRE representam exatamente o mesmo conjunto
+ *  de propostas, nunca repetindo a condição em lugares diferentes. */
+function getOpenPipelineProposals(idx){
+  idx = idx || buildCommercialIndexes();
+  return DB.proposals.filter(p=>
+    proposalMatchesFilterBarDims(p, [], idx) &&
+    !p.contratoGeradoId &&
+    p.status==='Em negociação'
+  );
+}
 /** Fonte única de verdade para "vendas" no dashboard a partir desta correção:
  *  contract.dataContratacao + contract.valorContratado — nunca mais
  *  lead.dataFechamento/lead.valor. Um cliente pode ter mais de um contrato ao
@@ -5470,7 +5518,7 @@ function computeCoreKPIs(range, idx){
   // (contratoGeradoId preenchido) NUNCA entra aqui de novo — ela já foi
   // contabilizada acima, em "vendido", via o contrato.
   const propostasDoFiltro = DB.proposals.filter(p=> proposalMatchesFilterBarDims(p, [], idx));
-  const valorProposta = p => Number((p.tipoProposta==='simples' ? p.creditoPretendido : p.valorTotal) || 0);
+  const valorProposta = proposalPipelineValue;
   // Propostas abertas respeitam o PERÍODO selecionado (dataCriacao) — mesma
   // regra usada por relPipeline() e pela exportação CSV do pipeline, para o
   // dashboard e o relatório sempre apresentarem o mesmo total.
@@ -5497,7 +5545,7 @@ function computeCoreKPIs(range, idx){
   // oportunidade), só não é mais usada para EXCLUIR do pipeline. Relatórios/
   // CSV do pipeline (relPipeline) continuam fora do escopo desta tarefa (só
   // Dashboard) e por isso continuam na definição antiga; ver relatório final.
-  const propostasEmNegociacao = DB.proposals.filter(p=> proposalMatchesFilterBarDims(p, [], idx) && !p.contratoGeradoId && p.status==='Em negociação');
+  const propostasEmNegociacao = getOpenPipelineProposals(idx);
   const pipelineAberto = propostasEmNegociacao.reduce((s,p)=> s+valorProposta(p), 0);
   // v36_11 — auditoria: propostasEnviadas mede propostas NASCIDAS no período
   // (via propostasAbertas, period-scoped) que ainda não foram resolvidas —
@@ -6064,7 +6112,7 @@ function viewDashboard(){
   // correção conceitual do pipeline — deixou de ser "só propostas nascidas
   // neste mês").
   const tooltipCobertura = 'Cobertura = valor atualmente em negociação ÷ valor restante da meta. Inclui negociações abertas em períodos anteriores. Não representa previsão de fechamento.';
-  const tooltipPipeline = 'Pipeline em aberto considera todas as propostas ATUALMENTE em negociação (status "Em negociação"), independentemente de quando foram criadas — é uma fotografia do estoque de oportunidades agora, não um fluxo do período selecionado.';
+  const tooltipPipeline = 'Pipeline em aberto considera todas as propostas ATUALMENTE em negociação (status "Em negociação"), independentemente de quando foram criadas — é uma fotografia do estoque de oportunidades agora, não um fluxo do período selecionado. Clique para ver quais propostas compõem esse valor.';
   const tooltipMotivosPerda = 'Motivos de propostas com status "Perdida" (nunca do cliente — uma proposta perdida continua contando aqui mesmo que o cliente seja depois recuperado). Período estimado pela data da última alteração da proposta, único dado disponível — pode divergir da data exata da perda se a proposta foi editada depois de perdida.';
   // v36_11 — auditoria do rótulo "Propostas enviadas": a fórmula (k.propostasEnviadas,
   // ver comentário em computeCoreKPIs) mede propostas NASCIDAS no período que
@@ -6168,7 +6216,7 @@ function viewDashboard(){
   </div>
 
   <div class="dashx-stat-strip">
-    <div class="dashx-stat-strip-item clickable" data-goto="leads" tabindex="0" title="${escapeHtml(tooltipPipeline)}"><div class="dashx-stat-strip-label">Pipeline aberto ⓘ</div><div class="dashx-stat-strip-value">${fmtMoney(k.pipelineAberto)}</div></div>
+    <div class="dashx-stat-strip-item clickable" data-open-pipeline="1" tabindex="0" title="${escapeHtml(tooltipPipeline)}"><div class="dashx-stat-strip-label">Pipeline aberto ⓘ</div><div class="dashx-stat-strip-value">${fmtMoney(k.pipelineAberto)}</div></div>
     <div class="dashx-stat-strip-item" title="${escapeHtml(tooltipEfetivacao)}"><div class="dashx-stat-strip-label">Efetivação de propostas ⓘ</div><div class="dashx-stat-strip-value">${k.conversao}%${cmp?' '+dashPill(k.conversao,cmp.conversao):''}</div></div>
     <div class="dashx-stat-strip-item clickable" data-goto="leads" tabindex="0"><div class="dashx-stat-strip-label">Qtd. vendas</div><div class="dashx-stat-strip-value">${k.qtdVendas}${cmp?' '+dashPill(k.qtdVendas,cmp.qtdVendas):''}</div></div>
     <div class="dashx-stat-strip-item"><div class="dashx-stat-strip-label">Ticket médio</div><div class="dashx-stat-strip-value">${fmtMoney(k.ticket)}</div></div>
@@ -6447,12 +6495,10 @@ function computeProposalAging(idx){
   // caia fora do período selecionado no filtro — dataCriacao continua sendo
   // usada logo abaixo, só que para calcular `daysBetween`, nunca mais para
   // excluir do universo. Mesmo conjunto exato de propostasEmNegociacao em
-  // computeCoreKPIs (dimensões do filtro, sem restrição de período).
-  const abertas = DB.proposals.filter(p=>
-    proposalMatchesFilterBarDims(p, [], idx) &&
-    !p.contratoGeradoId &&
-    p.status==='Em negociação'
-  );
+  // computeCoreKPIs (dimensões do filtro, sem restrição de período) — v36_24:
+  // agora via getOpenPipelineProposals, fonte única compartilhada com o KPI
+  // e o modal de detalhamento do pipeline, para os três nunca divergirem.
+  const abertas = getOpenPipelineProposals(idx);
   const hoje = todayISO();
   const buckets = [
     {label:'Até 7 dias', min:0, max:7, count:0, color:CHART_PALETTE.green},
@@ -6468,6 +6514,126 @@ function computeProposalAging(idx){
   const total = abertas.length;
   buckets.forEach(b=> b.pct = total ? Math.round((b.count/total)*100) : 0);
   return { total, buckets };
+}
+
+/* ================= MODAL "PIPELINE ABERTO" (v36_24) =================
+ * Mostra exatamente as propostas que compõem o KPI "Pipeline aberto" — MESMA
+ * fonte (getOpenPipelineProposals) do KPI e do aging, nunca deduplicando por
+ * cliente: um cliente com 2 propostas em negociação aparece 2 vezes, e o
+ * total do modal é SEMPRE igual a k.pipelineAberto por construção (mesmo
+ * conjunto, mesma fórmula de valor — proposalPipelineValue). Reaproveita
+ * integralmente a infraestrutura de modal já existente (openModal/
+ * closeModalFn, classe .xwide) e as ações já existentes (openLeadDetail,
+ * openProposalByIdSmart, o padrão inline de WhatsApp, addTimeline,
+ * openTaskForm) — nenhuma lógica nova duplicada, nenhum handler reinventado. */
+let pipelineModalSort = 'idade';
+function pipelineModalRows(){
+  const idx = dashboardIdxCache || buildCommercialIndexes();
+  const hoje = todayISO();
+  return getOpenPipelineProposals(idx).map(p=>{
+    const lead = idx.leadsById.get(p.leadId);
+    if(!lead) return null; // defensivo — nunca deveria faltar, não deve quebrar o modal
+    const ultima = (lead.timeline && lead.timeline.length) ? lead.timeline[lead.timeline.length-1] : null;
+    return {
+      p, lead,
+      valor: proposalPipelineValue(p),
+      idade: daysBetween(p.dataCriacao, hoje),
+      administradora: p.administradora || lead.administradora || '—',
+      segmento: p.segmento || lead.tipoConsorcio || '—',
+      assessor: p.assessorResponsavel || lead.responsavel || '—',
+      ultimaInteracao: ultima
+    };
+  }).filter(Boolean);
+}
+/** Ordenação comercial (item 11 do pedido): padrão = idade da oportunidade
+ *  DESC (mais antigas primeiro — prioridade de tratamento), empate por valor
+ *  DESC. Alternativas simples: maior valor, mais recentes — sem score novo. */
+function sortPipelineRows(rows, mode){
+  const arr = rows.slice();
+  if(mode==='valor') return arr.sort((a,b)=> b.valor-a.valor);
+  if(mode==='recente') return arr.sort((a,b)=> (b.p.dataCriacao||'').localeCompare(a.p.dataCriacao||''));
+  return arr.sort((a,b)=> b.idade-a.idade || b.valor-a.valor); // 'idade' (padrão)
+}
+function openPipelineDetailModal(){
+  pipelineModalSort = 'idade';
+  document.getElementById('modalBody').outerHTML = `<div class="modal xwide" id="modalBody"></div>`;
+  renderPipelineModal();
+  openModal();
+}
+function renderPipelineModal(){
+  const rows = pipelineModalRows();
+  const sorted = sortPipelineRows(rows, pipelineModalSort);
+  const totalValor = rows.reduce((s,r)=>s+r.valor,0);
+  const clientesUnicos = new Set(rows.map(r=>r.p.leadId)).size;
+  const filtroAtivo = filterBar.assessor!=='Todos' || filterBar.segmento!=='Todos' || filterBar.administradora!=='Todos' || filterBar.origem!=='Todos';
+  const sortOpts = [ {key:'idade', label:'Mais antigas'}, {key:'valor', label:'Maior valor'}, {key:'recente', label:'Mais recentes'} ];
+  document.getElementById('modalBody').innerHTML = `
+    <h2>Pipeline aberto</h2>
+    <div class="pipeline-modal-summary">
+      <div class="pipeline-modal-summary-value">${fmtMoney(totalValor)}</div>
+      <div class="pipeline-modal-summary-sub">em oportunidades · <b>${clientesUnicos}</b> cliente${clientesUnicos===1?'':'s'} · <b>${rows.length}</b> proposta${rows.length===1?'':'s'}</div>
+    </div>
+    ${rows.length? `
+    <div class="pipeline-modal-sort">
+      <span>Ordenar por</span>
+      ${sortOpts.map(o=>`<button class="pipeline-sort-btn${pipelineModalSort===o.key?' active':''}" data-pipelinesort="${o.key}">${o.label}</button>`).join('')}
+    </div>
+    <div class="table-wrap pipeline-modal-table-wrap"><table class="pipeline-modal-table">
+      <thead><tr><th>Cliente</th><th>Valor</th><th>Administradora</th><th>Segmento</th><th>Assessor</th><th>Idade</th><th>Última interação</th><th>Criada em</th><th></th></tr></thead>
+      <tbody>${sorted.map(r=>pipelineModalRowHtml(r)).join('')}</tbody>
+    </table></div>` : `<div class="empty">Nenhuma proposta em negociação no momento${filtroAtivo?' para os filtros de assessor/segmento/administradora/origem selecionados':''}.</div>`}
+    <div class="modal-actions"><button class="pill-btn ghost" id="pipelineModalClose">Fechar</button></div>
+  `;
+  document.getElementById('pipelineModalClose').onclick = closeModalFn;
+  document.querySelectorAll('[data-pipelinesort]').forEach(btn=> btn.onclick = ()=>{ pipelineModalSort = btn.dataset.pipelinesort; renderPipelineModal(); });
+  wirePipelineModalRowActions();
+}
+function pipelineModalRowHtml(r){
+  const ultimaTxt = r.ultimaInteracao ? `${escapeHtml(r.ultimaInteracao.acao)} · ${fmtDate(String(r.ultimaInteracao.when).slice(0,10))}` : '—';
+  return `<tr data-pipelinelead="${r.lead.id}" data-pipelineproposal="${r.p.id}">
+    <td data-label="Cliente"><b>${escapeHtml(r.lead.nome)}</b></td>
+    <td data-label="Valor">${fmtMoney(r.valor)}</td>
+    <td data-label="Administradora">${escapeHtml(r.administradora)}</td>
+    <td data-label="Segmento">${escapeHtml(r.segmento)}</td>
+    <td data-label="Assessor">${escapeHtml(r.assessor)}</td>
+    <td data-label="Idade">${r.idade} dia${r.idade===1?'':'s'}</td>
+    <td data-label="Última interação">${ultimaTxt}</td>
+    <td data-label="Criada em">${fmtDate(r.p.dataCriacao)}</td>
+    <td data-label="Ações" class="pipeline-modal-actions-cell">
+      <button class="link-btn" data-pipeact="cliente" title="Abrir cliente">Cliente</button>
+      <button class="link-btn" data-pipeact="proposta" title="Abrir proposta">Proposta</button>
+      <button class="link-btn" data-pipeact="whats" title="WhatsApp">WhatsApp</button>
+      <button class="link-btn" data-pipeact="call" title="Registrar ligação">Ligação</button>
+      <button class="link-btn" data-pipeact="task" title="Criar tarefa">Tarefa</button>
+    </td>
+  </tr>`;
+}
+function wirePipelineModalRowActions(){
+  document.querySelectorAll('#modalBody tr[data-pipelinelead]').forEach(tr=>{
+    const leadId = tr.dataset.pipelinelead;
+    const proposalId = tr.dataset.pipelineproposal;
+    const lead = DB.leads.find(l=>l.id===leadId);
+    if(!lead) return;
+    tr.querySelectorAll('[data-pipeact]').forEach(btn=>{
+      btn.onclick = (e)=>{
+        e.stopPropagation();
+        const act = btn.dataset.pipeact;
+        if(act==='cliente'){ closeModalFn(); openLeadDetail(leadId); }
+        else if(act==='proposta'){ closeModalFn(); openProposalByIdSmart(proposalId, leadId); }
+        else if(act==='whats'){
+          const digits = normalizePhone(lead.telefone);
+          if(!digits){ showToast('Cliente sem telefone cadastrado'); return; }
+          addTimeline(lead,'WhatsApp aberto'); neutralizePrimeiroContatoTask(lead); saveDB();
+          window.open(`https://wa.me/55${digits}`,'_blank');
+        }
+        else if(act==='call'){
+          addTimeline(lead,'Ligação registrada'); neutralizePrimeiroContatoTask(lead); saveDB();
+          showToast('Ligação registrada na timeline'); renderPipelineModal();
+        }
+        else if(act==='task'){ closeModalFn(); openTaskForm(null, leadId); }
+      };
+    });
+  });
 }
 
 /** Junta os dois cortes de "origem" que já existem separadamente no
@@ -6701,11 +6867,22 @@ function newChart(id, type, labels, datasets, opts){
   const stale = typeof Chart.getChart==='function' ? Chart.getChart(ctx) : null;
   if(stale){ try{ stale.destroy(); }catch(e){} }
   const tickFmt = money ? (v)=>fmtMoneyCompact(v) : undefined;
+  // v36_24 — quando opts.counts (array paralelo aos dados) é informado — hoje
+  // só pelos gráficos de crédito vendido (hero + "Evolução") — o tooltip
+  // ganha uma segunda linha com a quantidade de contratos daquele ponto,
+  // derivada da MESMA fonte que já gerou o valor (nunca uma métrica nova).
+  // Sem opts.counts, comportamento idêntico ao anterior em todos os outros
+  // gráficos do dashboard.
   const tooltipLabelFmt = (item)=>{
     const raw = type==='doughnut' ? item.parsed : (horizontal ? item.parsed.x : item.parsed.y);
     const val = money ? fmtMoney(raw) : (typeof raw==='number' ? raw.toLocaleString('pt-BR') : raw);
     const name = item.dataset.label || item.label || '';
-    return type==='doughnut' ? `${item.label}: ${val}` : (name ? `${name}: ${val}` : val);
+    const base = type==='doughnut' ? `${item.label}: ${val}` : (name ? `${name}: ${val}` : val);
+    if(Array.isArray(opts.counts) && typeof item.dataIndex==='number' && opts.counts[item.dataIndex]!==undefined){
+      const n = opts.counts[item.dataIndex];
+      return [base, `${n} ${n===1?'contrato':'contratos'}`];
+    }
+    return base;
   };
   if(sparkline){
     // Mini-gráfico para os cards de KPI: sem eixos, sem legenda, sem tooltip
@@ -6785,68 +6962,145 @@ function dashSetFilter(dim, value){
   filterBar[dim] = value;
   renderView();
 }
+/** v36_24 — série temporal única de crédito vendido, respeitando o filtro de
+ *  período/dimensões atual. Fonte compartilhada pelo mini-gráfico do hero
+ *  ("Crédito vendido — período selecionado") e pelo gráfico "Evolução do
+ *  crédito vendido" — computada UMA VEZ por renderDashboardCharts() e
+ *  consumida pelos dois, nunca duplicando o agrupamento nem rescaneando
+ *  DB.contracts duas vezes para a mesma informação.
+ *
+ *  Granularidade por modo de período:
+ *   - 'mes'                 → diária (dias do mês corrente);
+ *   - 'ano'                 → mensal, os 12 meses do ano corrente;
+ *   - 'trimestre'           → mensal, os 3 meses do trimestre corrente;
+ *   - 'tudo'                → mensal, do primeiro mês com venda relevante
+ *                             (respeitando as dimensões do filtro) até o mês
+ *                             mais recente com venda OU o mês atual, o que for
+ *                             mais tarde — nunca uma janela fixa de 6 meses.
+ *   - 'custom'/outro        → mensal, últimos 6 meses (comportamento já
+ *                             existente, preservado sem alteração).
+ *
+ *  BUG REAL CORRIGIDO nesta rodada: o modo 'tudo' ("Todo o período") caía no
+ *  mesmo "else" genérico do modo 'custom' e por isso SEMPRE mostrava uma
+ *  janela fixa de últimos 6 meses a partir de hoje — nunca o período completo
+ *  — podendo inclusive OMITIR totalmente vendas antigas fora dessa janela.
+ *  Cada mês é identificado por uma chave inequívoca 'YYYY-MM' (nunca por nome
+ *  de mês isolado), então meses de mesmo nome em anos diferentes nunca são
+ *  somados no mesmo ponto — e o rótulo visual ganha o sufixo do ano ('/25',
+ *  '/26'...) sempre que o intervalo exibido cruza mais de um ano civil.
+ *  Meses sem venda entre dois meses com venda permanecem no dataset com
+ *  valor 0 (nunca são removidos) — a série é sempre contínua dentro do range
+ *  exibido. */
+function buildSalesTimeSeries(idx){
+  idx = idx || buildCommercialIndexes();
+  const now = new Date();
+  if(filterBar.mode==='mes'){
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+    const points = [];
+    for(let d=1; d<=daysInMonth; d++){
+      const iso = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const contratos = filteredSoldContracts({mode:'custom', from:iso, to:iso}, [], idx);
+      points.push({ key:iso, label:String(d), value: contratos.reduce((s,c)=>s+Number(c.valorContratado||0),0), count: contratos.length });
+    }
+    return { granularity:'dia', points };
+  }
+  // Constrói a lista de meses SEM usar Date.setMonth em cima de uma data com
+  // dia > 28 (bug real corrigido em rodada anterior: setMonth "estoura" para
+  // o mês seguinte quando o mês de destino tem menos dias que o dia atual).
+  // Constrói cada mês diretamente com dia 1, que nunca estoura.
+  let monthsList; // array de {y, m} (m = 0-indexado)
+  // 'tudo': agrupa TODOS os contratos relevantes (dimensões do filtro, sem
+  // restrição de período) numa ÚNICA passada — Map por chave 'YYYY-MM' — em
+  // vez de repetir filteredSoldContracts uma vez por mês, o que evitaria
+  // O(n×meses) rescans de DB.contracts quando o histórico é longo (24/60+
+  // meses). minKey/maxKey saem da mesma passada, sem custo adicional.
+  let sumByKey = null, countByKey = null;
+  if(filterBar.mode==='ano'){
+    const y = now.getFullYear();
+    monthsList = Array.from({length:12}, (_,m)=>({y, m}));
+  } else if(filterBar.mode==='trimestre'){
+    const y = now.getFullYear();
+    const q = Math.floor(now.getMonth()/3);
+    monthsList = [q*3, q*3+1, q*3+2].map(m=>({y, m}));
+  } else if(filterBar.mode==='tudo'){
+    sumByKey = new Map(); countByKey = new Map();
+    let minKey = null, maxKey = null;
+    filteredSoldContracts({mode:'tudo'}, [], idx).forEach(c=>{
+      if(!c.dataContratacao) return;
+      const key = c.dataContratacao.slice(0,7); // 'YYYY-MM'
+      sumByKey.set(key, (sumByKey.get(key)||0) + Number(c.valorContratado||0));
+      countByKey.set(key, (countByKey.get(key)||0) + 1);
+      if(!minKey || key<minKey) minKey = key;
+      if(!maxKey || key>maxKey) maxKey = key;
+    });
+    const nowKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    // Fim = mês mais recente com venda OU mês atual, o que vier depois —
+    // garante que a soma da série sempre bate com k.vendido (nunca deixa um
+    // contrato de fora por cair "depois" do fim calculado) e nunca gera
+    // dezenas de meses vazios além do necessário quando não há venda futura.
+    const endKey = (maxKey && maxKey>nowKey) ? maxKey : nowKey;
+    monthsList = [];
+    if(minKey){
+      let [yy,mm] = minKey.split('-').map(Number); mm -= 1;
+      const [endY, endM1] = endKey.split('-').map(Number); const endM = endM1-1;
+      while(yy<endY || (yy===endY && mm<=endM)){
+        monthsList.push({y:yy, m:mm});
+        mm++; if(mm>11){ mm=0; yy++; }
+      }
+    } else {
+      // Nenhuma venda registrada ainda (respeitando as dimensões do filtro) —
+      // mostra só o mês atual, com valor 0, em vez de uma lista vazia.
+      monthsList = [{y:now.getFullYear(), m:now.getMonth()}];
+    }
+  } else {
+    // 'custom' / qualquer outro: últimos 6 meses terminando no mês atual
+    // (comportamento já existente, preservado sem alteração).
+    monthsList = [];
+    for(let i=5;i>=0;i--){
+      let mm = now.getMonth()-i, yy = now.getFullYear();
+      while(mm<0){ mm+=12; yy--; }
+      monthsList.push({y:yy, m:mm});
+    }
+  }
+  // Mostra o ano no rótulo quando os meses exibidos cruzam mais de um ano
+  // civil, para nunca ficar ambíguo qual mês/ano cada rótulo representa.
+  const cruzaAno = monthsList.some(mo=>mo.y!==monthsList[0].y);
+  const points = monthsList.map(mo=>{
+    const key = `${mo.y}-${String(mo.m+1).padStart(2,'0')}`;
+    const label = new Date(mo.y, mo.m, 1).toLocaleDateString('pt-BR', {month:'short'}) + (cruzaAno ? '/' + String(mo.y).slice(2) : '');
+    if(sumByKey){
+      return { key, label, value: sumByKey.get(key)||0, count: countByKey.get(key)||0 };
+    }
+    // Comparação por string (from/to) evita qualquer risco de fuso horário —
+    // nunca faz new Date(iso).getMonth() em cima de string sem horário.
+    const from = `${mo.y}-${String(mo.m+1).padStart(2,'0')}-01`;
+    const lastDay = new Date(mo.y, mo.m+1, 0).getDate();
+    const to = `${mo.y}-${String(mo.m+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+    const contratos = filteredSoldContracts({mode:'custom', from, to}, [], idx);
+    return { key, label, value: contratos.reduce((s,c)=>s+Number(c.valorContratado||0),0), count: contratos.length };
+  });
+  return { granularity:'mes', points };
+}
 function renderDashboardCharts(){
   const idx = dashboardIdxCache || buildCommercialIndexes();
   const base = filteredBaseLeads([]);
 
   // Evolução das vendas: diária quando o período selecionado é "Este mês", mensal
   // nos demais casos — respeitando o filtro selecionado (mês do ano corrente para
-  // "Este ano", meses do trimestre corrente para "Trimestre"), não sempre
-  // "últimos 6 meses a partir de hoje" independente do filtro escolhido.
-  // Usa CONTRATOS (data de contratação + valor contratado), nunca mais
-  // lead.dataFechamento/lead.valor — evita divergência quando um cliente tem
-  // mais de um contrato.
-  if(filterBar.mode==='mes'){
-    const now = new Date();
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-    const labels = []; const data = [];
-    for(let d=1; d<=daysInMonth; d++){
-      const iso = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      labels.push(String(d));
-      data.push(filteredSoldContracts({mode:'custom', from:iso, to:iso}, [], idx).reduce((s,c)=>s+Number(c.valorContratado||0),0));
-    }
-    newChart('chartEvo','bar', labels, [{label:'Vendido no dia', data, backgroundColor:CHART_PALETTE.blue, borderRadius:4, maxBarThickness:22}], {money:true});
+  // "Este ano", meses do trimestre corrente para "Trimestre", período completo
+  // real para "Todo o período") — nunca uma janela fixa alheia ao filtro
+  // escolhido. Usa CONTRATOS (data de contratação + valor contratado), nunca
+  // mais lead.dataFechamento/lead.valor — evita divergência quando um cliente
+  // tem mais de um contrato. Mesma série (buildSalesTimeSeries) alimenta o
+  // mini-gráfico do hero logo abaixo — computada uma única vez aqui.
+  const salesSeries = buildSalesTimeSeries(idx);
+  const evoLabels = salesSeries.points.map(p=>p.label);
+  const evoValues = salesSeries.points.map(p=>p.value);
+  const evoCounts = salesSeries.points.map(p=>p.count);
+  if(salesSeries.granularity==='dia'){
+    newChart('chartEvo','bar', evoLabels, [{label:'Vendido no dia', data:evoValues, backgroundColor:CHART_PALETTE.blue, borderRadius:4, maxBarThickness:22}], {money:true, counts:evoCounts});
   } else {
-    // Constrói a lista de meses SEM usar Date.setMonth em cima de uma data com
-    // dia > 28 (bug real corrigido: setMonth "estoura" para o mês seguinte
-    // quando o mês de destino tem menos dias que o dia atual — ex.: 31 de
-    // agosto menos 6 meses podia cair em março em vez de fevereiro). Constrói
-    // cada mês diretamente com dia 1, que nunca estoura.
-    const now = new Date();
-    let monthsList; // array de {y, m} (m = 0-indexado)
-    if(filterBar.mode==='ano'){
-      const y = now.getFullYear();
-      monthsList = Array.from({length:12}, (_,m)=>({y, m}));
-    } else if(filterBar.mode==='trimestre'){
-      const y = now.getFullYear();
-      const q = Math.floor(now.getMonth()/3);
-      monthsList = [q*3, q*3+1, q*3+2].map(m=>({y, m}));
-    } else {
-      // 'tudo' / 'custom' / qualquer outro: últimos 6 meses terminando no mês atual.
-      monthsList = [];
-      for(let i=5;i>=0;i--){
-        let mm = now.getMonth()-i, yy = now.getFullYear();
-        while(mm<0){ mm+=12; yy--; }
-        monthsList.push({y:yy, m:mm});
-      }
-    }
-    // Mostra o ano no rótulo quando os meses exibidos cruzam mais de um ano
-    // (só acontece no caso "últimos 6 meses"), para nunca ficar ambíguo qual
-    // mês/ano cada rótulo representa.
-    const cruzaAno = monthsList.some(mo=>mo.y!==monthsList[0].y);
-    const months = monthsList.map(mo=>({
-      y: mo.y, m: mo.m,
-      label: new Date(mo.y, mo.m, 1).toLocaleDateString('pt-BR', {month:'short'}) + (cruzaAno ? '/' + String(mo.y).slice(2) : '')
-    }));
-    // Comparação por string (from/to) evita qualquer risco de fuso horário —
-    // nunca faz new Date(iso).getMonth() em cima de string sem horário.
-    const evoData = months.map(mo=>{
-      const from = `${mo.y}-${String(mo.m+1).padStart(2,'0')}-01`;
-      const lastDay = new Date(mo.y, mo.m+1, 0).getDate();
-      const to = `${mo.y}-${String(mo.m+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
-      return filteredSoldContracts({mode:'custom', from, to}, [], idx).reduce((s,c)=>s+Number(c.valorContratado||0),0);
-    });
-    newChart('chartEvo','line', months.map(m=>m.label), [{label:'Vendido', data:evoData, borderColor:CHART_PALETTE.blue, backgroundColor:CHART_PALETTE.blueSoft, fill:true, tension:.35, pointRadius:3, pointBackgroundColor:CHART_PALETTE.blue, pointBorderColor:'#fff', pointBorderWidth:1.5, borderWidth:2.5}], {money:true});
+    newChart('chartEvo','line', evoLabels, [{label:'Vendido', data:evoValues, borderColor:CHART_PALETTE.blue, backgroundColor:CHART_PALETTE.blueSoft, fill:true, tension:.35, pointRadius:3, pointBackgroundColor:CHART_PALETTE.blue, pointBorderColor:'#fff', pointBorderWidth:1.5, borderWidth:2.5}], {money:true, counts:evoCounts});
   }
 
   // Pipeline por status — barras horizontais (mais legível que rosca),
@@ -6867,10 +7121,22 @@ function renderDashboardCharts(){
   const forecast = commissionForecast12Months();
   newChart('chartComissaoForecast','bar', forecast.labels, [{label:'A receber', data:forecast.data, backgroundColor:CHART_PALETTE.gold, borderRadius:5, maxBarThickness:30}], {money:true});
 
-  // Mini-linhas de tendência (últimos 6 meses) dentro de cada card de KPI
-  // principal — mesma fonte (computeCoreKPIs), nunca duplicando o cálculo.
+  // v36_24 — mini-gráfico de tendência do hero "Crédito vendido — período
+  // selecionado": deixou de ser uma janela fixa de 6 meses (kpiSparklineData)
+  // desconectada do filtro para reutilizar a MESMA salesSeries calculada
+  // acima para o gráfico "Evolução do crédito vendido" — agora reage ao
+  // período selecionado (diário em "Este mês", mensal+ano em "Todo o
+  // período" etc.) e nunca diverge do gráfico maior, pois é a mesma fonte.
+  if(document.getElementById('spark_vendido')){
+    newChart('spark_vendido', salesSeries.granularity==='dia' ? 'bar' : 'line', evoLabels,
+      [{ data:evoValues, borderColor:CHART_PALETTE.blue, backgroundColor: salesSeries.granularity==='dia' ? CHART_PALETTE.blue : CHART_PALETTE.blue+'22', fill: salesSeries.granularity!=='dia', tension:.35, borderWidth:2, borderRadius:2 }],
+      {sparkline:true, money:true, counts:evoCounts});
+  }
+
+  // Mini-linhas de tendência (últimos 6 meses fixos) dentro dos demais cards
+  // de KPI — mesma fonte (computeCoreKPIs), nunca duplicando o cálculo.
+  // "Crédito vendido" saiu desta lista genérica (ver bloco acima).
   const sparkCfg = [
-    {id:'spark_vendido', metric:'vendido', color:CHART_PALETTE.blue, money:true},
     {id:'spark_qtd', metric:'qtdVendas', color:CHART_PALETTE.navy, money:false},
     {id:'spark_ticket', metric:'ticket', color:CHART_PALETTE.purple, money:true},
     {id:'spark_conv', metric:'conversao', color:CHART_PALETTE.green, money:false}
@@ -13871,6 +14137,10 @@ function previewImportDelinquents(parsed){
 function attachViewHandlers(){
   const c = document.getElementById('content');
   c.querySelectorAll('[data-goto]').forEach(el=> el.onclick = ()=>{ currentView = el.dataset.goto; renderNav(); renderView(); });
+  // v36_24 — "Pipeline aberto" deixou de navegar genericamente para Clientes
+  // (data-goto="leads") e agora abre o detalhamento exato das propostas que
+  // compõem o KPI, sem trocar de tela.
+  c.querySelectorAll('[data-open-pipeline]').forEach(el=> el.onclick = ()=> openPipelineDetailModal());
   c.querySelectorAll('[data-openlead]').forEach(el=> el.onclick = ()=> openLeadDetail(el.dataset.openlead, el.dataset.leadtab||undefined));
   // v36_15 — guard ampliado com closest('details') para o menu "···" da
   // linha (novo, ver renderLeadsTable) não disparar também a abertura do
