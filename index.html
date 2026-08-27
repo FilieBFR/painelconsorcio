@@ -444,6 +444,26 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   .comm-expand-row td{padding:10px 12px;}
 }
 
+/* v36_25 — modais de auditoria "Previsto no mês"/"Recebido no mês": resumo
+   (valor + contagem) e tabela de parcelas. Reaproveita .table-wrap/table/
+   .pill-btn/.empty já existentes — só o necessário é novo. */
+.comm-modal-summary{padding:14px 18px;background:var(--brand-blue-soft);border-radius:var(--radius);margin:14px 0 16px;}
+.comm-modal-summary-value{font-size:clamp(22px,3vw,30px);font-weight:800;color:var(--brand-navy);letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+.comm-modal-summary-sub{font-size:12.5px;color:var(--text-secondary);margin-top:4px;}
+.comm-modal-summary-sub b{color:var(--ink);}
+.comm-modal-table th,.comm-modal-table td{white-space:nowrap;}
+.comm-modal-table td[data-label="Cliente"]{white-space:normal;min-width:120px;}
+.comm-modal-tag{display:inline-block;margin-top:2px;font-size:10.5px;font-weight:700;color:var(--gold);background:var(--gold-soft);padding:1px 7px;border-radius:10px;white-space:nowrap;}
+@media (max-width:760px){
+  .comm-modal-table thead{display:none;}
+  .comm-modal-table, .comm-modal-table tbody, .comm-modal-table tr, .comm-modal-table td{display:block;width:100%;}
+  .comm-modal-table tr{border-bottom:1px solid var(--border);padding:10px 0;}
+  .comm-modal-table tr:last-child{border-bottom:0;}
+  .comm-modal-table td{white-space:normal;padding:3px 0;border:0;}
+  .comm-modal-table td[data-label]::before{content:attr(data-label) ": ";font-weight:700;color:var(--text-secondary);}
+  .comm-modal-table td[data-label="Cliente"]::before{display:none;}
+}
+
 /* ===== TELA DASHBOARD (visual premium/executivo) ===== */
 .dash-pill{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:20px;margin-top:9px;}
 .dash-pill.up{background:var(--green-soft);color:var(--green);}
@@ -6947,6 +6967,25 @@ function newChart(id, type, labels, datasets, opts){
     }
   });
 }
+// v36_24 — redimensionamento explícito dos gráficos ao redimensionar a
+// janela. Medição real mostrou que Chart.js#resize() numa instância já
+// existente pode NÃO remedir corretamente o container em certos cenários de
+// redimensionamento (o canvas "congela" no tamanho antigo, inline style
+// width/height desatualizado) — item explicitamente pedido para nunca
+// acontecer ("manter tamanho antigo após resize"). Testado e confirmado:
+// destruir e recriar os gráficos da view atual (mesma função já chamada em
+// attachViewHandlers logo após cada renderView) sempre mede o container
+// corretamente, então este listener reaproveita exatamente essas mesmas
+// funções — nenhuma lógica de medição nova. Debounced (150ms) para não
+// recriar a cada pixel durante um arrasto contínuo de janela.
+let __chartResizeTimer = null;
+window.addEventListener('resize', ()=>{
+  clearTimeout(__chartResizeTimer);
+  __chartResizeTimer = setTimeout(()=>{
+    if(currentView==='dashboard') renderDashboardCharts();
+    else if(currentView==='comissoes') renderCommissoesChart();
+  }, 150);
+});
 /** Versão compacta de valores monetários para eixos de gráfico (R$ 12,5 mil /
  *  R$ 1,2 mi) — evita que rótulos de eixo estourem o espaço disponível. */
 function fmtMoneyCompact(v){
@@ -12481,17 +12520,102 @@ function commissaoSituacao(cm){
 function commissaoProximaParcela(cm){
   return cm.parcelas.find(p=>p.status!=='Recebida') || null;
 }
-/** v36_15 — NOVO cálculo derivado: "recebido NO MÊS" (por dataRecebida), que
- *  não existia antes (o totRecebido original em viewComissoes é global, sem
- *  recorte de mês). Soma valorRecebido||valor de parcelas Recebida cuja
- *  dataRecebida cai no mês/ano atual. */
-function commissaoRecebidoNoMes(cm){
+/** v36_25 — CORREÇÃO DE SEMÂNTICA FINANCEIRA (causa raiz documentada no
+ *  relatório desta rodada): "Previsto no mês" somava TODAS as parcelas com
+ *  dataPrevista no mês atual, inclusive as já marcadas como Recebida — o
+ *  card não representava "o que ainda falta receber", e sim "o que estava
+ *  originalmente programado", misturando competência com o que já virou
+ *  caixa. Esta função é agora a ÚNICA fonte de verdade do predicado —
+ *  reaproveitada pelo KPI (via commissionParcelasPendingThisMonthRows
+ *  abaixo), pelo quick filter "esteMes" (comissaoContratoMatchesSituacao) e
+ *  pela coluna "Este mês" de comissaoPorAdministradora — nenhum dos quatro
+ *  lugares recalcula a condição de forma independente. Nunca toca
+ *  cm.prestamista.parcelas — comissão de prestamista permanece inteiramente
+ *  separada, como já era. */
+function isCommissionParcelaPendingThisMonth(p){
+  if(p.status==='Recebida') return false;
+  // v36_25 — bug real encontrado durante os testes desta rodada (não citado
+  // no pedido original, mas necessário para o predicado funcionar
+  // corretamente): `new Date('YYYY-MM-DD')` sem horário é interpretado como
+  // meia-noite UTC — num fuso atrás de UTC (ex.: America/Sao_Paulo, UTC-3),
+  // isso desloca o dia 1 de qualquer mês para o dia 31 do mês ANTERIOR em
+  // horário local, fazendo getMonth() devolver o mês errado (reproduzido e
+  // confirmado: '2026-08-01' virava Julho). O restante do arquivo já evita
+  // isso em vários pontos (ex.: getComparisonRange) anexando 'T00:00:00'
+  // para forçar interpretação em horário local — mesma correção aplicada
+  // aqui, já que o predicado precisa acertar TODOS os dias do mês, inclusive
+  // o dia 1.
+  const d = new Date(p.dataPrevista+'T00:00:00');
   const now = new Date();
-  return cm.parcelas.filter(p=>{
-    if(p.status!=='Recebida' || !p.dataRecebida) return false;
-    const d = new Date(p.dataRecebida);
-    return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
-  }).reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
+  return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
+}
+/** v36_15 — predicado "recebido NO MÊS" (por dataRecebida): status Recebida
+ *  e dataRecebida cai no mês/ano atual — fonte única também reaproveitada
+ *  pelo modal de detalhamento (commissionParcelasReceivedThisMonthRows) e
+ *  pelo cálculo do KPI (viewComissoes), nunca reimplementada em cada lugar.
+ *  v36_25 — extraída para função própria por simetria com
+ *  isCommissionParcelaPendingThisMonth acima — mesma correção de fuso
+ *  horário aplicada aqui (ver comentário completo na função irmã acima):
+ *  `new Date(p.dataRecebida)` sem 'T00:00:00' deslocava o dia 1 de qualquer
+ *  mês para o mês anterior em fusos atrás de UTC. Fora isso, nenhuma mudança
+ *  de comportamento (já era exatamente esta condição; antes vivia embutida
+ *  em commissaoRecebidoNoMes(cm), agora removida por ter ficado sem uso
+ *  próprio depois que viewComissoes passou a somar via
+ *  commissionParcelasReceivedThisMonthRows). */
+function isCommissionParcelaReceivedThisMonth(p){
+  if(p.status!=='Recebida' || !p.dataRecebida) return false;
+  const d = new Date(p.dataRecebida+'T00:00:00');
+  const now = new Date();
+  return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
+}
+/** v36_25 — lista achatada {cm, contract, lead, parcela} de todas as
+ *  parcelas da comissão PRINCIPAL (nunca prestamista) que atendem
+ *  isCommissionParcelaPendingThisMonth, para os contratos já filtrados
+ *  (mesma lista que alimenta o resto da tela). Fonte única do KPI "Previsto
+ *  no mês" (soma de parcela.valor) e do modal de detalhamento (as próprias
+ *  linhas) — a soma das linhas do modal é sempre, por construção, igual ao
+ *  KPI. */
+function commissionParcelasPendingThisMonthRows(contratos, leadsById){
+  const rows = [];
+  contratos.forEach(c=>{
+    const cm = DB.commissionMeta[c.id];
+    if(!cm) return;
+    cm.parcelas.forEach(p=>{
+      if(isCommissionParcelaPendingThisMonth(p)) rows.push({cm, contract:c, lead:leadsById.get(c.leadId), parcela:p});
+    });
+  });
+  return rows;
+}
+/** v36_25 — equivalente para "Recebido no mês": lista achatada das parcelas
+ *  que atendem isCommissionParcelaReceivedThisMonth — mesmo predicado usado
+ *  para somar o KPI em viewComissoes e para popular o modal de
+ *  detalhamento — nunca podem divergir. */
+function commissionParcelasReceivedThisMonthRows(contratos, leadsById){
+  const rows = [];
+  contratos.forEach(c=>{
+    const cm = DB.commissionMeta[c.id];
+    if(!cm) return;
+    cm.parcelas.forEach(p=>{
+      if(isCommissionParcelaReceivedThisMonth(p)) rows.push({cm, contract:c, lead:leadsById.get(c.leadId), parcela:p});
+    });
+  });
+  return rows;
+}
+/** v36_25 — mesma sequência de filtros (administradora → assessor → busca →
+ *  situação) que viewComissoes já aplicava inline, extraída para ser
+ *  reaproveitada também pelos modais de detalhamento de "Previsto no mês" e
+ *  "Recebido no mês" — garante que eles operem sobre EXATAMENTE a mesma
+ *  lista de contratos que gerou o KPI exibido na tela (mesmas dimensões:
+ *  administradora/assessor/busca/situação), nunca uma lista recalculada de
+ *  forma independente. */
+function getComissoesContratosFiltrados(){
+  const leadsById = new Map(DB.leads.map(l=>[l.id,l]));
+  let contratos = DB.contracts.filter(c=>DB.commissionMeta[c.id]);
+  if(comissoesFilters.administradora!=='Todas') contratos = contratos.filter(c=>resolveCommissionAdministradora(DB.commissionMeta[c.id], c)===comissoesFilters.administradora);
+  if(comissoesFilters.assessor!=='Todos') contratos = contratos.filter(c=>{ const lead=leadsById.get(c.leadId); return lead && lead.responsavel===comissoesFilters.assessor; });
+  if(comissoesFilters.busca) contratos = contratos.filter(c=> comissaoMatchesSearch(c, leadsById.get(c.leadId), comissoesFilters.busca));
+  if(comissoesFilters.situacao!=='Todos') contratos = contratos.filter(c=> comissaoContratoMatchesSituacao(DB.commissionMeta[c.id], comissoesFilters.situacao));
+  return contratos;
 }
 /** Contrato atende ao filtro rápido de "situação" (Todos/aReceber/esteMes/
  *  atrasadas/recebidas) — combinações das MESMAS condições já usadas nos
@@ -12506,11 +12630,15 @@ function commissaoRecebidoNoMes(cm){
 function comissaoContratoMatchesSituacao(cm, situacao){
   if(situacao==='Todos') return true;
   const hoje = todayISO();
-  const now = new Date();
   if(situacao==='aReceber') return cm.parcelas.some(p=>p.status!=='Recebida');
   if(situacao==='atrasadas') return cm.parcelas.some(p=>p.status!=='Recebida' && p.dataPrevista<hoje);
   if(situacao==='recebidas') return cm.parcelas.some(p=>p.status==='Recebida'); // definição A — ver comentário acima
-  if(situacao==='esteMes') return cm.parcelas.some(p=>{ const d=new Date(p.dataPrevista); return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear(); });
+  // v36_25 — mesma fonte de verdade do KPI "Previsto no mês" (ver
+  // isCommissionParcelaPendingThisMonth): um contrato só entra neste quick
+  // filter se tiver ao menos uma parcela AINDA NÃO recebida prevista para o
+  // mês atual — antes, uma parcela já recebida no mês bastava para o
+  // contrato aparecer aqui, divergindo do que o KPI (já corrigido) soma.
+  if(situacao==='esteMes') return cm.parcelas.some(isCommissionParcelaPendingThisMonth);
   return true;
 }
 /** Busca por cliente ou nº de contrato — mesma normalização (normalizeStr)
@@ -12562,14 +12690,15 @@ function comissaoPorAdministradora(contratosComComissao){
     const cm = DB.commissionMeta[c.id];
     const admin = resolveCommissionAdministradora(cm, c) || 'Não informado';
     if(!grupos[admin]) grupos[admin] = {aReceber:0, esteMes:0, atrasado:0};
-    const now = new Date();
     cm.parcelas.forEach(p=>{
       if(p.status!=='Recebida'){
         grupos[admin].aReceber += p.valor;
         if(p.dataPrevista<hoje) grupos[admin].atrasado += p.valor;
       }
-      const d = new Date(p.dataPrevista);
-      if(d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear()) grupos[admin].esteMes += p.valor;
+      // v36_25 — mesma fonte de verdade do KPI "Previsto no mês": esta coluna
+      // "Este mês" incluía parcelas já recebidas (mesmo bug do KPI, corrigido
+      // aqui com o mesmo predicado).
+      if(isCommissionParcelaPendingThisMonth(p)) grupos[admin].esteMes += p.valor;
     });
   });
   return Object.entries(grupos).map(([nome,v])=>({nome, ...v})).sort((a,b)=>b.aReceber-a.aReceber);
@@ -12637,26 +12766,21 @@ function viewComissoes(){
   // Comissão agora é por CONTRATO (item 3) — um cliente pode ter vários
   // contratos, cada um com sua própria linha/comissão nesta tela.
   const leadsById = new Map(DB.leads.map(l=>[l.id,l]));
-  let contratosComComissao = DB.contracts.filter(c=>DB.commissionMeta[c.id]);
+  // v36_25 — cascata de filtros (administradora → assessor → busca →
+  // situação) extraída para getComissoesContratosFiltrados(), reaproveitada
+  // também pelos modais de detalhamento — nenhuma mudança de comportamento
+  // aqui, só eliminação da duplicação.
+  let contratosComComissao = getComissoesContratosFiltrados();
   const contratosSemComissao = DB.contracts.filter(c=>!DB.commissionMeta[c.id]);
-  if(comissoesFilters.administradora!=='Todas') contratosComComissao = contratosComComissao.filter(c=>resolveCommissionAdministradora(DB.commissionMeta[c.id], c)===comissoesFilters.administradora);
-  if(comissoesFilters.assessor!=='Todos') contratosComComissao = contratosComComissao.filter(c=>{ const lead=leadsById.get(c.leadId); return lead && lead.responsavel===comissoesFilters.assessor; });
-  // v36_15 — busca (cliente/contrato) e situação (quick filter) são novos,
-  // aplicados sobre o mesmo contratosComComissao já filtrado por
-  // administradora/assessor acima — nenhuma condição substitui outra.
-  if(comissoesFilters.busca) contratosComComissao = contratosComComissao.filter(c=> comissaoMatchesSearch(c, leadsById.get(c.leadId), comissoesFilters.busca));
-  if(comissoesFilters.situacao!=='Todos') contratosComComissao = contratosComComissao.filter(c=> comissaoContratoMatchesSituacao(DB.commissionMeta[c.id], comissoesFilters.situacao));
-  let totFuturas=0,totAtrasadas=0,totAtrasadasCount=0,totRecebido=0,totRecebidoNoMes=0,totPendente=0,totAjustadas=0;
+  let totFuturas=0,totAtrasadas=0,totAtrasadasCount=0,totRecebido=0,totPendente=0,totAjustadas=0;
   // v29 — totais SEPARADOS de prestamista (item 1): nunca somados aos totais
   // acima (que continuam representando só a comissão principal) — só
   // combinados no indicador explícito "Total consolidado".
   let totPrincipalPrevisto=0, totPrestamistaPrevisto=0, totPrestamistaRecebido=0;
-  const now = new Date();
   contratosComComissao.forEach(c=>{
     const cm = DB.commissionMeta[c.id];
     if(cm.ajustadaManualmente) totAjustadas++;
     totPrincipalPrevisto += cm.totalPrevisto||0;
-    totRecebidoNoMes += commissaoRecebidoNoMes(cm);
     cm.parcelas.forEach(p=>{
       if(comissoesFilters.competencia && p.dataPrevista.slice(0,7)!==comissoesFilters.competencia) return;
       // "Divergência" (valor recebido != valor previsto) deixou de ser sinalizada
@@ -12678,20 +12802,32 @@ function viewComissoes(){
   // parcelas previstas para o mês atual (o filtro cortava tudo antes de
   // chegar na checagem "é o mês atual?"). O rótulo promete "mês atual"; ele
   // precisa SEMPRE representar o mês atual, nunca ficar sujeito a um filtro
-  // de outro mês por baixo. Por isso "Previsto no mês" agora é calculado
-  // numa passada PRÓPRIA, fora do loop acima — continua respeitando
+  // de outro mês por baixo. Por isso "Previsto no mês" é calculado numa
+  // passada PRÓPRIA, fora do loop acima — continua respeitando
   // administradora/assessor/busca/situação (mesma lista contratosComComissao),
-  // só não é mais afetado por competência (documentado no tooltip). Nenhuma
-  // fórmula de negócio mudou — é a mesma soma de sempre, só sem a
-  // interferência acidental de um filtro que não deveria afetá-la.
-  let totMes = 0;
-  contratosComComissao.forEach(c=>{
-    const cm = DB.commissionMeta[c.id];
-    cm.parcelas.forEach(p=>{
-      const d = new Date(p.dataPrevista);
-      if(d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear()) totMes += p.valor;
-    });
-  });
+  // só não é mais afetado por competência (documentado no tooltip).
+  // v36_25 — CORREÇÃO DE SEMÂNTICA (causa raiz documentada no relatório desta
+  // rodada): a passada somava TODAS as parcelas do mês, inclusive as já
+  // Recebida — "Previsto no mês" e "Recebido no mês" podiam contar a MESMA
+  // parcela duas vezes, e o card não representava "o que ainda falta
+  // receber". Agora usa commissionParcelasPendingThisMonthRows (mesmo
+  // predicado do quick filter "esteMes" e da coluna "Este mês" de
+  // comissaoPorAdministradora — fonte única, ver comentário na função) —
+  // uma parcela Recebida nunca mais compõe este valor. As linhas retornadas
+  // também alimentam o modal de detalhamento (soma das linhas = KPI, sempre,
+  // por construção).
+  const parcelasPrevistasMes = commissionParcelasPendingThisMonthRows(contratosComComissao, leadsById);
+  const totMes = parcelasPrevistasMes.reduce((s,r)=>s+r.parcela.valor,0);
+  // v36_25 — mesmo tratamento para "Recebido no mês": antes acumulado dentro
+  // do loop principal via commissaoRecebidoNoMes(cm) (que somava por
+  // contrato, sem preservar as linhas individuais); agora numa passada
+  // própria com commissionParcelasReceivedThisMonthRows, que devolve as
+  // linhas — usadas tanto para a soma quanto para alimentar o modal de
+  // detalhamento (soma das linhas = KPI, sempre, por construção). Mesmo
+  // predicado (isCommissionParcelaReceivedThisMonth) que já era usado por
+  // commissaoRecebidoNoMes — nenhuma mudança de valor, só de forma.
+  const parcelasRecebidasMes = commissionParcelasReceivedThisMonthRows(contratosComComissao, leadsById);
+  const totRecebidoNoMes = parcelasRecebidasMes.reduce((s,r)=>s+(r.parcela.valorRecebido||r.parcela.valor),0);
   const proximosRecebimentos = comissaoProximosRecebimentos(contratosComComissao, 6);
   const cronograma = commissionScheduleForComissoesScreen();
 
@@ -12707,11 +12843,14 @@ function viewComissoes(){
   const tooltipAReceber = comissoesFilters.competencia
     ? 'Parcelas de comissão ainda não marcadas como recebidas, com vencimento previsto na competência selecionada.'
     : 'Parcelas de comissão ainda não marcadas como recebidas.';
-  const tooltipEsteMes = 'Valor total das parcelas com vencimento previsto no mês atual, independentemente de já terem sido recebidas. Representa competência (dataPrevista), sempre do mês corrente — não é afetado pelo filtro de competência selecionado abaixo.';
+  // v36_25 — texto corrigido para refletir a fórmula real (ver
+  // isCommissionParcelaPendingThisMonth): já não é mais verdade que inclui
+  // parcelas recebidas — essa era justamente a regra removida nesta rodada.
+  const tooltipEsteMes = 'Parcelas ainda NÃO recebidas com vencimento previsto no mês atual — assim que uma parcela é marcada como recebida, ela sai daqui e passa a contar em "Recebido no mês". Representa competência (dataPrevista), sempre do mês corrente — não é afetado pelo filtro de competência selecionado abaixo. Clique para ver as parcelas.';
   const tooltipAtrasado = comissoesFilters.competencia
     ? 'Parcelas não recebidas com vencimento anterior à data atual, dentro da competência selecionada.'
     : 'Parcelas não recebidas com vencimento anterior à data atual.';
-  const tooltipRecebidoMes = 'Parcelas efetivamente recebidas com data de recebimento no mês atual. Representa caixa (dataRecebida) — não é afetado pelo filtro de competência.';
+  const tooltipRecebidoMes = 'Parcelas efetivamente recebidas com data de recebimento no mês atual. Representa caixa (dataRecebida) — não é afetado pelo filtro de competência. Uma parcela cuja competência (dataPrevista) é de um mês anterior aparece aqui se foi recebida agora — identificado no detalhamento. Clique para ver os recebimentos.';
 
   return `
   <div class="comm-header">
@@ -12726,18 +12865,20 @@ function viewComissoes(){
       <div class="comm-hero-label">A receber ⓘ</div>
       <div class="comm-hero-value">${fmtMoney(totPendente)}</div>
     </div>
-    <div class="comm-hero-item" title="${escapeHtml(tooltipEsteMes)}">
+    <div class="comm-hero-item clickable" id="commHeroPrevistoMes" tabindex="0" title="${escapeHtml(tooltipEsteMes)}">
       <div class="comm-hero-label">Previsto no mês ⓘ</div>
       <div class="comm-hero-value">${fmtMoney(totMes)}</div>
+      <div class="comm-hero-sub">${parcelasPrevistasMes.length} parcela${parcelasPrevistasMes.length===1?'':'s'}</div>
     </div>
     <div class="comm-hero-item ${totAtrasadasCount?'clickable crit':''}" ${totAtrasadasCount?'id="commHeroAtrasado" tabindex="0"':''} title="${escapeHtml(tooltipAtrasado)}">
       <div class="comm-hero-label">Atrasado ⓘ</div>
       <div class="comm-hero-value">${fmtMoney(totAtrasadas)}</div>
       ${totAtrasadasCount? `<div class="comm-hero-sub">${totAtrasadasCount} parcela${totAtrasadasCount===1?'':'s'}</div>` : ''}
     </div>
-    <div class="comm-hero-item" title="${escapeHtml(tooltipRecebidoMes)}">
+    <div class="comm-hero-item clickable" id="commHeroRecebidoMes" tabindex="0" title="${escapeHtml(tooltipRecebidoMes)}">
       <div class="comm-hero-label">Recebido no mês ⓘ</div>
       <div class="comm-hero-value" style="color:var(--green);">${fmtMoney(totRecebidoNoMes)}</div>
+      <div class="comm-hero-sub">${parcelasRecebidasMes.length} recebimento${parcelasRecebidasMes.length===1?'':'s'}</div>
     </div>
   </div>
   <p class="small-note comm-secondary-line">Futuras ${fmtMoney(totFuturas)} · Recebido${comissoesFilters.competencia?' (competência selecionada)':' (total, todas as competências)'} ${fmtMoney(totRecebido)} · Ajustadas manualmente ${totAjustadas} · Prestamista ${fmtMoney(totPrestamistaPrevisto)} · Total consolidado (principal + prestamista) ${fmtMoney(totPrincipalPrevisto+totPrestamistaPrevisto)}</p>
@@ -12827,6 +12968,106 @@ function viewComissoes(){
   <tbody>${contratosSemComissao.map(c=>{ const lead=leadsById.get(c.leadId); return `<tr><td>${lead?escapeHtml(lead.nome):'—'}</td><td>${escapeHtml(c.numero)}</td><td>${displayAdmin(resolveContractAdministradora(c))}</td><td><button class="link-btn" data-manualcomm="${c.id}">Configurar comissão</button></td></tr>`; }).join('')}</tbody></table></div>` : ''}
   `;
 }
+
+/* ================= MODAIS DE AUDITORIA — "PREVISTO NO MÊS" / "RECEBIDO NO
+   MÊS" (v36_25) =================
+   Reaproveitam integralmente openModal()/closeModalFn(), a classe .modal.xwide
+   e .table-wrap/table já existentes — nenhuma arquitetura paralela. Ambos
+   recalculam a lista de contratos (getComissoesContratosFiltrados) e as
+   linhas (commissionParcelasPendingThisMonthRows /
+   commissionParcelasReceivedThisMonthRows) no momento do clique, com a MESMA
+   fonte que já produziu o valor exibido no card — a soma das linhas do modal
+   é sempre exatamente igual ao KPI, por construção, nunca por reconciliação
+   manual. */
+function openCommissionForecastModal(){
+  renderCommissionForecastModal();
+  openModal();
+}
+function renderCommissionForecastModal(){
+  const leadsById = new Map(DB.leads.map(l=>[l.id,l]));
+  const contratos = getComissoesContratosFiltrados();
+  const rows = commissionParcelasPendingThisMonthRows(contratos, leadsById);
+  const total = rows.reduce((s,r)=>s+r.parcela.valor,0);
+  const sorted = rows.slice().sort((a,b)=> (a.parcela.dataPrevista||'').localeCompare(b.parcela.dataPrevista||''));
+  const hoje = todayISO();
+  document.getElementById('modalBody').outerHTML = `<div class="modal xwide" id="modalBody"></div>`;
+  document.getElementById('modalBody').innerHTML = `
+    <h2>Previsto no mês</h2>
+    <div class="comm-modal-summary">
+      <div class="comm-modal-summary-value">${fmtMoney(total)}</div>
+      <div class="comm-modal-summary-sub">previsto para receber no mês · <b>${rows.length}</b> parcela${rows.length===1?'':'s'}</div>
+    </div>
+    ${rows.length? `<div class="table-wrap comm-modal-table-wrap"><table class="comm-modal-table">
+      <thead><tr><th>Cliente</th><th>Contrato</th><th>Administradora</th><th>Assessor</th><th>Nº</th><th>Data prevista</th><th class="num">Valor previsto</th><th>Status</th></tr></thead>
+      <tbody>${sorted.map(r=>{
+        const lead = r.lead, p = r.parcela;
+        const admin = resolveCommissionAdministradora(r.cm, r.contract);
+        const atrasada = p.dataPrevista<hoje;
+        return `<tr>
+          <td data-label="Cliente"><b>${lead?escapeHtml(lead.nome):'—'}</b></td>
+          <td data-label="Contrato">${escapeHtml(r.contract.numero)}</td>
+          <td data-label="Administradora">${displayAdmin(admin)}</td>
+          <td data-label="Assessor">${lead&&lead.responsavel?escapeHtml(lead.responsavel):'—'}</td>
+          <td data-label="Nº">${p.n}</td>
+          <td data-label="Data prevista">${fmtDate(p.dataPrevista)}</td>
+          <td data-label="Valor previsto" class="num">${fmtMoney(p.valor)}</td>
+          <td data-label="Status"><span class="badge ${atrasada?'b-perdido':'b-novo'}">${atrasada?'Atrasada':'Futura'}</span></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>` : `<div class="empty">Nenhuma parcela prevista e ainda não recebida para o mês atual com os filtros selecionados.</div>`}
+    <div class="modal-actions"><button class="pill-btn ghost" id="commModalClose">Fechar</button></div>
+  `;
+  document.getElementById('commModalClose').onclick = closeModalFn;
+}
+function openCommissionReceivedModal(){
+  renderCommissionReceivedModal();
+  openModal();
+}
+function renderCommissionReceivedModal(){
+  const leadsById = new Map(DB.leads.map(l=>[l.id,l]));
+  const contratos = getComissoesContratosFiltrados();
+  const rows = commissionParcelasReceivedThisMonthRows(contratos, leadsById);
+  const total = rows.reduce((s,r)=>s+(r.parcela.valorRecebido||r.parcela.valor),0);
+  const sorted = rows.slice().sort((a,b)=> (a.parcela.dataRecebida||'').localeCompare(b.parcela.dataRecebida||''));
+  const now = new Date();
+  document.getElementById('modalBody').outerHTML = `<div class="modal xwide" id="modalBody"></div>`;
+  document.getElementById('modalBody').innerHTML = `
+    <h2>Recebido no mês</h2>
+    <div class="comm-modal-summary">
+      <div class="comm-modal-summary-value" style="color:var(--green);">${fmtMoney(total)}</div>
+      <div class="comm-modal-summary-sub">recebido no mês · <b>${rows.length}</b> recebimento${rows.length===1?'':'s'}</div>
+    </div>
+    ${rows.length? `<div class="table-wrap comm-modal-table-wrap"><table class="comm-modal-table">
+      <thead><tr><th>Cliente</th><th>Contrato</th><th>Administradora</th><th>Assessor</th><th>Nº</th><th>Data prevista</th><th>Data recebida</th><th class="num">Valor previsto</th><th class="num">Valor recebido</th></tr></thead>
+      <tbody>${sorted.map(r=>{
+        const lead = r.lead, p = r.parcela;
+        const admin = resolveCommissionAdministradora(r.cm, r.contract);
+        // v36_25 — item 6 do pedido: identifica discretamente um recebimento
+        // de competência anterior (dataPrevista de um mês/ano diferente do
+        // mês/ano em que caiu dataRecebida) — só compara dois campos já
+        // existentes da própria linha, nenhum cálculo novo. 'T00:00:00'
+        // evita o mesmo deslocamento de fuso horário corrigido em
+        // isCommissionParcelaPendingThisMonth (ver comentário lá).
+        const dp = new Date(p.dataPrevista+'T00:00:00');
+        const competenciaAnterior = dp.getMonth()!==now.getMonth() || dp.getFullYear()!==now.getFullYear();
+        return `<tr>
+          <td data-label="Cliente"><b>${lead?escapeHtml(lead.nome):'—'}</b></td>
+          <td data-label="Contrato">${escapeHtml(r.contract.numero)}</td>
+          <td data-label="Administradora">${displayAdmin(admin)}</td>
+          <td data-label="Assessor">${lead&&lead.responsavel?escapeHtml(lead.responsavel):'—'}</td>
+          <td data-label="Nº">${p.n}</td>
+          <td data-label="Data prevista">${fmtDate(p.dataPrevista)}${competenciaAnterior?'<div class="comm-modal-tag">Competência anterior</div>':''}</td>
+          <td data-label="Data recebida">${fmtDate(p.dataRecebida)}</td>
+          <td data-label="Valor previsto" class="num">${fmtMoney(p.valor)}</td>
+          <td data-label="Valor recebido" class="num">${fmtMoney(p.valorRecebido||p.valor)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>` : `<div class="empty">Nenhum recebimento no mês atual com os filtros selecionados.</div>`}
+    <div class="modal-actions"><button class="pill-btn ghost" id="commModalClose">Fechar</button></div>
+  `;
+  document.getElementById('commModalClose').onclick = closeModalFn;
+}
+
 /** Comissão DESTINADA AO ASSESSOR — conceito separado da comissão recebida da
  *  administradora. O percentual nunca tem padrão assumido silenciosamente: se o
  *  assessor tem um % padrão cadastrado, ele só aparece como sugestão pré-preenchida,
@@ -14365,6 +14606,20 @@ function attachViewHandlers(){
   if(commHeroAtrasado){
     commHeroAtrasado.onclick=()=>{ comissoesFilters.situacao='atrasadas'; commissionsPageLimit=100; renderView(); };
     commHeroAtrasado.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); commHeroAtrasado.click(); } });
+  }
+  // v36_25 — "Previsto no mês"/"Recebido no mês" viram cards auditáveis: ao
+  // clicar, abrem o detalhamento exato das parcelas que compõem o valor —
+  // nunca mudam de tela nem alteram comissoesFilters (diferente do card
+  // "Atrasado" acima, que é um quick filter).
+  const commHeroPrevisto=document.getElementById('commHeroPrevistoMes');
+  if(commHeroPrevisto){
+    commHeroPrevisto.onclick=()=> openCommissionForecastModal();
+    commHeroPrevisto.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); commHeroPrevisto.click(); } });
+  }
+  const commHeroRecebido=document.getElementById('commHeroRecebidoMes');
+  if(commHeroRecebido){
+    commHeroRecebido.onclick=()=> openCommissionReceivedModal();
+    commHeroRecebido.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); commHeroRecebido.click(); } });
   }
   c.querySelectorAll('[data-commexpand]').forEach(btn=> btn.onclick=()=>{
     const id = btn.dataset.commexpand;
