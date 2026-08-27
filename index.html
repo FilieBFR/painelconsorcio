@@ -5436,7 +5436,22 @@ function getPendencias(){
   const assembleiasProximas = DB.assemblies.filter(a=> a.data>=todayISO() && a.data<=addDays(todayISO(),7));
   const cobrancaHoje = DB.delinquents.filter(d=>d.proximaCobranca===todayISO() && d.status!=='Regularizado' && d.status!=='Cancelado');
   const semProximaAcao = active.filter(l=>!l.nextAction || !l.nextAction.data);
-  const tarefasAtrasadas = DB.tasks.filter(t=>!t.done && t.data<todayISO());
+  // v36_26 — CORREÇÃO: uma assembleia é um EVENTO datado, não uma pendência
+  // comercial acionável — depois que sua data passa, ela nunca deveria
+  // inflar "tarefas atrasadas". A tarefa em DB.tasks criada por
+  // createAssemblyTask (lembrete de aviso de lance) é só um espelho da
+  // assembleia, marcada com `assemblyId` (nunca `regraAuto` — ver
+  // INICIO_TASK_MIRROR_REGRAS/buildPriorityFeed logo abaixo, que já fazia
+  // essa mesma exclusão só na "Prioridades" do Início). O bug real: esta
+  // fonte — consumida também pelo badge "Tarefas atrasadas" do Início
+  // (pend.tarefasAtrasadas.length) e pela Agenda (renderAgendaList, que
+  // recalcula "atrasado" de forma independente, corrigido lá também) — não
+  // tinha essa exclusão, então uma assembleia passada aparecia como tarefa
+  // atrasada em ambos. Excluída aqui na FONTE, não só na lista visual, para
+  // nunca divergir entre os lugares que a consomem. Uma tarefa comercial
+  // comum (assemblyId ausente) continua contando normalmente — nada muda
+  // para o caso já coberto pelo item 10 do pedido (tarefa vencida real).
+  const tarefasAtrasadas = DB.tasks.filter(t=>!t.done && t.data<todayISO() && !t.assemblyId);
   const proximasTarefas = DB.tasks.filter(t=>!t.done && t.data>todayISO() && t.data<=addDays(todayISO(),30)).sort((a,b)=>(a.data+a.hora).localeCompare(b.data+b.hora));
   const posVendaPendente = DB.quotas.filter(q=>!['Concluído','Bem adquirido'].includes(q.posVendaStage));
   const comissoesAReceber = Object.values(DB.commissionMeta).flatMap(cm=>cm.parcelas.filter(p=>p.status==='Pendente' && p.dataPrevista<=addDays(todayISO(),7)));
@@ -11560,7 +11575,14 @@ function renderAgendaList(){
     </label>
   </div>
   <div class="table-wrap"><table><thead><tr><th></th><th>Data</th><th>Tipo</th><th>Título</th><th>Cliente</th><th></th></tr></thead>
-  <tbody>${list.length? list.map(t=>{ const lead=leadsById.get(t.clientId); const late=!t.done && t.data<todayISO();
+  <tbody>${list.length? list.map(t=>{ const lead=leadsById.get(t.clientId);
+    // v36_26 — mesma correção de getPendencias() (ver comentário lá): uma
+    // tarefa de aviso de assembleia (assemblyId) é um EVENTO passado, não
+    // uma pendência comercial — nunca deve ganhar o estilo/rótulo
+    // "(atrasado)" só porque sua data já passou. A linha continua aparecendo
+    // normalmente na lista (nada é escondido/apagado) — só deixa de ser
+    // classificada/exibida como atrasada.
+    const late=!t.done && t.data<todayISO() && !t.assemblyId;
     return `<tr style="${t.done?'opacity:.55':''}"><td>${t.done? '<span class="badge b-fechado" style="font-size:10px;">✓ Concluída</span>' : `<button class="pill-btn sm ghost" data-completetask="${t.id}">Concluir</button>`}</td>
     <td style="${late?'color:var(--red);font-weight:600':''}">${fmtDate(t.data)} ${t.hora}${late?' (atrasado)':''}</td>
     <td>${escapeHtml(t.kind)} · ${escapeHtml(t.tipo||'')}</td><td><button class="link-btn" data-opentask="${t.id}" style="${t.done?'text-decoration:line-through;color:var(--text-secondary);':''}">${escapeHtml(t.titulo)}</button></td><td>${lead?escapeHtml(lead.nome):'—'}</td>
