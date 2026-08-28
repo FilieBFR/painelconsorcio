@@ -189,6 +189,14 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .pipeline-sort-btn.active{background:var(--brand-navy);border-color:var(--brand-navy);color:#fff;}
 .pipeline-modal-table th,.pipeline-modal-table td{white-space:nowrap;}
 .pipeline-modal-table td[data-label="Cliente"]{white-space:normal;min-width:120px;}
+/* v36_28 — nome do cliente clicável no modal "Pipeline aberto": mesma ação
+   do botão "Cliente" já existente (data-pipeact="cliente"), só um segundo
+   ponto de clique mais natural/descoberto — discreto por padrão (herda o
+   peso/cor do texto em negrito já usado), só ganha sublinhado+cor de link
+   no hover/foco, nunca parece um botão genérico. */
+.pipeline-client-name{background:none;border:none;padding:0;margin:0;font:inherit;font-weight:700;color:var(--ink);cursor:pointer;text-align:left;}
+.pipeline-client-name:hover{color:var(--brand-blue);text-decoration:underline;}
+.pipeline-client-name:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;border-radius:2px;}
 .pipeline-modal-actions-cell{display:flex;gap:10px;flex-wrap:wrap;}
 .pipeline-modal-actions-cell .link-btn{font-size:12px;}
 @media (max-width:760px){
@@ -526,7 +534,13 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 @media (max-width:800px){ .dashx-prod-panel{grid-column:auto;} }
 .dashx-hero-eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);font-weight:700;}
 .dashx-hero-figure{font-size:clamp(28px,3.6vw,46px);font-weight:800;color:var(--brand-navy);letter-spacing:-.02em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;line-height:1.05;margin-top:6px;overflow-wrap:anywhere;}
-.dashx-hero-spark{height:46px;margin-top:10px;}
+/* v36_28 — mini gráfico de tendência do hero: altura maior que o antigo
+   sparkline genérico (46px) para dar respiro real à linha em vez de espremer
+   a série inteira numa tira fina — ainda claramente secundário ao valor
+   principal (dashx-hero-figure), nunca competindo com ele. position:relative
+   para o estado vazio (empty) poder se centralizar por cima do canvas. */
+.dashx-hero-spark{height:112px;margin-top:10px;position:relative;}
+.dashx-hero-spark-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:var(--ink-soft);text-align:center;}
 .dashx-hero-foot{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary);}
 .dashx-hero-foot b{color:var(--ink);font-variant-numeric:tabular-nums;}
 
@@ -596,6 +610,7 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   .dashx-hero-panel,.dashx-goal-panel{padding:15px 16px;}
   .dashx-eff-card{padding:13px 14px;}
   .dashx-comm-stats{padding:4px 14px;}
+  .dashx-hero-spark{height:92px;}
 }
 
 @media(max-width:900px){
@@ -5411,6 +5426,27 @@ const REAL_CONTACT_TIMELINE_ACTIONS = new Set(['Ligação registrada', 'WhatsApp
 function leadHasRealContact(lead){
   return (lead.timeline||[]).some(t=> REAL_CONTACT_TIMELINE_ACTIONS.has(t.acao));
 }
+/** v36_27 — REFINAMENTO da correção v36_26: `!t.assemblyId` sozinho era
+ *  amplo demais — excluía TODA tarefa-lembrete de assembleia de "atrasada",
+ *  mesmo quando a assembleia vinculada ainda não aconteceu (lembrete vencido
+ *  de uma assembleia futura/hoje continua sendo uma pendência real: alguém
+ *  precisa avisar o cliente do lance a tempo). A distinção correta não é
+ *  "a tarefa é de assembleia?", e sim "a assembleia vinculada já passou?":
+ *   - assembleia FUTURA ou HOJE (assembly.data >= hoje) → o lembrete pode
+ *     continuar atrasado normalmente (mesma regra de qualquer tarefa);
+ *   - assembleia PASSADA (assembly.data < hoje) → o lembrete nunca é
+ *     atrasado — o evento já ocorreu, a ação perdeu o sentido (regra v36_26,
+ *     preservada).
+ *  Tarefa sem `assemblyId` (a grande maioria — tarefas comerciais comuns)
+ *  nunca passa por esta função: a regra normal de atraso se aplica direto,
+ *  sem nenhuma mudança de comportamento. Assembleia não encontrada (registro
+ *  órfão/excluído) é tratada como "não relevante" — mesma postura segura da
+ *  v36_26, nunca reintroduz o bug original. */
+function isAssemblyTaskStillRelevant(t){
+  if(!t.assemblyId) return true;
+  const a = DB.assemblies.find(x=>x.id===t.assemblyId);
+  return !!a && a.data>=todayISO();
+}
 /* ================= PENDÊNCIAS DE HOJE / PRIORIDADES / SAÚDE DO PIPELINE =================
    Tudo aqui é derivado de regras objetivas (datas, status, contagens) —
    nada de nota artificial. */
@@ -5451,7 +5487,11 @@ function getPendencias(){
   // nunca divergir entre os lugares que a consomem. Uma tarefa comercial
   // comum (assemblyId ausente) continua contando normalmente — nada muda
   // para o caso já coberto pelo item 10 do pedido (tarefa vencida real).
-  const tarefasAtrasadas = DB.tasks.filter(t=>!t.done && t.data<todayISO() && !t.assemblyId);
+  // v36_27 — refinado: `!t.assemblyId` puro virou isAssemblyTaskStillRelevant
+  // (ver comentário completo na função, logo acima) — um lembrete de
+  // assembleia FUTURA/HOJE ainda vencido continua contando como atrasada;
+  // só o de uma assembleia PASSADA deixa de contar.
+  const tarefasAtrasadas = DB.tasks.filter(t=>!t.done && t.data<todayISO() && isAssemblyTaskStillRelevant(t));
   const proximasTarefas = DB.tasks.filter(t=>!t.done && t.data>todayISO() && t.data<=addDays(todayISO(),30)).sort((a,b)=>(a.data+a.hora).localeCompare(b.data+b.hora));
   const posVendaPendente = DB.quotas.filter(q=>!['Concluído','Bem adquirido'].includes(q.posVendaStage));
   const comissoesAReceber = Object.values(DB.commissionMeta).flatMap(cm=>cm.parcelas.filter(p=>p.status==='Pendente' && p.dataPrevista<=addDays(todayISO(),7)));
@@ -6239,7 +6279,7 @@ function viewDashboard(){
     <div class="dashx-hero-panel" data-goto="leads" tabindex="0">
       <div class="dashx-hero-eyebrow">Crédito vendido — período selecionado</div>
       <div class="dashx-hero-figure">${fmtMoney(k.vendido)}</div>
-      <div class="dashx-hero-spark"><canvas id="spark_vendido"></canvas></div>
+      <div class="dashx-hero-spark"><canvas id="spark_vendido"></canvas><div class="dashx-hero-spark-empty" id="spark_vendido_empty" style="display:none;">Sem vendas no período selecionado</div></div>
       <div class="dashx-hero-foot">
         ${heroMesFoot}
         <span>Hoje <b>${fmtMoney(snap.hoje.vendido)}</b></span>
@@ -6626,7 +6666,7 @@ function renderPipelineModal(){
 function pipelineModalRowHtml(r){
   const ultimaTxt = r.ultimaInteracao ? `${escapeHtml(r.ultimaInteracao.acao)} · ${fmtDate(String(r.ultimaInteracao.when).slice(0,10))}` : '—';
   return `<tr data-pipelinelead="${r.lead.id}" data-pipelineproposal="${r.p.id}">
-    <td data-label="Cliente"><b>${escapeHtml(r.lead.nome)}</b></td>
+    <td data-label="Cliente"><button class="pipeline-client-name" data-pipeact="cliente" title="Abrir cadastro do cliente">${escapeHtml(r.lead.nome)}</button></td>
     <td data-label="Valor">${fmtMoney(r.valor)}</td>
     <td data-label="Administradora">${escapeHtml(r.administradora)}</td>
     <td data-label="Segmento">${escapeHtml(r.segmento)}</td>
@@ -6919,6 +6959,51 @@ function newChart(id, type, labels, datasets, opts){
     }
     return base;
   };
+  if(opts.heroTrend){
+    // v36_28 — variante do mini-gráfico exclusiva do hero "Crédito vendido —
+    // período selecionado": mesma filosofia de baixo ruído dos sparklines
+    // genéricos abaixo (que continuam 100% inalterados — spark_qtd/ticket/
+    // conv), mas com um pouco mais de respiro (canvas mais alto — ver
+    // .dashx-hero-spark) e um eixo X esparso e discreto em vez de totalmente
+    // oculto, para a leitura de tendência parecer parte natural do hero, não
+    // "um gráfico encaixado embaixo". Preenchimento em gradiente sutil (do
+    // azul institucional, esmaecendo para transparente) via CanvasGradient —
+    // nunca uma cor chapada. Ponto só aparece no hover; com 1 único dado, o
+    // ponto fica sempre visível (senão o gráfico pareceria quebrado/vazio).
+    const singlePoint = Array.isArray(labels) && labels.length<=1;
+    let bg = CHART_PALETTE.blueSoft;
+    try{
+      // Prioriza a altura do CONTAINER (.dashx-hero-spark, com altura fixa
+      // via CSS — ver seção 18 do pedido) em vez do próprio canvas: no
+      // momento em que o gradiente é criado, o canvas ainda não foi
+      // dimensionado pelo Chart.js (isso só acontece durante new Chart()
+      // logo abaixo), então ctx.clientHeight poderia ler um valor
+      // desatualizado ou 0 — o container já está corretamente dimensionado
+      // pelo CSS independente do Chart.js.
+      const h = (ctx.parentElement && ctx.parentElement.clientHeight) || ctx.clientHeight || 112;
+      const grad = ctx.getContext('2d').createLinearGradient(0,0,0,h);
+      grad.addColorStop(0, 'rgba(11,79,138,.24)');
+      grad.addColorStop(1, 'rgba(11,79,138,0)');
+      bg = grad;
+    }catch(e){ /* fallback silencioso para a cor sólida sutil já definida acima */ }
+    const heroDatasets = datasets.map(ds=> Object.assign({}, ds, { backgroundColor: ds.fill!==false ? bg : ds.backgroundColor, borderWidth: 1.75, tension: .3 }));
+    chartRegistry[id] = new Chart(ctx, {
+      type: type||'line', data:{labels, datasets: heroDatasets},
+      options:{
+        responsive:true, maintainAspectRatio:false, devicePixelRatio: Math.min(window.devicePixelRatio||1, 2),
+        layout:{padding:{top:6,right:4,bottom:0,left:4}},
+        elements:{ point:{radius: singlePoint?3:0, hoverRadius:4, backgroundColor:CHART_PALETTE.blue, hoverBackgroundColor:CHART_PALETTE.blue, hoverBorderColor:'#fff', hoverBorderWidth:2}, line:{borderWidth:1.75} },
+        plugins:{ legend:{display:false}, tooltip:{enabled:true, backgroundColor:'#0A2447', padding:8, cornerRadius:8, displayColors:false,
+          callbacks:{ label: tooltipLabelFmt }, titleFont:{size:11,weight:'700',family:"'Inter','Segoe UI',sans-serif"}, bodyFont:{size:11,family:"'Inter','Segoe UI',sans-serif"} } },
+        scales:{
+          x:{ display: !singlePoint, type:'category', grid:{display:false, drawTicks:false}, border:{display:false},
+              ticks:{ font:{size:9.5,family:"'Inter','Segoe UI',sans-serif"}, color:CHART_PALETTE.tick, maxRotation:0, autoSkip:true, autoSkipPadding:16, maxTicksLimit:6 } },
+          y:{ display:false }
+        }
+      }
+    });
+    return;
+  }
   if(sparkline){
     // Mini-gráfico para os cards de KPI: sem eixos, sem legenda, sem tooltip
     // pesado — só a tendência visual. Ainda assim destruído/recriado com
@@ -7181,10 +7266,32 @@ function renderDashboardCharts(){
   // acima para o gráfico "Evolução do crédito vendido" — agora reage ao
   // período selecionado (diário em "Este mês", mensal+ano em "Todo o
   // período" etc.) e nunca diverge do gráfico maior, pois é a mesma fonte.
-  if(document.getElementById('spark_vendido')){
-    newChart('spark_vendido', salesSeries.granularity==='dia' ? 'bar' : 'line', evoLabels,
-      [{ data:evoValues, borderColor:CHART_PALETTE.blue, backgroundColor: salesSeries.granularity==='dia' ? CHART_PALETTE.blue : CHART_PALETTE.blue+'22', fill: salesSeries.granularity!=='dia', tension:.35, borderWidth:2, borderRadius:2 }],
-      {sparkline:true, money:true, counts:evoCounts});
+  // v36_28 — reestilizado (ver newChart/opts.heroTrend): sempre linha, nunca
+  // barra (mesmo em granularidade diária) — o gráfico grande "Evolução"
+  // continua usando barra para o dia, propositalmente diferente (mini
+  // gráfico do hero = tendência ambiente; gráfico grande = analítico, ver
+  // item 25 do pedido). Estado vazio (nenhuma venda no período) mostra uma
+  // mensagem discreta em vez de uma linha achatada em zero sem contexto —
+  // nem dado nem agrupamento mudam, só a apresentação quando não há o que
+  // mostrar.
+  const sparkCanvas = document.getElementById('spark_vendido');
+  const sparkEmptyEl = document.getElementById('spark_vendido_empty');
+  if(sparkCanvas){
+    const heroHasData = evoValues.some(v=>v>0);
+    if(heroHasData){
+      sparkCanvas.style.display = '';
+      if(sparkEmptyEl) sparkEmptyEl.style.display = 'none';
+      newChart('spark_vendido', 'line', evoLabels,
+        [{ label:'Vendido', data:evoValues, borderColor:CHART_PALETTE.blue, fill:true, pointBackgroundColor:CHART_PALETTE.blue }],
+        {heroTrend:true, money:true, counts:evoCounts});
+    } else {
+      // Nenhum ponto positivo no período: nunca deixa um Chart.js "vivo"
+      // preso a um canvas escondido — mesmo destroy defensivo que newChart já
+      // faz internamente antes de recriar, só que aqui não recriamos nada.
+      if(chartRegistry['spark_vendido']){ try{ chartRegistry['spark_vendido'].destroy(); }catch(e){} delete chartRegistry['spark_vendido']; }
+      sparkCanvas.style.display = 'none';
+      if(sparkEmptyEl) sparkEmptyEl.style.display = '';
+    }
   }
 
   // Mini-linhas de tendência (últimos 6 meses fixos) dentro dos demais cards
@@ -11582,7 +11689,11 @@ function renderAgendaList(){
     // "(atrasado)" só porque sua data já passou. A linha continua aparecendo
     // normalmente na lista (nada é escondido/apagado) — só deixa de ser
     // classificada/exibida como atrasada.
-    const late=!t.done && t.data<todayISO() && !t.assemblyId;
+    // v36_27 — mesmo refinamento de getPendencias() (ver
+    // isAssemblyTaskStillRelevant): só deixa de ser "atrasado" quando a
+    // assembleia vinculada já passou; se ainda é futura/hoje, o lembrete
+    // vencido continua sendo marcado normalmente.
+    const late=!t.done && t.data<todayISO() && isAssemblyTaskStillRelevant(t);
     return `<tr style="${t.done?'opacity:.55':''}"><td>${t.done? '<span class="badge b-fechado" style="font-size:10px;">✓ Concluída</span>' : `<button class="pill-btn sm ghost" data-completetask="${t.id}">Concluir</button>`}</td>
     <td style="${late?'color:var(--red);font-weight:600':''}">${fmtDate(t.data)} ${t.hora}${late?' (atrasado)':''}</td>
     <td>${escapeHtml(t.kind)} · ${escapeHtml(t.tipo||'')}</td><td><button class="link-btn" data-opentask="${t.id}" style="${t.done?'text-decoration:line-through;color:var(--text-secondary);':''}">${escapeHtml(t.titulo)}</button></td><td>${lead?escapeHtml(lead.nome):'—'}</td>
