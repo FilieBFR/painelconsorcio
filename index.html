@@ -5426,6 +5426,50 @@ const REAL_CONTACT_TIMELINE_ACTIONS = new Set(['Ligação registrada', 'WhatsApp
 function leadHasRealContact(lead){
   return (lead.timeline||[]).some(t=> REAL_CONTACT_TIMELINE_ACTIONS.has(t.acao));
 }
+/** v36_29 — índice descartável (uma única varredura de DB.tasks, nunca
+ *  persistido) para computar "aguardando primeiro contato" em O(1) por lead
+ *  em vez de buscar em DB.tasks para cada lead (O(leads×tasks)). hasOpen =
+ *  pelo menos 1 tarefa primeiro_contato ainda aberta para o cliente. hasAny
+ *  = pelo menos 1 tarefa primeiro_contato (aberta OU concluída) já existiu
+ *  para o cliente — usado só para distinguir "todas concluídas" de "nenhuma
+ *  tarefa nunca existiu" (ver isAwaitingFirstContact abaixo). */
+function buildFirstContactTaskIndex(){
+  const hasOpen = new Set(), hasAny = new Set();
+  DB.tasks.forEach(t=>{
+    if(t.regraAuto!=='primeiro_contato' || !t.clientId) return;
+    hasAny.add(t.clientId);
+    if(!t.done) hasOpen.add(t.clientId);
+  });
+  return {hasOpen, hasAny};
+}
+/** v36_29 — CORREÇÃO DE SEMÂNTICA (causa raiz documentada no relatório desta
+ *  rodada): um lead 'Novo Lead' sem contato real continuava aparecendo em
+ *  "Aguardando primeiro contato" na página Início mesmo depois de a tarefa
+ *  automática (regraAuto:'primeiro_contato') ter sido concluída manualmente
+ *  — completeTask() grava "Tarefa concluída: ..." na timeline (ver
+ *  completeTask), nunca uma das REAL_CONTACT_TIMELINE_ACTIONS, então
+ *  leadHasRealContact() sozinho nunca enxergava essa conclusão.
+ *
+ *  Fonte única — usada por getPendencias() (consumida, por sua vez, por
+ *  viewInicio() e buildPriorityFeed(), que só leem a lista já pronta,
+ *  nenhuma lógica duplicada em nenhum dos dois). Nunca altera lead.status —
+ *  status comercial e pendência operacional continuam conceitos separados.
+ *
+ *  Regra: aguardando primeiro contato SE E SOMENTE SE
+ *   (1) status==='Novo Lead'; E
+ *   (2) sem contato real (leadHasRealContact); E
+ *   (3) não existe NENHUMA tarefa primeiro_contato para o cliente (dado
+ *       antigo/migração/importação — nunca esconde a pendência só por
+ *       faltar a tarefa) OU existe PELO MENOS UMA tarefa primeiro_contato
+ *       ainda aberta para ele (cobre duplicidade histórica: uma tarefa
+ *       concluída e outra aberta para o mesmo cliente ainda conta como
+ *       aguardando). */
+function isAwaitingFirstContact(lead, idx){
+  if(!lead || lead.status!=='Novo Lead') return false;
+  if(leadHasRealContact(lead)) return false;
+  if(idx.hasAny.has(lead.id) && !idx.hasOpen.has(lead.id)) return false; // toda tarefa primeiro_contato já concluída
+  return true;
+}
 /** v36_27 — REFINAMENTO da correção v36_26: `!t.assemblyId` sozinho era
  *  amplo demais — excluía TODA tarefa-lembrete de assembleia de "atrasada",
  *  mesmo quando a assembleia vinculada ainda não aconteceu (lembrete vencido
@@ -5463,7 +5507,13 @@ function getPendencias(){
   // correção é separar STATUS COMERCIAL de PENDÊNCIA DE PRIMEIRO CONTATO —
   // o status nunca é alterado automaticamente por isso). leadHasRealContact
   // exclui quem já tem ligação/WhatsApp/interação registrada na timeline.
-  const novosLeadsAguardando = active.filter(l=> l.status==='Novo Lead' && !leadHasRealContact(l));
+  // v36_29 — refinado: também exclui quem já teve a tarefa automática de
+  // primeiro contato concluída manualmente (ver isAwaitingFirstContact/
+  // buildFirstContactTaskIndex acima) — leadHasRealContact sozinho não
+  // enxergava essa conclusão, pois completeTask() não grava uma ação de
+  // contato real na timeline.
+  const firstContactTaskIdx = buildFirstContactTaskIndex();
+  const novosLeadsAguardando = active.filter(l=> isAwaitingFirstContact(l, firstContactTaskIdx));
   const retornosAtrasados = active.filter(l=> l.nextAction && !l.nextAction.done && l.nextAction.data && l.nextAction.data < todayISO());
   const propostasSemResposta = active.filter(l=> l.status==='Aguardando Resposta' || leadIdsComPropostaSemResposta.has(l.id));
   const propostasEmElaboracao = DB.proposals.filter(p=>p.status==='Rascunho');
