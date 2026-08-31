@@ -8186,11 +8186,27 @@ function renderClientAgendaTab(l){
   // tinha os compromissos/lembretes/assembleias), tratando essencialmente da
   // mesma área (o que vem a seguir para este cliente). O resumo do cliente
   // agora só mostra a próxima ação como leitura rápida, com um atalho para cá.
+  // v36_30 — CAUSA RAIZ do bug relatado ("só aparece Excluir, não aparece
+  // Concluir"): o card "Próxima ação" acima sempre teve "Definir/editar" e
+  // "Remover" (visualmente destrutivo, vermelho — é o que o usuário
+  // descreveu como "Excluir"), mas NUNCA teve uma ação "Concluir" própria —
+  // a única forma de concluir essa pendência era descer até a tabela
+  // "Compromissos e lembretes" abaixo e achar a mesma tarefa (regraAuto:
+  // 'proximaAcao') representada de novo como linha, onde "Concluir" já
+  // funcionava corretamente. Card e tabela são duas vitrines da MESMA
+  // tarefa em DB.tasks (ligadas por l.nextAction.taskId) — a tabela nunca
+  // teve o bug; só o card resumido não oferecia a ação. Corrigido
+  // adicionando um botão "Concluir" ao card, usando data-completetask (o
+  // MESMO atributo/wiring já existente para a tabela, linha ~8264) — reusa
+  // completeTaskFromUI()→completeTask() sem nenhuma lógica nova, e por isso
+  // já mantém lead.nextAction.done em sincronia automaticamente (ver
+  // completeTask, que já tinha esse efeito colateral antes desta correção).
   return `
   <div class="card next-action-box ${overdue?'overdue':''}" style="margin-bottom:16px;">
     <div style="font-weight:700;font-size:13px;">Próxima ação</div>
     ${l.nextAction? `<div style="font-size:12px;margin-top:6px;">${escapeHtml(l.nextAction.tipo)} — ${fmtDate(l.nextAction.data)} ${l.nextAction.hora||''}${l.nextAction.done?' <b style="color:var(--green)">(concluída)</b>':(overdue?' <b style="color:var(--red)">(atrasada)</b>':'')}<br><span class="small-note">Responsável: ${escapeHtml(l.nextAction.responsavel||'—')}${l.nextAction.observacao?' · '+escapeHtml(l.nextAction.observacao):''}</span></div>` : '<div class="small-note" style="margin-top:6px;">Nenhuma próxima ação definida.</div>'}
     <button class="pill-btn sm ghost" id="editNextActionBtn" style="margin-top:10px;">Definir / editar</button>
+    ${(l.nextAction && !l.nextAction.done && l.nextAction.taskId)? `<button class="pill-btn sm ghost" data-completetask="${l.nextAction.taskId}" style="margin-top:10px;">Concluir</button>` : ''}
     ${l.nextAction? '<button class="pill-btn sm ghost" id="removeNextActionBtn" style="margin-top:10px;color:var(--red);border-color:var(--red);">Remover</button>' : ''}
     <div id="nextActionForm" style="display:none;margin-top:10px;"></div>
   </div>
