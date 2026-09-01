@@ -8321,7 +8321,7 @@ function renderClientAgendaTab(l){
   <div class="section-title" style="font-size:13px;margin:10px 0 6px;">Compromissos e lembretes</div>
   ${tasks.length? `<div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Título</th><th></th></tr></thead><tbody>${tasks.map(t=>`<tr style="${t.done?'opacity:.5':''}"><td>${fmtDate(t.data)} ${t.hora}</td><td>${escapeHtml(t.kind)}</td><td><button class="link-btn" data-opentask="${t.id}" style="${t.done?'text-decoration:line-through;':''}">${escapeHtml(t.titulo)}</button></td><td>${t.done? '<span class="small-note">✓ Concluída</span>' : `<button class="pill-btn sm ghost" data-completetask="${t.id}">Concluir</button>`}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nenhum item de agenda</div>'}
   <div class="section-title" style="font-size:13px;margin:16px 0 6px;">Assembleias / lances</div>
-  ${asms.length? `<div class="table-wrap"><table><thead><tr><th>Data</th><th>Grupo/Cota</th><th>Observação</th><th>Aviso de lance</th></tr></thead><tbody>${asms.map(a=>{ const tk=a.taskId?DB.tasks.find(x=>x.id===a.taskId):null; return `<tr><td>${fmtDate(a.data)}</td><td>${escapeHtml(a.grupo||'')}/${escapeHtml(a.cota||'')}</td><td>${escapeHtml((a.observacao||'').slice(0,50))||'—'}</td><td>${tk? (tk.done? '<span class="small-note">✓ Concluído</span>' : `<button class="pill-btn sm ghost" data-completetask="${tk.id}">Concluir aviso</button>`) : '—'}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">Nenhuma assembleia vinculada</div>'}`;
+  ${asms.length? `<div class="table-wrap"><table><thead><tr><th>Data</th><th>Grupo/Cota</th><th>Observação</th><th>Aviso de lance</th><th></th></tr></thead><tbody>${asms.map(a=>{ const tk=a.taskId?DB.tasks.find(x=>x.id===a.taskId):null; return `<tr><td>${fmtDate(a.data)}</td><td>${escapeHtml(a.grupo||'')}/${escapeHtml(a.cota||'')}</td><td>${escapeHtml((a.observacao||'').slice(0,50))||'—'}</td><td>${tk? (tk.done? '<span class="small-note">✓ Concluído</span>' : `<button class="pill-btn sm ghost" data-completetask="${tk.id}">Concluir aviso</button>`) : '—'}</td><td><button class="link-btn" data-editassembly="${a.id}">Editar</button> <button class="link-btn" data-deleteassembly="${a.id}" style="color:var(--red);">Excluir</button></td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">Nenhuma assembleia vinculada</div>'}`;
 }
 function renderClientCommissionsTab(l){
   // v25: lista TODOS os contratos do cliente, mesmo os que ainda não têm
@@ -8386,6 +8386,12 @@ function wireClientSubTabHandlers(t, l, renderTab){
     const b2=document.getElementById('tabNewAssembly'); if(b2) b2.onclick=()=>openAssemblyForm(null, null, l.id);
     document.querySelectorAll('[data-completetask]').forEach(btn=> btn.onclick=()=> completeTaskFromUI(btn.dataset.completetask, ()=>renderTab('agenda')));
     document.querySelectorAll('[data-opentask]').forEach(btn=> btn.onclick=()=>openTaskForm(btn.dataset.opentask));
+    document.querySelectorAll('[data-editassembly]').forEach(btn=> btn.onclick=()=>openAssemblyForm(btn.dataset.editassembly));
+    document.querySelectorAll('[data-deleteassembly]').forEach(btn=> btn.onclick=()=>{
+      const asm = DB.assemblies.find(x=>x.id===btn.dataset.deleteassembly);
+      if(!asm) return;
+      deleteAssembly(asm, ()=> renderTab('agenda'));
+    });
     const en=document.getElementById('editNextActionBtn'); if(en) en.onclick=()=>{
       const box=document.getElementById('nextActionForm'); box.style.display='block';
       box.innerHTML = `<div class="form-grid">
@@ -12213,7 +12219,7 @@ function openAssemblyGroupDetail(key){
         <td>${escapeHtml(a.tipoLance||'—')}</td><td>${fmtMoney(a.valorLance)}</td><td>${a.percentualEmbutido||0}%</td>
         <td>${escapeHtml(a.recorrencia||'Nenhuma')}</td>
         <td title="${escapeHtml(obsRaw)}">${obsResumo}</td>
-        <td><button class="link-btn" data-editassembly="${a.id}">${a.conflitoCalendarioOficial?'Revisar':'Editar'}</button></td>
+        <td><button class="link-btn" data-editassembly="${a.id}">${a.conflitoCalendarioOficial?'Revisar':'Editar'}</button> <button class="link-btn" data-deleteassembly="${a.id}" style="color:var(--red);">Excluir</button></td>
       </tr>`;
     }).join('')}</tbody></table></div>
     ${items.some(a=>a.conflitoCalendarioOficial) ? '<p class="small-note" style="color:var(--red);margin-top:8px;">⚠ Há um conflito de calendário oficial nesta cota — duas ocorrências disputavam a mesma data e uma delas manteve a data antiga sinalizada acima. Nenhum registro foi excluído; ajuste manualmente a data que preferir.</p>' : ''}
@@ -12221,6 +12227,15 @@ function openAssemblyGroupDetail(key){
   `;
   document.getElementById('closeModal').onclick = closeModalFn;
   document.querySelectorAll('[data-editassembly]').forEach(btn=> btn.onclick=()=>openAssemblyForm(btn.dataset.editassembly));
+  document.querySelectorAll('[data-deleteassembly]').forEach(btn=> btn.onclick=()=>{
+    const asm = DB.assemblies.find(x=>x.id===btn.dataset.deleteassembly);
+    if(!asm) return;
+    deleteAssembly(asm, ()=>{
+      const remaining = DB.assemblies.filter(x=> assemblyGroupKey(x)===key);
+      if(remaining.length) openAssemblyGroupDetail(key);
+      else { closeModalFn(); renderView(); }
+    });
+  });
   openModal();
 }
 /** prefill (opcional, item 5): { proposalId, contractId, administradora, onDone }
@@ -12408,25 +12423,7 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
       else closeModalFn();
     };
     const delBtn = document.getElementById('deleteAssemblyBtn');
-    if(delBtn) delBtn.onclick = ()=>{
-      let excluirFuturas = false;
-      if(a.seriesId){
-        const futuras = DB.assemblies.filter(x=>x.seriesId===a.seriesId && x.data>a.data).length;
-        if(futuras>0) excluirFuturas = window.confirm(`Esta assembleia faz parte de uma série recorrente com ${futuras} ocorrência(s) futura(s).\n\nOK = excluir esta e todas as futuras.\nCancelar = excluir somente esta ocorrência.`);
-      }
-      const msg = excluirFuturas ? 'Excluir esta assembleia e todas as futuras da série (as ocorrências anteriores permanecem como histórico)? Esta ação não pode ser desfeita.' : `Excluir esta assembleia (Grupo ${a.grupo||'—'}/Cota ${a.cota||'—'} em ${fmtDate(a.data)})? Esta ação não pode ser desfeita.`;
-      if(!window.confirm(msg)) return;
-      const leadIdUsed = a.leadId;
-      if(excluirFuturas){
-        DB.assemblies.filter(x=>x.seriesId===a.seriesId && x.data>=a.data).forEach(x=> deleteAssemblyTask(x));
-        DB.assemblies = DB.assemblies.filter(x=> !(x.seriesId===a.seriesId && x.data>=a.data));
-      } else {
-        deleteAssemblyTask(a);
-        DB.assemblies = DB.assemblies.filter(x=>x.id!==a.id);
-      }
-      saveDB(); showToast('Assembleia excluída');
-      returnAfterSave(leadIdUsed);
-    };
+    if(delBtn) delBtn.onclick = ()=> deleteAssembly(a, returnAfterSave);
     function buildDataFromForm(){
       const quotas = clientQuotas();
       const quotaEscolhida = selectedQuotaId ? quotas.find(q=>q.id===selectedQuotaId) : null;
@@ -12798,7 +12795,43 @@ function updateAssemblyTask(a){
   task.obs = a.observacao||'';
 }
 function deleteAssemblyTask(a){
-  if(a.taskId) DB.tasks = DB.tasks.filter(t=>t.id!==a.taskId);
+  // v36_33 — remove por a.taskId E por qualquer tarefa cujo assemblyId aponte
+  // para esta assembleia (defesa contra taskId ausente/inválido ou tarefas
+  // órfãs/duplicadas historicamente — nunca deixa lembrete para trás).
+  DB.tasks = DB.tasks.filter(t=> t.id!==a.taskId && t.assemblyId!==a.id);
+}
+/** v36_33 — função semântica única de exclusão de assembleia: localiza a(s)
+ *  tarefa(s) vinculada(s), remove as referências corretas, remove a
+ *  assembleia, salva e notifica. Reaproveitada pelo botão "Excluir" do
+ *  formulário de edição, pela listagem (Assembleias → Abrir → Excluir) e pela
+ *  aba Agenda da ficha do cliente — nunca duplicar esta lógica em outro
+ *  lugar. Exclusão ≠ conclusão: nunca chama completeTask nem define
+ *  done:true. onDone(leadId), se informado, é chamado após salvar — cada
+ *  chamador decide como se re-renderizar. Retorna false se o usuário cancelar
+ *  a confirmação (nada é alterado). */
+function deleteAssembly(a, onDone){
+  if(!a) return false;
+  let excluirFuturas = false;
+  if(a.seriesId){
+    const futuras = DB.assemblies.filter(x=>x.seriesId===a.seriesId && x.data>a.data).length;
+    if(futuras>0) excluirFuturas = window.confirm(`Esta assembleia faz parte de uma série recorrente com ${futuras} ocorrência(s) futura(s).\n\nOK = excluir esta e todas as futuras.\nCancelar = excluir somente esta ocorrência.`);
+  }
+  const msg = excluirFuturas ? 'Excluir esta assembleia e todas as futuras da série (as ocorrências anteriores permanecem como histórico)? Esta ação não pode ser desfeita.' : `Excluir esta assembleia (Grupo ${a.grupo||'—'}/Cota ${a.cota||'—'} em ${fmtDate(a.data)})? Esta ação não pode ser desfeita.`;
+  if(!window.confirm(msg)) return false;
+  const leadIdUsed = a.leadId;
+  const lead = DB.leads.find(l=>l.id===leadIdUsed);
+  if(excluirFuturas){
+    DB.assemblies.filter(x=>x.seriesId===a.seriesId && x.data>=a.data).forEach(x=> deleteAssemblyTask(x));
+    DB.assemblies = DB.assemblies.filter(x=> !(x.seriesId===a.seriesId && x.data>=a.data));
+    if(lead) addTimeline(lead, `Assembleia e ocorrências futuras excluídas — Grupo ${a.grupo||'—'}/Cota ${a.cota||'—'} a partir de ${fmtDate(a.data)}`);
+  } else {
+    deleteAssemblyTask(a);
+    DB.assemblies = DB.assemblies.filter(x=>x.id!==a.id);
+    if(lead) addTimeline(lead, `Assembleia excluída — Grupo ${a.grupo||'—'}/Cota ${a.cota||'—'} em ${fmtDate(a.data)}`);
+  }
+  saveDB(); showToast('Assembleia excluída');
+  if(onDone) onDone(leadIdUsed);
+  return true;
 }
 /* ================= COMISSÕES ================= */
 /** v36_15 — funções auxiliares PURAS de apresentação/agrupamento para a
