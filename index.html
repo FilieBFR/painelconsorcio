@@ -4300,7 +4300,14 @@ function validateCotaInputs(raw){
   if(raw.lanceTotal!==undefined && raw.baseLanceValor>0 && raw.lanceTotal > raw.baseLanceValor*1.0001) errors.push('Lance total superior a 100% da base.');
   if(raw.lanceTotal!==undefined && raw.saldoProjetado!==undefined && raw.lanceTotal > raw.saldoProjetado+0.01) errors.push('Lance superior ao saldo projetado.');
   if(raw.estrategiaContemplacao==='lanceFixo' && raw.fixedInfo && !raw.fixedInfo.atingido) errors.push('Lance fixo diferente do exigido pelo grupo.');
-  if(!raw.regraGrupoConfigurada) errors.push('Regra comercial do grupo ainda não configurada.');
+  // v36_34 — a regra comercial do grupo (% ou valor de lance fixo exigido) só é
+  // relevante quando a estratégia é "Lance fixo" — sorteio e lance livre nunca a
+  // consultam (ver resolveLanceFixoExigido/isGroupRuleConfirmed, usados só pelos
+  // ramos de lance fixo de cada motor). Antes, esta checagem era incondicional e
+  // bloqueava TODA proposta (mesmo sorteio/lance livre) até uma regra de grupo
+  // ser cadastrada — obrigando cadastro grupo a grupo mesmo quando o lance fixo
+  // nunca seria usado. Agora só bloqueia quando a proposta de fato depende dela.
+  if(raw.estrategiaContemplacao==='lanceFixo' && !raw.regraGrupoConfigurada) errors.push('Regra comercial do grupo ainda não configurada.');
 
   return { errors, blocked: errors.length>0 };
 }
