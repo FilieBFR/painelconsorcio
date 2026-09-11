@@ -8197,14 +8197,31 @@ function renderResumoTab(l){
     </div>
   </div>`;
 }
+/** v36_35 — "Interações" passou a mostrar só o que o analista de fato
+ *  escreveu aqui (acao==='Interação registrada', a única entrada de texto
+ *  livre deste formulário — ver addTlBtn abaixo) — vira a base do que foi
+ *  conversado/combinado com o cliente para retomar na próxima reunião, sem o
+ *  ruído dos eventos automáticos do sistema (cota salva, contrato atualizado,
+ *  status alterado, tarefa concluída etc., que antes apareciam misturados na
+ *  mesma lista). addTimeline() continua gravando TODOS os eventos exatamente
+ *  como antes — leadHasRealContact() e a "última interação" (que leem
+ *  lead.timeline inteiro) não são afetados. Os eventos automáticos não somem:
+ *  ficam no "Histórico do sistema" recolhível abaixo, para quem precisar
+ *  auditar. */
 function renderInteracoesTab(l){
-  return `<div class="timeline">${(l.timeline||[]).slice().reverse().map(t=>`
-    <div class="timeline-item"><div class="timeline-dot"></div>
+  const timeline = l.timeline||[];
+  const notas = timeline.filter(t=>t.acao==='Interação registrada');
+  const sistema = timeline.filter(t=>t.acao!=='Interação registrada');
+  const item = (t)=>`<div class="timeline-item"><div class="timeline-dot"></div>
       <div><div class="t-when">${new Date(t.when).toLocaleString('pt-BR')} · ${escapeHtml(t.usuario)}</div>
       <div class="t-body"><b>${escapeHtml(t.acao)}</b>${t.obs?' — '+escapeHtml(t.obs):''}</div></div>
-    </div>`).join('') || '<div class="empty">Sem registros ainda</div>'}</div>
-  <div class="field full" style="margin-top:12px;"><label>Adicionar registro</label><textarea id="tlNote" placeholder="Ex: Ligação realizada, cliente pediu retorno em 3 dias..."></textarea></div>
-  <button class="pill-btn" id="addTlBtn" style="margin-top:8px;">Adicionar à timeline</button>`;
+    </div>`;
+  return `<div class="timeline">${notas.slice().reverse().map(item).join('') || '<div class="empty">Nenhuma anotação ainda — registre abaixo o que foi conversado/combinado com o cliente, para consultar antes da próxima reunião.</div>'}</div>
+  <div class="field full" style="margin-top:12px;"><label>Adicionar registro</label><textarea id="tlNote" placeholder="Ex: Cliente pediu retorno em 3 dias, quer aguardar o 13º salário para dar o lance..."></textarea></div>
+  <button class="pill-btn" id="addTlBtn" style="margin-top:8px;">Adicionar à timeline</button>
+  ${sistema.length ? `<details class="studio-group" style="margin-top:20px;"><summary class="studio-group-summary">Histórico do sistema (${sistema.length})</summary>
+    <div class="timeline studio-group-body">${sistema.slice().reverse().map(item).join('')}</div>
+  </details>` : ''}`;
 }
 function wireTabHandlers(t, l, setActiveTab, renderTab){
   if(t==='resumo'){
@@ -11705,17 +11722,26 @@ function openQuotaForm(id, presetContractId, presetLeadId){
   const q = id ? DB.quotas.find(x=>x.id===id) : null;
   const contractId = q ? q.contractId : presetContractId;
   const contract = DB.contracts.find(c=>c.id===contractId);
+  // v36_35 — nova cota criada a partir de um contrato já herda a administradora
+  // e a data de contratação do próprio contrato (mesmo cliente, mesmo negócio —
+  // repetir esses dois campos era puro retrabalho). Só se aplica a CADASTRO NOVO
+  // (q vazio); ao editar uma cota existente, o valor já salvo continua sendo o
+  // que aparece, nunca sobrescrito silenciosamente pelo contrato. Os campos
+  // continuam editáveis — é só o valor inicial que muda, nunca uma trava.
+  const adminHerdada = q ? q.administradora : (contract ? resolveContractAdministradora(contract) : '');
+  const dataHerdada = q ? q.dataContratacao : (contract && contract.dataContratacao ? contract.dataContratacao : todayISO());
   document.getElementById('modalBody').innerHTML = `
     <h2>${q?'Editar cota':'Nova cota'}</h2>
     <div class="modal-sub">${contract? `Contrato ${escapeHtml(contract.numero)}` : ''}</div>
+    ${!q && contract ? '<div class="small-note" style="margin-bottom:10px;">Administradora e data de contratação já preenchidas a partir do contrato — ajuste se esta cota específica for diferente.</div>' : ''}
     <div class="form-grid">
       <div class="field"><label>Número da cota</label><input id="qt_numero" value="${escapeHtml(q?.numero||'')}"></div>
-      <div class="field"><label>Administradora</label>${selectHTML('qt_admin', DB.settings.administradoras, q?.administradora)}</div>
+      <div class="field"><label>Administradora</label>${selectHTML('qt_admin', DB.settings.administradoras, adminHerdada)}</div>
       <div class="field"><label>Grupo</label><input id="qt_grupo" value="${escapeHtml(q?.grupo||'')}"></div>
       <div class="field"><label>Crédito (R$)</label><input id="qt_credito" data-money value="${moneyStr(q?.credito)}"></div>
       <div class="field"><label>Prazo (meses)</label><input type="number" id="qt_prazo" value="${q?.prazo||''}"></div>
       <div class="field"><label>Parcela (R$)</label><input id="qt_parcela" data-money value="${moneyStr(q?.parcela)}"></div>
-      <div class="field"><label>Data contratação</label><input type="date" id="qt_data" value="${q?.dataContratacao||todayISO()}"></div>
+      <div class="field"><label>Data contratação</label><input type="date" id="qt_data" value="${dataHerdada}"></div>
       <div class="field"><label>Estágio pós-venda</label>${selectHTML('qt_stage', (q&&q.posVendaStage==='Documentação') ? POSVENDA_STAGES_HISTORICO : POSVENDA_STAGES, q?.posVendaStage||'Contrato assinado')}</div>
       <div class="field"><label>Estratégia de lance</label><input id="qt_estrategia" value="${escapeHtml(q?.estrategiaLance||'')}"></div>
       <div class="field"><label>Valor de lance (R$)</label><input id="qt_valorlance" data-money value="${moneyStr(q?.valorLance)}"></div>
