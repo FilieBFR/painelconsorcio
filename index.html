@@ -716,6 +716,114 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
   .sim-side{position:static;}
   .scenario-compare,.scenario-compare.cols3{grid-template-columns:1fr;}
 }
+/* ===================== v36_36 — Simulador em 5 etapas =====================
+   Só apresentação: nenhuma regra financeira aqui. Reaproveita a paleta BFR
+   (navy/azul/dourado); o fundo escuro/dourado da referência comercial só
+   influencia a proposta ao cliente, nunca este espaço de trabalho. */
+.modal.xwide.proposal-modal{width:min(1440px, calc(100vw - 32px));max-width:1440px;}
+.pstepper{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;border-bottom:1px solid var(--line);margin-top:14px;overflow-x:auto;}
+.pstep{display:flex;align-items:center;gap:10px;padding:12px 12px 12px 4px;background:none;border:none;border-bottom:3px solid transparent;cursor:pointer;text-align:left;font-family:inherit;color:var(--ink-soft);min-width:150px;}
+.pstep:hover{color:var(--ink);}
+.pstep:focus-visible{outline:2px solid var(--brand-blue);outline-offset:-2px;border-radius:6px;}
+.pstep-n{flex:0 0 26px;height:26px;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink-soft);background:#fff;}
+.pstep-t{display:flex;flex-direction:column;font-size:12.5px;font-weight:600;line-height:1.25;}
+.pstep-t small{font-size:11px;font-weight:400;color:var(--ink-soft);}
+.pstep.active{color:var(--brand-navy);border-bottom-color:var(--gold);}
+.pstep.active .pstep-n{background:var(--brand-navy);border-color:var(--brand-navy);color:#fff;}
+.pstep.done .pstep-n{border-color:var(--green);color:var(--green);}
+.pw{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:26px;align-items:start;}
+.pw-main{min-width:0;}
+.pw-side{position:sticky;top:0;align-self:start;min-width:0;max-height:calc(100vh - 300px);min-height:220px;overflow-y:auto;overscroll-behavior:contain;border-radius:14px;}
+.pw-step-intro{font-size:12.5px;color:var(--text-secondary);margin:2px 0 14px;max-width:70ch;line-height:1.5;}
+.pw-block{margin-bottom:22px;}
+.pw-block-head{display:flex;align-items:baseline;gap:10px;margin:0 0 4px;}
+.pw-block-head h3{margin:0;font-size:13.5px;font-weight:700;color:var(--brand-navy);}
+.pw-block-tag{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--gold);}
+.pw-block-sub{font-size:12px;color:var(--text-secondary);margin:0 0 10px;}
+.pw-nav{display:flex;justify-content:space-between;gap:10px;margin-top:24px;padding-top:16px;border-top:1px solid var(--line);}
+.choice-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;}
+.choice-card{display:flex;flex-direction:column;gap:4px;text-align:left;padding:13px 15px;border:1px solid var(--border);border-radius:12px;background:#fff;cursor:pointer;font-family:inherit;color:var(--ink);transition:border-color .12s,box-shadow .12s,background .12s;}
+.choice-card b{font-size:13px;color:var(--brand-navy);font-weight:700;}
+.choice-card span{font-size:11.5px;color:var(--text-secondary);line-height:1.4;}
+.choice-card:hover{border-color:#B9C4D6;}
+.choice-card:focus-visible{outline:2px solid var(--brand-blue);outline-offset:1px;}
+.choice-card.selected{border-color:var(--gold);background:#FFFBF2;box-shadow:inset 0 0 0 1px var(--gold);}
+.choice-card[disabled],.choice-card[aria-disabled="true"]{opacity:.55;cursor:not-allowed;}
+.choice-card{position:relative;}
+.choice-card:focus-within{outline:2px solid var(--brand-blue);outline-offset:1px;}
+.field.diff>label::after{content:" •";color:var(--gold);font-weight:800;}
+.choice-grid.cols3{grid-template-columns:repeat(3,minmax(0,1fr));}
+.res-chips{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 12px;}
+.res-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;border:1px solid var(--border);font-size:12px;color:var(--ink-soft);background:#fff;}
+.res-chip i{width:8px;height:8px;border-radius:50%;background:var(--line);display:inline-block;}
+.res-chip.on{color:var(--brand-navy);border-color:#BFD0E6;background:var(--brand-blue-soft);font-weight:600;}
+.res-chip.on i{background:var(--brand-blue);}
+.cota-pick{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;}
+.cota-pick button{padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:#fff;font-size:12px;cursor:pointer;font-family:inherit;color:var(--ink);}
+.cota-pick button.active{background:var(--brand-navy);color:#fff;border-color:var(--brand-navy);}
+.bidbar{display:flex;height:10px;border-radius:6px;overflow:hidden;background:var(--paper);margin:6px 0 4px;}
+.bidbar i{display:block;height:100%;}
+.bidbar .b-prop{background:var(--navy-700);} .bidbar .b-emb{background:var(--gold);} .bidbar .b-fgts{background:var(--green);} .bidbar .b-out{background:var(--purple);}
+.bidlegend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--text-secondary);}
+.bidlegend b{color:var(--brand-navy);font-variant-numeric:tabular-nums;}
+.pw-adv{border:1px dashed var(--border);border-radius:10px;padding:0 14px;margin-top:12px;}
+.pw-adv>summary{padding:11px 0;font-size:12px;font-weight:600;color:var(--text-secondary);cursor:pointer;}
+.pw-adv[open]{padding-bottom:14px;}
+.calc-line{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:7px 0;border-top:1px dashed var(--border);}
+.calc-line span{color:var(--text-secondary);} .calc-line b{color:var(--brand-navy);font-variant-numeric:tabular-nums;}
+.field-err{color:var(--red);font-size:11.5px;margin-top:4px;line-height:1.35;}
+.field.has-err input,.field.has-err select{border-color:var(--red);}
+/* Resumo financeiro fixo */
+.sum-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px 4px;box-shadow:var(--shadow);}
+.sum-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin:0 0 2px;}
+.sum-hero{font-size:24px;font-weight:800;color:var(--brand-navy);letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15;}
+.sum-hero-sub{font-size:12px;color:var(--text-secondary);margin:2px 0 8px;}
+.sum-sec{padding:8px 0 8px;border-top:1px solid var(--border);}
+.sum-sec-title{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text-secondary);margin:0 0 6px;}
+.sum-kv{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:12.5px;padding:3px 0;}
+.sum-kv span{color:var(--text-secondary);}
+.sum-kv b{color:var(--brand-navy);font-weight:700;font-variant-numeric:tabular-nums;text-align:right;}
+.sum-kv.key b{color:var(--gold);font-size:15px;font-weight:800;}
+.sum-alerts{margin:0 0 12px;}
+.sum-alert{border-radius:10px;padding:7px 11px;font-size:12px;line-height:1.4;margin-bottom:6px;}
+.sum-alert.block{background:var(--red-soft);color:#8A2E22;}
+.sum-alert.warn{background:var(--gold-soft);color:#7A4D0E;}
+.sum-alert.ok{background:var(--green-soft);color:#17643F;}
+.sum-alert b{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px;}
+/* Comparação de cenários */
+.scen-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start;}
+.scen-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 16px 12px;position:relative;}
+.scen-card.presented{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
+.scen-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;}
+.scen-head h4{margin:0;font-size:14px;color:var(--brand-navy);}
+.scen-badge{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:var(--gold-soft);color:#7A4D0E;white-space:nowrap;}
+.scen-strat{font-size:12px;color:var(--text-secondary);margin:0 0 8px;}
+.scen-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;padding:6px 0;border-top:1px dashed var(--border);}
+.scen-row>span{color:var(--text-secondary);}
+.scen-row .v{display:flex;flex-direction:column;align-items:flex-end;}
+.scen-row .v b{color:var(--brand-navy);font-variant-numeric:tabular-nums;}
+.scen-row .v.best b{color:var(--green);}
+.scen-row .v.best b::after{content:" ●";font-size:9px;}
+.delta{font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--text-secondary);}
+.delta.up{color:#17643F;} .delta.down{color:#8A2E22;}
+.scen-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.scen-empty{border:1.5px dashed var(--border);border-radius:14px;padding:22px 16px;text-align:center;color:var(--text-secondary);font-size:12.5px;}
+.scen-editor{border:1px solid var(--border);border-radius:14px;padding:16px;margin-top:16px;background:#FCFDFE;}
+.scen-legend{font-size:11.5px;color:var(--text-secondary);margin:8px 0 0;}
+.pw-nav{flex-wrap:wrap;}
+@media(max-width:640px){
+  .pw-nav{flex-direction:column-reverse;}
+  .pw-nav>div,.pw-nav .pill-btn{width:100%;}
+  .pw-nav .pill-btn{white-space:normal;}
+}
+@media(max-width:1180px){ .pw{grid-template-columns:minmax(0,1fr) 310px;gap:18px;} }
+@media(max-width:1000px){
+  .pw{grid-template-columns:1fr;}
+  .pw-side{position:static;max-height:none;overflow:visible;}
+  .scen-grid{grid-template-columns:1fr;}
+  .pstepper{grid-template-columns:repeat(5,minmax(150px,1fr));}
+  .choice-grid.cols3{grid-template-columns:1fr;}
+}
 
 /* ===== APRESENTAÇÃO COMERCIAL — DOCUMENTO A4 PREMIUM (capa + corpo) ===== */
 .proposal-preview-screen{width:100%;max-width:190mm;margin:0 auto;padding:6px;}
@@ -3301,6 +3409,15 @@ function normalizeDB(){
     if(p.modoCenario===undefined) p.modoCenario = 'unico';
     if(p.apresentarHistorico===undefined) p.apresentarHistorico = false;
     if(p.historicoGrupo===undefined) p.historicoGrupo = [];
+    // v36_36 — campos comerciais novos do simulador em 5 etapas: só recebem
+    // defaults neutros quando ausentes (nada é sobrescrito, nenhum cálculo muda);
+    // proposta antiga continua idêntica — sem objetivo, sem projeção, sem cenários.
+    if(p.tipoProposta!=='simples'){
+      if(p.objetivo===undefined) p.objetivo = {tipo:'', outro:''};
+      if(p.projecao===undefined) p.projecao = {exibir:true, agioConservadorPct:0, faixaMinPct:0, faixaMaxPct:0, observacao:''};
+      if(p.cenarios===undefined) p.cenarios = [];
+      if(p.cenarioPrincipalNome===undefined) p.cenarioPrincipalNome = '';
+    }
     // Item novo — compatibilidade com propostas antigas sem tipoProposta:
     // trata como 'completa' quando já tem simulação financeira de verdade
     // (cotas com crédito calculado), senão como 'simples'. Nunca reclassifica
@@ -8495,6 +8612,136 @@ function blankCota(numero){
     rendaOuFaturamento: null
   };
 }
+/** v36_36 — enquadramento COMERCIAL da proposta (não é fórmula nem estratégia de
+ *  contemplação). "Alavancagem" e "revenda" só habilitam o bloco de projeção da
+ *  proposta quando o analista preencher as premissas (draft.projecao). */
+const OBJETIVOS_PROPOSTA = [
+  {value:'aquisicao', label:'Aquisição planejada', desc:'Adquirir o bem ou serviço com planejamento e previsibilidade.'},
+  {value:'preservacao', label:'Preservação de capital', desc:'Proteger o poder de compra do capital com disciplina de parcelas.'},
+  {value:'lance', label:'Contemplação por lance', desc:'Priorizar a contemplação antecipada por meio de lance.'},
+  {value:'sorteio', label:'Participação por sorteio', desc:'Concorrer nas assembleias sem ofertar lance.'},
+  {value:'reducaoParcela', label:'Redução de parcela', desc:'Reduzir o valor mensal após a contemplação.'},
+  {value:'reducaoPrazo', label:'Redução de prazo', desc:'Encurtar o plano mantendo a parcela.'},
+  {value:'alavancagem', label:'Alavancagem patrimonial', desc:'Usar a carta como instrumento de expansão patrimonial.'},
+  {value:'revenda', label:'Oportunidade de revenda', desc:'Carta contemplada como ativo com possibilidade de cessão.'},
+  {value:'outro', label:'Outro objetivo', desc:'Descreva um objetivo personalizado.'}
+];
+const PROPOSAL_STEPS = [
+  {id:'objetivo', label:'Objetivo do cliente', sub:'Para que serve a carta'},
+  {id:'carta', label:'Configuração da carta', sub:'Cliente, cotas e taxas'},
+  {id:'estrategia', label:'Estratégia', sub:'Contemplação, recursos, resultado'},
+  {id:'cenarios', label:'Comparação de cenários', sub:'Até três alternativas'},
+  {id:'apresentacao', label:'Apresentação ao cliente', sub:'Prévia, PDF e envio'}
+];
+function objetivoLabel(draft){
+  const o = draft && draft.objetivo;
+  if(!o || !o.tipo) return '';
+  if(o.tipo==='outro') return (o.outro||'').trim();
+  const f = OBJETIVOS_PROPOSTA.find(x=>x.value===o.tipo);
+  return f ? f.label : '';
+}
+/** v36_37 — validação das premissas de ágio (alavancagem/revenda). Só se aplica quando
+ *  a projeção PODERIA ser exibida (objetivo compatível + exibição ligada); com a
+ *  projeção desativada ou outro objetivo, nada é validado nem bloqueado. Nunca
+ *  corrige, inverte ou arredonda valores: só descreve o problema, por campo
+ *  ('agio' | 'min' | 'max'). Percentuais são frações (0,43 = 43%); 0 ou vazio = não
+ *  informado. Regras: finito, ≥ 0, ≤ limite da interface (500%); a faixa exige os
+ *  dois extremos (ou nenhum); mínimo ≤ máximo; e, com faixa + conservador,
+ *  mínimo ≤ conservador ≤ máximo. Faixa sem conservador também é erro (a
+ *  projeção não teria como ser exibida — nunca some em silêncio). */
+const PROJECAO_LIMITE_PCT = 5;
+function validarProjecao(draft){
+  const res = {applies:false, errors:[], valid:true};
+  const o = draft && draft.objetivo, pj = draft && draft.projecao;
+  if(!o || !pj || !(o.tipo==='alavancagem' || o.tipo==='revenda') || pj.exibir===false) return res;
+  res.applies = true;
+  const EPS = 1e-9;
+  const rotulo = {agio:'Ágio conservador', min:'Faixa — mínimo', max:'Faixa — máximo'};
+  const bruto = {agio:pj.agioConservadorPct, min:pj.faixaMinPct, max:pj.faixaMaxPct};
+  const val = {};
+  const erro = (campo,msg)=>{ res.errors.push({campo, msg}); };
+  ['agio','min','max'].forEach(k=>{
+    const v = bruto[k];
+    if(v===undefined || v===null || v===''){ val[k] = 0; return; }
+    const n = (typeof v==='number') ? v : Number(v);
+    if(!Number.isFinite(n)){ erro(k, `${rotulo[k]}: valor inválido (não numérico ou infinito).`); val[k] = null; return; }
+    if(n<0){ erro(k, `${rotulo[k]}: não pode ser negativo.`); val[k] = null; return; }
+    if(n>PROJECAO_LIMITE_PCT+EPS){ erro(k, `${rotulo[k]}: acima do limite permitido (${Math.round(PROJECAO_LIMITE_PCT*100)}%).`); val[k] = null; return; }
+    val[k] = n;
+  });
+  const ok = k=> val[k]!==null;
+  const tem = k=> ok(k) && val[k]>EPS;
+  if(ok('min') && ok('max')){
+    if(tem('min') !== tem('max')){
+      erro(tem('min')?'max':'min', `Faixa incompleta: informe também o ${tem('min')?'máximo':'mínimo'} da faixa (ou deixe os dois em branco).`);
+    } else if(tem('min') && tem('max')){
+      if(val.min > val.max+EPS){
+        erro('min', 'Faixa invertida: o mínimo é maior que o máximo. Corrija os valores — o sistema não os inverte sozinho.');
+        erro('max', 'O máximo não pode ser menor que o mínimo.');
+      } else if(ok('agio')){
+        if(!tem('agio')) erro('agio', 'Informe o ágio conservador para exibir a faixa (mínimo ≤ conservador ≤ máximo).');
+        else if(val.agio < val.min-EPS || val.agio > val.max+EPS) erro('agio', 'O ágio conservador deve estar dentro da faixa: mínimo ≤ conservador ≤ máximo.');
+      }
+    }
+  }
+  res.valid = res.errors.length===0;
+  return res;
+}
+/** Premissas de projeção (alavancagem/revenda) — SEMPRE informadas pelo analista;
+ *  nada aqui é calculado pelo motor nem prometido ao cliente. Só devolve valores
+ *  quando o objetivo é alavancagem/revenda, a exibição está ativa, as premissas
+ *  são consistentes (validarProjecao) e o ágio conservador está preenchido.
+ *  v36_37 — terminologia: o percentual incide sobre o crédito líquido e representa
+ *  o ÁGIO potencial (não o valor de revenda): agioEstimado = crédito líquido × %;
+ *  valorTotalProjetado = crédito líquido + agioEstimado (mostrado à parte). */
+function projecaoRevenda(draft, cons){
+  const o = draft && draft.objetivo, pj = draft && draft.projecao;
+  if(!o || !pj || !(o.tipo==='alavancagem' || o.tipo==='revenda') || pj.exibir===false) return null;
+  if(!validarProjecao(draft).valid) return null;
+  const base = Number(cons && cons.creditoDisponivelTotal);
+  const agio = Number(pj.agioConservadorPct), min = Number(pj.faixaMinPct)||0, max = Number(pj.faixaMaxPct)||0;
+  if(!Number.isFinite(base) || !(base>0) || !Number.isFinite(agio) || !(agio>0)) return null;
+  const agioEstimado = base*agio;
+  return {
+    base, agioConservadorPct: agio, agioEstimado, valorTotalProjetado: base + agioEstimado,
+    faixaMinPct: min>0?min:null, faixaMaxPct: max>0?max:null,
+    faixaAgioMin: min>0?base*min:null, faixaAgioMax: max>0?base*max:null,
+    observacao: (pj.observacao||'').trim()
+  };
+}
+/** v36_37 — validação completa para AÇÕES DEFINITIVAS: validateSimulation (motor,
+ *  intocado) + consistência das premissas de ágio. Usada em enviar, aceitar,
+ *  imprimir como definitiva, copiar resumo, marca d'água e fechamento. */
+function validateProposalFull(draft, cons){
+  const v = validateSimulation(draft, cons);
+  const pv = validarProjecao(draft);
+  const extra = [...new Set(pv.errors.map(e=>e.msg))];
+  return { errors: [...v.errors, ...extra], blocked: v.blocked || !pv.valid, projecao: pv };
+}
+function notaProjecao(v){ return (v && v.projecao && !v.projecao.valid) ? ' Premissas de ágio inconsistentes (etapa 1 — Objetivo do cliente).' : ''; }
+/** v36_37 — seguros oficialmente validados por administradora (espelha as únicas
+ *  modalidades aceitas pelo motor: seguroParaPorto/seguroParaMapfre; CNP e Embracon
+ *  só "sem seguro"). seguroModalidadeIncompativel() continua no motor como proteção
+ *  adicional. */
+const SEGURO_OPCOES_POR_ADMIN = { porto:['semSeguro','pctSaldo'], mapfre:['semSeguro','pctCredito'], cnp:['semSeguro'], embracon:['semSeguro'] };
+const SEGURO_LABELS = { semSeguro:'Sem seguro', pctSaldo:'% mensal sobre o saldo devedor', pctCredito:'% mensal sobre o crédito', pctParcela:'% sobre a parcela', valorFixo:'Valor fixo mensal' };
+function seguroOpcoesPermitidas(adminNome){ return SEGURO_OPCOES_POR_ADMIN[normalizeAdminKey(adminNome)] || ['semSeguro']; }
+function seguroCompativel(adminNome, tipo){ return seguroOpcoesPermitidas(adminNome).includes(tipo || 'semSeguro'); }
+/** Cenários alternativos (até 2, além do principal = draft.cotas). Cada alternativa
+ *  guarda só OVERRIDES por índice de cota — o que não foi sobrescrito segue o
+ *  cenário principal. O motor recebe sempre uma lista de cotas "efetiva" comum:
+ *  nada é recalculado fora de computeConsolidated. */
+function effectiveCotasForScenario(draft, alt){
+  return (draft.cotas||[]).map((c,i)=> Object.assign({}, c, (alt && alt.overrides && alt.overrides[i]) || {}));
+}
+function consForCotas(draft, cotas){
+  return computeConsolidated(cotas, draft.rates, draft.administradora, draft.grupo, draft.segmento);
+}
+function diffCotaOverrides(base, target){
+  const out = {};
+  Object.keys(target||{}).forEach(k=>{ if(JSON.stringify(base?base[k]:undefined)!==JSON.stringify(target[k])) out[k]=target[k]; });
+  return out;
+}
 function cloneDraftFromProposal(p){
   return JSON.parse(JSON.stringify({
     leadId:p.leadId, numeroProposta:p.numeroProposta, versao:p.versao, status:p.status,
@@ -8505,7 +8752,12 @@ function cloneDraftFromProposal(p){
     comercial: Object.assign({objetivoCliente:'', tituloEstrategia:'', mensagemAbertura:'', explicacaoEstrategia:'', mensagemEncerramento:'', horizonteContemplacaoEstimado:''}, p.comercial||{}),
     apresentarHistorico: !!p.apresentarHistorico, historicoGrupo: p.historicoGrupo||[],
     exibirLanceOverride: p.exibirLanceOverride===undefined ? null : p.exibirLanceOverride,
-    modoCenario: p.modoCenario || 'unico'
+    modoCenario: p.modoCenario || 'unico',
+    // v36_36 — campos comerciais novos (defaults seguros para propostas antigas)
+    objetivo: Object.assign({tipo:'', outro:''}, p.objetivo||{}),
+    projecao: Object.assign({exibir:true, agioConservadorPct:0, faixaMinPct:0, faixaMaxPct:0, observacao:''}, p.projecao||{}),
+    cenarios: Array.isArray(p.cenarios) ? p.cenarios : [],
+    cenarioPrincipalNome: p.cenarioPrincipalNome || ''
   }));
 }
 function newProposalDraft(presetLeadId){
@@ -8526,6 +8778,10 @@ function newProposalDraft(presetLeadId){
     apresentarHistorico: false, historicoGrupo: [],
     exibirLanceOverride: null, // null = automático (segue a estratégia); true/false = decisão explícita do analista
     modoCenario: 'unico', // 'unico' | 'comparacao' | 'oculto'
+    // v36_36 — objetivo comercial, premissas de projeção e cenários alternativos
+    objetivo: {tipo:'', outro:''},
+    projecao: {exibir:true, agioConservadorPct:0, faixaMinPct:0, faixaMaxPct:0, observacao:''},
+    cenarios: [], cenarioPrincipalNome: '',
     contratoGeradoId: null
   };
 }
@@ -8859,7 +9115,13 @@ function openSimpleProposalForm(id, presetLeadId){
 function openProposalForm(id, presetLeadId){
   let p = id ? DB.proposals.find(x=>x.id===id) : null;
   let draft = p ? cloneDraftFromProposal(p) : newProposalDraft(presetLeadId);
-  let ptab = 'dados';
+  // v36_36 — simulador em 5 etapas: 'objetivo' | 'carta' | 'estrategia' | 'cenarios' | 'apresentacao'.
+  // Proposta nova começa pelo objetivo; proposta existente abre direto na configuração da carta.
+  let ptab = p ? 'carta' : 'objetivo';
+  let stratCota = 0;            // cota em edição na etapa 3 (estratégia)
+  let editingScen = null;       // id do cenário alternativo em edição na etapa 4
+  let seguroAviso = '';         // aviso visível quando a troca de administradora zera um seguro incompatível
+  let expandedAdv = new Set();  // cotas com "campos técnicos" abertos na etapa 2
   let expandedCotas = new Set([0]);
   // v36.22 — item 21 do pedido: estado de quais grupos do painel da Aba 3
   // estão abertos — mesmo padrão de expandedCotas acima (Set local, nunca
@@ -8887,11 +9149,9 @@ function openProposalForm(id, presetLeadId){
         ${openedFromClientId? `<button class="link-btn" id="pBtnBackToClient" style="margin-bottom:4px;">← Voltar para propostas do cliente</button>` : ''}
         <h2>${p?'Editar proposta':'Nova proposta'} <span class="badge ${proposalBadgeClass(draft.status)}">${draft.status}</span></h2>
         <div class="modal-sub">${escapeHtml(draft.numeroProposta)} · versão ${draft.versao}${draft.leadId? ' · '+escapeHtml(DB.leads.find(l=>l.id===draft.leadId)?.nome||'') : ''}</div>
-        <div class="tabbar" id="pTabs">
-          <button data-ptab="dados" class="${ptab==='dados'?'active':''}">1. Dados da simulação</button>
-          <button data-ptab="resultado" class="${ptab==='resultado'?'active':''}">2. Resultado e cenários</button>
-          <button data-ptab="apresentacao" class="${ptab==='apresentacao'?'active':''}">3. Estúdio de Proposta</button>
-        </div>
+        <nav class="pstepper" id="pTabs" aria-label="Etapas da proposta">
+          ${PROPOSAL_STEPS.map((s,i)=>`<button type="button" class="pstep ${ptab===s.id?'active':''}" data-ptab="${s.id}" ${ptab===s.id?'aria-current="step"':''}><span class="pstep-n">${i+1}</span><span class="pstep-t">${s.label}<small>${s.sub}</small></span></button>`).join('')}
+        </nav>
       </div>
       <div class="proposal-modal-content" id="propTabBody"></div>
       <div class="proposal-modal-footer">
@@ -8913,7 +9173,7 @@ function openProposalForm(id, presetLeadId){
     `;
     document.getElementById('cancelForm').onclick = closeProposalStudio;
     const backBtn = document.getElementById('pBtnBackToClient'); if(backBtn) backBtn.onclick = closeProposalStudio;
-    modalBody.querySelectorAll('[data-ptab]').forEach(btn=> btn.onclick=()=>{ ptab=btn.dataset.ptab; modalBody.querySelectorAll('[data-ptab]').forEach(b=>b.classList.toggle('active', b.dataset.ptab===ptab)); renderTabBody(); });
+    modalBody.querySelectorAll('[data-ptab]').forEach(btn=> btn.onclick=()=>goStep(btn.dataset.ptab));
     document.getElementById('pBtnPrint').onclick = doPrint;
     document.getElementById('pBtnWhatsCopy').onclick = doWhatsCopy;
     document.getElementById('pBtnWhatsOpen').onclick = doWhatsOpen;
@@ -8931,53 +9191,226 @@ function openProposalForm(id, presetLeadId){
     renderTabBody();
   }
 
+  /* ===================== v36_36 — SIMULADOR EM 5 ETAPAS =====================
+     Toda a camada abaixo é APRESENTAÇÃO/ORQUESTRAÇÃO: cada número exibido vem de
+     computeConsolidated/computeCotaResult/validateSimulation (intocados). Os únicos
+     indicadores "novos" são somas de valores já calculados (ex.: aporte próprio =
+     recurso próprio + outro recurso) ou premissas digitadas pelo analista. */
+  let scenCota = 0;             // cota em edição dentro do editor de cenário alternativo
+  const RES_KEYS = ['recursoProprio','fgts','lanceEmbutidoValor','outroRecurso'];
+
+  function goStep(id){
+    ptab = id;
+    modalBody.querySelectorAll('[data-ptab]').forEach(b=>{
+      const on = b.dataset.ptab===ptab; b.classList.toggle('active', on);
+      if(on) b.setAttribute('aria-current','step'); else b.removeAttribute('aria-current');
+    });
+    renderTabBody();
+    const pc = modalBody.querySelector('.proposal-modal-content'); if(pc) pc.scrollTop = 0;
+  }
+  function consPrincipal(){ return computeConsolidated(draft.cotas, draft.rates, draft.administradora, draft.grupo, draft.segmento); }
+  function stepNav(prevId, nextId){
+    const P = PROPOSAL_STEPS.find(s=>s.id===prevId), N = PROPOSAL_STEPS.find(s=>s.id===nextId);
+    return `<div class="pw-nav"><div>${P?`<button type="button" class="pill-btn ghost" data-gostep="${P.id}">← ${P.label}</button>`:''}</div><div>${N?`<button type="button" class="pill-btn" data-gostep="${N.id}">${N.label} →</button>`:''}</div></div>`;
+  }
   function renderTabBody(){
     const el = document.getElementById('propTabBody');
-    if(ptab==='dados') el.innerHTML = renderDadosTab();
-    else if(ptab==='resultado') el.innerHTML = renderResultadoTab();
+    if(ptab==='objetivo') el.innerHTML = renderObjetivoTab();
+    else if(ptab==='carta') el.innerHTML = renderCartaTab();
+    else if(ptab==='estrategia') el.innerHTML = renderEstrategiaTab();
+    else if(ptab==='cenarios') el.innerHTML = renderCenariosTab();
     else el.innerHTML = renderApresentacaoTab();
     wireTabBody();
+    refreshErrors(consPrincipal());
+    refreshProjErrors();
   }
 
+  /* ---------- erros junto ao campo ---------- */
+  const ERR_RULES = [
+    [/seguro/i, 'seguro'],
+    [/^Crédito deve|^Crédito:/, 'credito'],
+    [/^Prazo deve|^Prazo:/, 'prazo'],
+    [/^Parcelas pagas/, 'parcelasPagas'],
+    [/Mês de contemplação|^Contemplação não pode|contemplação é anterior/i, 'contemplacao'],
+    [/Redutor/, 'redutor'],
+    [/Parcelas de adesão/, 'adesao'],
+    [/^TCV/, 'tcv'],
+    [/Lance fixo diferente|Regra comercial do grupo|Lance fixo exigido/, 'lanceFixo'],
+    [/Lance livre exige|Lance embutido|Recurso próprio|FGTS|Outro recurso|recursoProprio|fgts|embutido|outroRecurso|Lance total|Lance superior|Lance ofertado/, 'recursos']
+  ];
+  function fieldErrorsMap(cons){
+    const map = {};
+    cons.results.forEach((r,i)=>{ (r.avisos||[]).forEach(msg=>{
+      const rule = ERR_RULES.find(([re])=>re.test(msg));
+      const key = (rule?rule[1]:'geral')+':'+i;
+      (map[key] = map[key]||[]).push(msg);
+    }); });
+    if(!draft.leadId) map['lead:0'] = ['Selecione o cliente para salvar e enviar a proposta.'];
+    return map;
+  }
+  function errSlot(key, idx){ return `<div class="field-err" data-errslot="${key}:${idx}" role="alert" hidden></div>`; }
+  function refreshErrors(cons){
+    const map = fieldErrorsMap(cons);
+    document.querySelectorAll('[data-errslot]').forEach(el=>{
+      const msgs = map[el.dataset.errslot] || [];
+      el.hidden = !msgs.length;
+      el.innerHTML = msgs.map(m=>'⚠ '+escapeHtml(m)).join('<br>');
+      const fld = el.closest('.field'); if(fld) fld.classList.toggle('has-err', !!msgs.length);
+    });
+  }
+  function refreshDerived(cons){
+    document.querySelectorAll('[data-derived]').forEach(el=>{
+      const [k,i] = el.dataset.derived.split(':'); const r = cons.results[Number(i)]; if(!r) return;
+      el.textContent = k==='normal' ? fmtMoney(r.installments.normal) : fmtMoney(r.installments.primeiraParcelaTotal);
+    });
+  }
+  function refreshChips(){
+    document.querySelectorAll('[data-reschip]').forEach(ch=>{
+      const [k,i] = ch.dataset.reschip.split(':'); const c = draft.cotas[Number(i)]; if(!c) return;
+      const on = k==='proprio' ? num2(c.recursoProprio)>0 : k==='embutido' ? num2(c.lanceEmbutidoValor)>0 : k==='fgts' ? num2(c.fgts)>0 : k==='outro' ? num2(c.outroRecurso)>0 : (c.modalidadeEspecial && c.modalidadeEspecial!=='nenhuma');
+      ch.classList.toggle('on', !!on);
+    });
+  }
+  function refreshLive(){
+    const rule = getAdminRule(draft.administradora); const cons = consPrincipal();
+    const qp = document.getElementById('quickPreview'); if(qp) qp.innerHTML = renderQuickPreview(cons, rule);
+    refreshDerived(cons); refreshErrors(cons); refreshChips();
+    const bb = document.getElementById('bidbar'); if(bb && cons.results[stratCota]) bb.innerHTML = bidbarHtml(cons.results[stratCota]);
+    const pp = document.getElementById('projPreview'); if(pp) pp.innerHTML = projecaoPreviewHtml(cons);
+    refreshProjErrors();
+    const sg = document.getElementById('scenGrid'); if(sg) sg.innerHTML = scenGridHtml();
+    refreshStudioPreview();
+  }
+
+  /* ---------- resumo financeiro fixo (lateral) ---------- */
+  function stratLabelOf(cons){
+    if(cons.estrategiasMistas) return 'Combinada entre cotas';
+    const s = cons.results[0] && cons.results[0].bid.estrategia;
+    return (ESTRATEGIAS_CONTEMPLACAO.find(e=>e.value===s)||{}).label || '—';
+  }
+  function baseLabelOf(cons){
+    const set = new Set(cons.results.filter(r=>r.bidPct && !r.bidPct.naoAplicavel).map(r=>r.bidPct.baseLabel));
+    return set.size===1 ? [...set][0] : (set.size ? 'bases diferentes por cota' : '');
+  }
+  function postScenarioOf(dr, cons){ return (typeof window.bfrpSelectedScenario==='function') ? window.bfrpSelectedScenario(dr, cons) : null; }
+  function pendenciasText(cons){
+    const validation = validateProposalFull(draft, cons);
+    const list = [...new Set(validation.errors)].map(m=> String(m).replace('na Etapa 2 antes de', 'na Etapa 3 (resultado após a contemplação) antes de'));
+    return { list, blocked: validation.blocked };
+  }
+  function alertsBlockHtml(cons){
+    const pend = pendenciasText(cons);
+    if(pend.list.length) return `<div class="sum-alerts"><div class="sum-alert block"><b>Pendências</b>${pend.list.map(m=>'⚠ '+escapeHtml(m)).join('<br>')}<div style="margin-top:6px;font-size:11.5px;">Impedem marcar como enviada; o rascunho pode ser salvo.</div></div></div>`;
+    return `<div class="sum-alerts"><div class="sum-alert ok" style="margin-bottom:0;"><b style="margin:0;display:inline;">✓ Sem pendências</b> — pode ser marcada como enviada.</div></div>`;
+  }
   function renderQuickPreview(cons, rule){
+    const kv = (l,v,cls)=>`<div class="sum-kv ${cls||''}"><span>${l}</span><b>${v}</b></div>`;
+    const post = postScenarioOf(draft, cons);
+    const sorteio = cons.todasSorteio;
+    const baseLbl = baseLabelOf(cons);
+    const fixed = cons.results.filter(r=>r.bid.fixedInfo);
+    const aporte = (Number(cons.recursoProprioTotal)||0) + (Number(cons.outroTotal)||0);
+    const obj = objetivoLabel(draft);
     return `
-    ${cons.avisos.length? `<div class="warn-banner"><b>Alertas</b><br>${cons.avisos.map(a=>'⚠ '+a).join('<br>')}</div>` : ''}
-    <div class="result-group">
-      <div class="rg-title">Crédito</div>
-      <div class="result-line highlight"><span>Crédito total</span><b>${fmtMoney(cons.creditoTotal)}</b></div>
-      <div class="result-line"><span>Quantidade de cotas</span><b>${cons.quantidadeTotalCotas}</b>${cons.quantidadeTotalCotas!==draft.cotas.length? ` <span class="small-note">(${draft.cotas.length} linha(s) cadastrada(s))</span>`:''}</div>
-      <div class="result-line"><span>Parcela inicial (total, com seguro/adesão quando aplicável)</span><b>${fmtMoney(cons.primeiraParcelaTotal)}</b></div>
-      <div class="result-line"><span>Prazo</span><b>${cons.prazoOriginalTotal} meses</b></div>
-    </div>
-    <div class="result-group">
-      <div class="rg-title">${cons.todasSorteio? 'Contemplação por sorteio' : 'Estratégia de lance'}</div>
-      ${cons.todasSorteio? `<div class="result-line"><span>Oferta de lance</span><b>Não há neste cenário</b></div>` : `
-      <div class="result-line"><span>Recurso próprio</span><b>${fmtMoney(cons.recursoProprioTotal)}</b></div>
-      <div class="result-line"><span>Lance embutido</span><b>${fmtMoney(cons.embutidoTotal)}</b></div>
-      ${cons.fgtsTotal? `<div class="result-line"><span>FGTS</span><b>${fmtMoney(cons.fgtsTotal)}</b></div>`:''}
-      ${cons.outroTotal? `<div class="result-line"><span>Outro recurso</span><b>${fmtMoney(cons.outroTotal)}</b></div>`:''}
-      <div class="result-line highlight"><span>Lance total</span><b>${fmtMoney(cons.lanceTotal)}</b></div>
-      <div class="result-line highlight"><span>% sobre ${rule.baseLabel.toLowerCase()}</span><b>${(cons.percentualLanceMedio*100).toFixed(1)}%</b></div>
-      ${cons.results.some(r=>r.bid.fixedInfo)? `<div class="result-line"><span>Lance fixo exigido pelo grupo</span><b>${cons.results.filter(r=>r.bid.fixedInfo).every(r=>r.bid.fixedInfo.atingido)?'✓ Atingido':'✗ Não atingido'}</b></div>`:''}
-      `}
-    </div>
-    <div class="result-group">
-      <div class="rg-title">Pós-contemplação</div>
-      <div class="result-line highlight"><span>Crédito disponível após lance</span><b>${fmtMoney(cons.creditoDisponivelTotal)}</b></div>
-      <div class="result-line highlight"><span>Nova parcela (reduzir parcela)</span><b>${fmtMoney(cons.parcelaCenarioATotal)}</b></div>
-      <div class="result-line"><span>Novo prazo (reduzir prazo)</span><b>${cons.prazoBTotal.toFixed(0)} meses</b></div>
-    </div>
-    `;
+    <div class="sum-card">
+      <p class="sum-eyebrow">Resumo financeiro · ao vivo</p>
+      <div class="sum-hero">${fmtMoney(cons.creditoTotal)}</div>
+      <div class="sum-hero-sub">crédito bruto · ${cons.quantidadeTotalCotas} cota${cons.quantidadeTotalCotas===1?'':'s'}${obj?` · ${escapeHtml(obj)}`:''}</div>
+      ${alertsBlockHtml(cons)}
+      <div class="sum-sec"><div class="sum-sec-title">Plano</div>
+        ${kv(cons.results.some(r=>r.components.redutor>0)?'Parcela inicial (reduzida)':'Parcela inicial', fmtMoney(cons.primeiraParcelaTotal), 'key')}
+        ${cons.results.some(r=>r.components.redutor>0) ? kv('Parcela integral', fmtMoney(cons.parcelaNormalTotal)) : ''}
+        ${kv('Prazo'+(cons.prazosIguais?'':' (maior cota)'), cons.prazoOriginalTotal+' meses')}
+      </div>
+      <div class="sum-sec"><div class="sum-sec-title">Estratégia</div>
+        ${kv('Modalidade', stratLabelOf(cons))}
+        ${sorteio ? kv('Lance','Não há neste cenário') : `
+          ${kv('Recurso próprio', fmtMoney(cons.recursoProprioTotal))}
+          ${kv('Lance embutido', fmtMoney(cons.embutidoTotal))}
+          ${cons.fgtsTotal? kv('FGTS', fmtMoney(cons.fgtsTotal)) : ''}
+          ${cons.outroTotal? kv('Outro recurso', fmtMoney(cons.outroTotal)) : ''}
+          ${kv('Lance total', fmtMoney(cons.lanceTotal), 'key')}
+          ${kv('% sobre '+escapeHtml((baseLbl||rule.baseLabel).toLowerCase()), fmtPct(cons.percentualLanceMedio))}
+          ${fixed.length ? kv('Lance fixo exigido', fixed.every(r=>r.bid.fixedInfo.atingido)?'✓ atingido':'✗ não atingido') : ''}`}
+      </div>
+      <div class="sum-sec"><div class="sum-sec-title">Resultado</div>
+        ${kv(sorteio?'Crédito disponível':'Crédito líquido disponível', fmtMoney(cons.creditoDisponivelTotal), 'key')}
+        ${sorteio ? '' : kv('Aporte próprio necessário', fmtMoney(aporte))}
+        ${kv(sorteio?'Saldo devedor na contemplação':'Saldo após o lance', fmtMoney(cons.saldoRestanteTotal))}
+        ${post && !post.unavailable ? kv('Parcela após contemplação', fmtMoney(post.installment)) + kv('Prazo restante', Math.round(post.remainingTerm)+' meses') : (post && post.unavailable ? kv('Após contemplação','cenário indisponível') : '')}
+        ${post ? `<div class="sum-kv"><span>Cenário</span><b style="font-weight:600;">${escapeHtml(post.label)}</b></div>` : ''}
+      </div>
+    </div>`;
   }
 
-  function renderDadosTab(){
+  /* ---------- ETAPA 1 — Objetivo do cliente ---------- */
+  function projecaoPreviewHtml(cons){
+    const dv = Object.assign({}, draft, {projecao: Object.assign({}, draft.projecao, {exibir:true})});
+    const pv = validarProjecao(dv);
+    if(!pv.valid) return `<div class="sum-alert block" style="margin-top:8px;"><b>Premissas inconsistentes</b>${[...new Set(pv.errors.map(e=>e.msg))].map(m=>'⚠ '+escapeHtml(m)).join('<br>')}<div style="margin-top:6px;font-size:11.5px;">Enquanto houver inconsistência, a projeção não aparece na proposta e o envio, a impressão definitiva e o fechamento ficam bloqueados (rascunho pode ser salvo).</div></div>`;
+    const pr = projecaoRevenda(dv, cons);
+    if(!pr) return `<div class="small-note">Informe o ágio conservador para ver a estimativa. Sem premissa preenchida, nenhuma projeção aparece na proposta.</div>`;
+    return `<div class="result-group" style="margin:8px 0 0;"><div class="rg-title">Estimativa com a sua premissa</div>
+      <div class="result-line"><span>Crédito líquido</span><b>${fmtMoney(pr.base)}</b></div>
+      <div class="result-line highlight"><span>Ágio potencial estimado (${fmtPct(pr.agioConservadorPct)} do crédito líquido)</span><b>${fmtMoney(pr.agioEstimado)}</b></div>
+      ${pr.faixaAgioMin!==null && pr.faixaAgioMax!==null ? `<div class="result-line"><span>Faixa potencial de ágio</span><b>${fmtMoney(pr.faixaAgioMin)} a ${fmtMoney(pr.faixaAgioMax)}</b></div>` : ''}
+      <div class="result-line"><span>Valor total projetado de revenda (crédito líquido + ágio)</span><b>${fmtMoney(pr.valorTotalProjetado)}</b></div></div>`;
+  }
+  function refreshProjErrors(){
+    const pv = validarProjecao(draft);
+    document.querySelectorAll('[data-projerr]').forEach(el=>{
+      const msgs = pv.errors.filter(e=>e.campo===el.dataset.projerr).map(e=>e.msg);
+      el.hidden = !msgs.length;
+      el.innerHTML = msgs.map(m=>'⚠ '+escapeHtml(m)).join('<br>');
+      const fld = el.closest('.field'); if(fld) fld.classList.toggle('has-err', !!msgs.length);
+    });
+  }
+  function renderObjetivoTab(){
+    const cons = consPrincipal(); const rule = getAdminRule(draft.administradora);
+    const tipo = (draft.objetivo||{}).tipo||''; const pj = draft.projecao||{};
+    const pctVal = v=> (typeof v==='string') ? escapeHtml(v) : (Number.isFinite(v) && v ? (v*100).toFixed(1) : '');
+    const proj = (tipo==='alavancagem'||tipo==='revenda') ? `
+      <div class="pw-block">
+        <div class="pw-block-head"><h3>Premissas de ${tipo==='revenda'?'revenda':'alavancagem'}</h3><span class="pw-block-tag">Preenchidas por você</span></div>
+        <p class="pw-block-sub">O simulador não estima valorização nem retorno. A proposta só mostra uma projeção se você informar as premissas abaixo — sempre identificada como premissa, sem promessa.</p>
+        <div class="form-grid cols3">
+          <div class="field"><label>Ágio conservador (% do crédito líquido)</label><input type="number" min="0" max="500" step="0.1" data-field="projecao.agioConservadorPct" data-pct="1" value="${pctVal(pj.agioConservadorPct)}" placeholder="ex.: 43"><div class="field-err" data-projerr="agio" role="alert" hidden></div></div>
+          <div class="field"><label>Faixa de ágio — mínimo (%)</label><input type="number" min="0" max="500" step="0.1" data-field="projecao.faixaMinPct" data-pct="1" value="${pctVal(pj.faixaMinPct)}" placeholder="opcional"><div class="field-err" data-projerr="min" role="alert" hidden></div></div>
+          <div class="field"><label>Faixa de ágio — máximo (%)</label><input type="number" min="0" max="500" step="0.1" data-field="projecao.faixaMaxPct" data-pct="1" value="${pctVal(pj.faixaMaxPct)}" placeholder="opcional"><div class="field-err" data-projerr="max" role="alert" hidden></div></div>
+          <div class="field full"><label>Fonte / observação da premissa</label><input data-field="projecao.observacao" value="${escapeHtml(pj.observacao||'')}" placeholder="ex.: histórico de cessões do grupo consultado em 09/2026"></div>
+        </div>
+        <div class="checkrow"><label><input type="checkbox" data-field="projecao.exibir" ${pj.exibir!==false?'checked':''}> Exibir esta projeção na proposta ao cliente</label></div>
+        <div id="projPreview">${projecaoPreviewHtml(cons)}</div>
+      </div>` : '';
+    return `<div class="pw"><div class="pw-main">
+      <p class="pw-step-intro">Comece pelo que o cliente quer resolver. O objetivo organiza a conversa e o texto da proposta; a mecânica do consórcio (estratégia de contemplação, recursos e resultado após a contemplação) é definida nas próximas etapas.</p>
+      <div class="pw-block">
+        <div class="pw-block-head"><h3>Qual é o objetivo desta proposta?</h3><span class="pw-block-tag">Objetivo comercial</span></div>
+        <div class="choice-grid" role="radiogroup" aria-label="Objetivo do cliente">
+          ${OBJETIVOS_PROPOSTA.map(o=>`<button type="button" class="choice-card ${tipo===o.value?'selected':''}" role="radio" aria-checked="${tipo===o.value}" data-objetivo="${o.value}"><b>${o.label}</b><span>${o.desc}</span></button>`).join('')}
+        </div>
+        ${tipo==='outro' ? `<div class="field full" style="margin-top:12px;"><label>Descreva o objetivo</label><input data-field="objetivo.outro" value="${escapeHtml((draft.objetivo||{}).outro||'')}" placeholder="ex.: Reforma e ampliação da sede"></div>` : ''}
+        ${(tipo==='alavancagem'||tipo==='revenda') ? `<div class="small-note" style="margin-top:10px;">"${tipo==='revenda'?'Oportunidade de revenda':'Alavancagem patrimonial'}" é um enquadramento comercial — não é uma nova fórmula de consórcio.</div>` : ''}
+      </div>
+      ${proj}
+      <div class="pw-block">
+        <div class="field full"><label>Texto do objetivo na proposta <span class="small-note">(opcional)</span></label><input data-field="comercial.objetivoCliente" value="${escapeHtml((draft.comercial||{}).objetivoCliente||'')}" placeholder="${escapeHtml(objetivoLabel(draft)||'ex.: Aquisição de imóvel para moradia')}">
+          <div class="small-note" style="margin-top:4px;">Se preencher, este texto aparece na proposta no lugar do rótulo do objetivo escolhido acima.</div></div>
+      </div>
+      ${stepNav(null,'carta')}
+    </div><aside class="pw-side"><div id="quickPreview">${renderQuickPreview(cons, rule)}</div></aside></div>`;
+  }
+
+  /* ---------- ETAPA 2 — Configuração da carta ---------- */
+  function renderCartaTab(){
     const rule = getAdminRule(draft.administradora);
     const adminKey = normalizeAdminKey(draft.administradora);
-    const cons = computeConsolidated(draft.cotas, draft.rates, draft.administradora, draft.grupo, draft.segmento);
-    return `
-    <div class="sim-grid">
-      <div>
-        <div class="studio-group-label">Oferta</div>
+    const cons = consPrincipal();
+    const linhaTotal = (adminKey==='embracon'||adminKey==='cnp') ? ' (total da linha)' : '';
+    return `<div class="pw"><div class="pw-main">
+      <p class="pw-step-intro">Cliente, administradora e cotas. Só aparecem os campos aplicáveis à administradora escolhida; o que é técnico fica em "Campos técnicos".</p>
+      <div class="pw-block">
+        <div class="pw-block-head"><h3>Cliente e administradora</h3></div>
         <div class="form-grid cols3">
           <div class="field full lead-picker">
             <label>Cliente*</label>
@@ -8988,6 +9421,7 @@ function openProposalForm(id, presetLeadId){
               : `<input type="text" id="pf_lead_search" autocomplete="off" placeholder="Buscar por nome, telefone, CPF/CNPJ ou código..." aria-label="Buscar cliente" role="combobox" aria-expanded="false" aria-controls="pf_lead_results">`;
             })()}
             <div class="lead-picker-results" id="pf_lead_results" role="listbox"></div>
+            ${errSlot('lead',0)}
           </div>
           <div class="field">
             <label>Assessor responsável</label>
@@ -9000,42 +9434,37 @@ function openProposalForm(id, presetLeadId){
           <div class="field"><label>Administradora*</label><select id="pf_administradora">${DB.settings.administradoras.map(a=>`<option ${draft.administradora===a?'selected':''}>${escapeHtml(a)}</option>`).join('')}</select></div>
           <div class="field"><label>Segmento</label><select data-field="segmento">${DB.settings.segmentos.map(s=>`<option ${draft.segmento===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select></div>
           <div class="field"><label>Grupo</label><input data-field="grupo" value="${escapeHtml(draft.grupo||'')}"></div>
-          <div class="field"><label>Nº da proposta</label><input data-field="numeroProposta" value="${escapeHtml(draft.numeroProposta||'')}"></div>
-          <div class="field"><label>Data de criação</label><input type="date" data-field="dataCriacao" value="${draft.dataCriacao||''}"></div>
-          <div class="field"><label>Data de envio</label><input type="date" data-field="dataEnvio" value="${draft.dataEnvio||''}"></div>
-          <div class="field"><label>Validade</label><input type="date" data-field="validade" value="${draft.validade||''}"></div>
         </div>
-        <div class="base-tag">Base do percentual do lance: ${rule.baseLabel}</div>
-        <div class="small-note" style="margin:-4px 0 12px;">${rule.note}</div>
+      </div>
 
-        <div class="section-title" style="font-size:13px;margin:14px 0 8px;">Taxas do grupo</div>
+      <div class="pw-block">
+        <div class="pw-block-head"><h3>Taxas do grupo e seguro</h3></div>
         <div class="form-grid cols3">
           <div class="field"><label>Taxa de administração (%)</label><input type="number" min="0" step="0.01" data-field="rates.taxaAdministracao" data-pct="1" value="${(draft.rates.taxaAdministracao*100).toFixed(2)}"></div>
           <div class="field"><label>Fundo de reserva (%)</label><input type="number" min="0" step="0.01" data-field="rates.fundoReserva" data-pct="1" value="${(draft.rates.fundoReserva*100).toFixed(2)}"></div>
           ${rule.hasAdesao? `<div class="field"><label>Taxa de adesão (%)</label><input type="number" min="0" step="0.01" data-field="rates.taxaAdesao" data-pct="1" value="${(draft.rates.taxaAdesao*100).toFixed(2)}"></div>` : ''}
-        </div>
-        <div class="section-title" style="font-size:13px;margin:14px 0 8px;">Seguro</div>
-        <div class="small-note" style="margin:-4px 0 10px;">Defina claramente a base de incidência — não presuma que um percentual único se aplica sempre ao saldo.</div>
-        <div class="form-grid cols3">
-          <div class="field"><label>Tipo de seguro</label><select id="sf_seguro_tipo">
-            <option value="semSeguro" ${draft.rates.seguro.tipo==='semSeguro'?'selected':''}>Sem seguro</option>
-            <option value="pctSaldo" ${draft.rates.seguro.tipo==='pctSaldo'?'selected':''}>% mensal sobre o saldo devedor</option>
-            <option value="pctCredito" ${draft.rates.seguro.tipo==='pctCredito'?'selected':''}>% mensal sobre o crédito</option>
-            <option value="pctParcela" ${draft.rates.seguro.tipo==='pctParcela'?'selected':''}>% sobre a parcela</option>
-            <option value="valorFixo" ${draft.rates.seguro.tipo==='valorFixo'?'selected':''}>Valor fixo mensal</option>
-          </select></div>
+          <div class="field"><label>Seguro</label><select id="sf_seguro_tipo">
+            ${seguroOpcoesPermitidas(draft.administradora).map(t=>`<option value="${t}" ${draft.rates.seguro.tipo===t?'selected':''}>${SEGURO_LABELS[t]}</option>`).join('')}
+            ${seguroCompativel(draft.administradora, draft.rates.seguro.tipo) ? '' : `<option value="${escapeHtml(draft.rates.seguro.tipo)}" selected disabled>${escapeHtml(SEGURO_LABELS[draft.rates.seguro.tipo]||draft.rates.seguro.tipo)} — não validada para esta administradora</option>`}
+          </select>${errSlot('seguro',0)}</div>
           ${draft.rates.seguro.tipo!=='semSeguro' ? (
             draft.rates.seguro.tipo==='valorFixo'
               ? `<div class="field"><label>Valor do seguro (R$/mês)</label><input data-money min="0" data-field="rates.seguro.valor" value="${moneyStr(draft.rates.seguro.valor)}"></div>`
               : `<div class="field"><label>Percentual do seguro (%)</label><input type="number" min="0" step="0.01" data-field="rates.seguro.valor" data-pct="1" value="${(draft.rates.seguro.valor*100).toFixed(2)}"></div>`
           ) : ''}
         </div>
+        ${seguroAviso ? `<div class="sum-alert warn" style="margin-top:10px;" role="status"><b>Seguro alterado</b>${escapeHtml(seguroAviso)}</div>` : ''}
+        <div class="small-note" style="margin-top:6px;">Seguro: só as modalidades oficialmente validadas para ${escapeHtml(draft.administradora||'a administradora')} — ${seguroOpcoesPermitidas(draft.administradora).map(t=>SEGURO_LABELS[t]).join(' ou ').toLowerCase()}.</div>
+      </div>
 
-        <div class="section-title" style="font-size:13px;margin:22px 0 8px;">Cotas <button class="pill-btn sm ghost" id="pBtnAddCota" style="margin-left:8px;">+ Adicionar cota</button></div>
-        <div class="small-note" style="margin:-4px 0 10px;">Cada cartão separa a oferta (crédito, prazo, redutor) da estratégia de contemplação — a escolha da modalidade muda quais campos de lance aparecem.</div>
+      <div class="pw-block">
+        <div class="pw-block-head"><h3>Cotas</h3><span class="pw-block-tag">${cons.quantidadeTotalCotas} cota${cons.quantidadeTotalCotas===1?'':'s'} no total</span>
+          <button type="button" class="pill-btn sm ghost" id="pBtnAddCota" style="margin-left:auto;">+ Adicionar cota</button></div>
+        <p class="pw-block-sub">Cada cota pode ter prazo, redutor e estratégia próprios. A estratégia de contemplação é definida na etapa 3.</p>
         ${draft.cotas.map((c,i)=>{
           const open = expandedCotas.has(i);
           const estLabel = (ESTRATEGIAS_CONTEMPLACAO.find(e=>e.value===c.estrategiaContemplacao)||{}).label || '—';
+          const r = cons.results[i];
           return `<div class="cota-card">
             <div class="cota-card-header" data-togglecota="${i}">
               <div>
@@ -9045,162 +9474,377 @@ function openProposalForm(id, presetLeadId){
               <div class="cota-card-actions">
                 <button class="pill-btn ghost sm" data-dupcota="${i}" title="Duplicar cota">Duplicar</button>
                 ${draft.cotas.length>1?`<button class="pill-btn ghost sm" data-delcota="${i}" title="Excluir cota">Excluir</button>`:''}
-                <button class="icon-btn" data-togglebtn="${i}">${open?'▲':'▼'}</button>
+                <button class="icon-btn" data-togglebtn="${i}" aria-label="${open?'Recolher':'Expandir'} cota">${open?'▲':'▼'}</button>
               </div>
             </div>
             ${open? `<div class="cota-card-body">
-              <div class="studio-group-label">Oferta</div>
-              <div class="field"><label>Crédito</label><input data-money min="0" data-field="cota.credito" data-idx="${i}" value="${moneyStr(c.credito)}"></div>
-              <div class="field"><label>Prazo (meses)</label><input type="number" min="1" step="1" data-field="cota.prazoTotal" data-idx="${i}" value="${c.prazoTotal}"></div>
-              <div class="field"><label>Parcelas já pagas</label><input type="number" min="0" step="1" data-field="cota.parcelasPagas" data-idx="${i}" value="${c.parcelasPagas}"></div>
-              <div class="field"><label>Tipo de pessoa</label><select data-field="cota.tipoPessoa" data-idx="${i}"><option ${c.tipoPessoa==='Física'?'selected':''}>Física</option><option ${c.tipoPessoa==='Jurídica'?'selected':''}>Jurídica</option></select></div>
-              ${adminKey!=='mapfre' ? `<div class="field"><label>Redutor (%)</label><input type="number" min="0" max="90" step="1" data-field="cota.redutorPct" data-idx="${i}" data-pct="1" value="${(c.redutorPct*100).toFixed(0)}"></div>` : `<div class="field"><label>Redutor</label><div class="small-note" style="padding-top:6px;">Não disponível para esta administradora — sem fórmula oficialmente validada.</div></div>`}
-              <div class="field"><label>Contemplação prevista na parcela</label><input type="number" min="1" step="1" data-field="cota.parcelaContemplacao" data-idx="${i}" value="${c.parcelaContemplacao}"></div>
-              ${adminKey==='porto' ? `
-                <div class="field"><label>Parcelas de adesão (diluição)</label><input type="number" min="1" step="1" data-field="cota.parcelasAdesao" data-idx="${i}" value="${c.parcelasAdesao}"></div>
-                <div class="field"><label>Base do lance</label><select data-field="cota.baseLance" data-idx="${i}">
-                  <option value="categoria" ${c.baseLance==='categoria'?'selected':''}>Categoria (crédito+adesão+taxas)</option>
-                  <option value="saldo" ${c.baseLance==='saldo'?'selected':''}>Saldo devedor</option>
-                  <option value="credito" ${c.baseLance==='credito'?'selected':''}>Crédito nominal</option>
-                </select>${c.baseLancePrecisaRevisao? '<div class="small-note" style="color:var(--red);margin-top:4px;">⚠ Esta cota foi criada com um padrão anterior — o padrão oficial da Porto é "Categoria". Revise e salve para confirmar.</div>' : ''}</div>
-              ` : ''}
-              ${(adminKey==='embracon'||adminKey==='cnp') ? `
-                <div class="field"><label>Quantidade de cotas (desta linha)</label><input type="number" min="1" step="1" data-field="cota.qtdCotasUnidade" data-idx="${i}" value="${c.qtdCotasUnidade}"></div>
-                <div class="field"><label>Renda/faturamento informado (R$, opcional)</label><input data-money min="0" data-field="cota.rendaOuFaturamento" data-idx="${i}" value="${c.rendaOuFaturamento?moneyStr(c.rendaOuFaturamento):''}" placeholder="Não informado"></div>
-              ` : ''}
-              ${adminKey==='mapfre' ? `
-                <div class="field"><label>Parcelas em TCV</label><input type="number" min="0" step="1" data-field="cota.tcv" data-idx="${i}" value="${c.tcv}"></div>
-                <div class="field"><label>Forma de abatimento</label><select data-field="cota.formaAbatimento" data-idx="${i}">
-                  <option value="reduzirParcela" ${c.formaAbatimento==='reduzirParcela'?'selected':''}>Reduzir parcela</option>
-                  <option value="reduzirPrazo" ${c.formaAbatimento==='reduzirPrazo'?'selected':''}>Reduzir prazo</option>
-                </select></div>
-                <div class="field"><label>Modalidade especial</label><select data-field="cota.modalidadeEspecial" data-idx="${i}">
-                  <option value="nenhuma" ${c.modalidadeEspecial==='nenhuma'?'selected':''}>Nenhuma</option>
-                  <option value="trocaFacil" ${c.modalidadeEspecial==='trocaFacil'?'selected':''}>Lance Troca Fácil</option>
-                  <option value="construFacil" ${c.modalidadeEspecial==='construFacil'?'selected':''}>Lance ConstruFácil</option>
-                  <option value="quitaFacil" ${c.modalidadeEspecial==='quitaFacil'?'selected':''}>Lance QuitaFácil</option>
-                </select></div>
-                ${c.modalidadeEspecial!=='nenhuma' ? `<div class="field"><label>Percentual da modalidade especial (%)</label><input type="number" min="0" max="100" step="0.1" data-field="cota.percentualEspecial" data-idx="${i}" data-pct="1" value="${(c.percentualEspecial*100).toFixed(1)}"></div>` : ''}
-                <div class="field"><label>Upgrade (%)</label><input type="number" min="0" max="100" step="0.1" data-field="cota.percentualUpgrade" data-idx="${i}" data-pct="1" value="${(c.percentualUpgrade*100).toFixed(1)}"></div>
-              ` : ''}
-              <div class="studio-group-label">Estratégia de contemplação</div>
-              <div class="field full"><label>Estratégia de contemplação*</label><select data-estrselect="${i}">
-                ${ESTRATEGIAS_CONTEMPLACAO.map(e=>`<option value="${e.value}" ${c.estrategiaContemplacao===e.value?'selected':''}>${e.label}</option>`).join('')}
-              </select></div>
-              ${c.estrategiaContemplacao==='sorteio' ? `
-                <div class="field full"><div class="small-note">Sem oferta de lance neste cenário — a contemplação é projetada por sorteio, sem data estimada.</div></div>
-              ` : `
-                <div class="field"><label>Recurso próprio</label><input data-money min="0" data-field="cota.recursoProprio" data-idx="${i}" value="${moneyStr(c.recursoProprio)}"></div>
-                ${rule.allowsFGTS?`<div class="field"><label>FGTS</label><input data-money min="0" data-field="cota.fgts" data-idx="${i}" value="${moneyStr(c.fgts)}"></div>`:''}
-                <div class="field"><label>Lance embutido</label><input data-money min="0" data-field="cota.lanceEmbutidoValor" data-idx="${i}" value="${moneyStr(c.lanceEmbutidoValor)}"></div>
-                ${rule.allowsOutro?`<div class="field"><label>Outro recurso</label><input data-money min="0" data-field="cota.outroRecurso" data-idx="${i}" value="${moneyStr(c.outroRecurso)}"></div>`:''}
-                ${rule.allowsEmbeddedBid?`<div class="field"><label>Limite do lance embutido (%)</label><input type="number" min="0" max="100" step="1" data-field="cota.limiteEmbutidoPct" data-idx="${i}" data-pct="1" value="${(c.limiteEmbutidoPct*100).toFixed(0)}"></div>`:''}
-                ${c.estrategiaContemplacao==='lanceFixo' ? `
-                  <div class="field"><label>Base do lance fixo</label><select data-field="cota.lanceFixoBase" data-idx="${i}">
-                    <option value="" ${!c.lanceFixoBase?'selected':''}>Padrão da administradora (${rule.baseLabel})</option>
-                    <option value="saldoDevedor" ${c.lanceFixoBase==='saldoDevedor'?'selected':''}>Saldo devedor</option>
-                    <option value="creditoCarta" ${c.lanceFixoBase==='creditoCarta'?'selected':''}>Crédito da carta</option>
-                  </select></div>
-                  <div class="field"><label>Percentual fixo exigido pelo grupo (%)</label><input type="number" min="0" max="100" step="0.1" data-field="cota.lanceFixoPercentual" data-idx="${i}" data-pct="1" value="${(c.lanceFixoPercentual*100).toFixed(1)}"></div>
-                  <div class="field"><label>ou valor fixo exigido (R$)</label><input data-money min="0" data-field="cota.lanceFixoValor" data-idx="${i}" value="${moneyStr(c.lanceFixoValor)}"></div>
-                  <div class="field full"><div class="small-note">Informe o percentual OU o valor — o outro é calculado automaticamente. Se a composição acima não atingir exatamente o exigido, a proposta fica bloqueada para envio.</div></div>
-                ` : ''}
-              `}
+              <div class="field"><label>Crédito</label><input data-money min="0" data-field="cota.credito" data-idx="${i}" value="${moneyStr(c.credito)}">${errSlot('credito',i)}</div>
+              <div class="field"><label>Prazo (meses)</label><input type="number" min="1" step="1" data-field="cota.prazoTotal" data-idx="${i}" value="${c.prazoTotal}">${errSlot('prazo',i)}</div>
+              ${adminKey!=='mapfre' ? `<div class="field"><label>Redutor (%)</label><input type="number" min="0" max="90" step="1" data-field="cota.redutorPct" data-idx="${i}" data-pct="1" value="${(c.redutorPct*100).toFixed(0)}">${errSlot('redutor',i)}</div>` : `<div class="field"><label>Redutor</label><div class="small-note" style="padding-top:6px;">Não disponível para esta administradora — sem fórmula oficialmente validada.</div></div>`}
+              <div class="field"><label>Parcelas já pagas</label><input type="number" min="0" step="1" data-field="cota.parcelasPagas" data-idx="${i}" value="${c.parcelasPagas}">${errSlot('parcelasPagas',i)}</div>
+              <div class="field"><label>Contemplação prevista na parcela</label><input type="number" min="1" step="1" data-field="cota.parcelaContemplacao" data-idx="${i}" value="${c.parcelaContemplacao}">${errSlot('contemplacao',i)}</div>
+              ${(adminKey==='embracon'||adminKey==='cnp') ? `<div class="field"><label>Quantidade de cotas (desta linha)</label><input type="number" min="1" step="1" data-field="cota.qtdCotasUnidade" data-idx="${i}" value="${c.qtdCotasUnidade}"></div>` : ''}
+              <div class="field full">
+                <div class="calc-line"><span>Parcela integral${linhaTotal}</span><b data-derived="normal:${i}">${r?fmtMoney(r.installments.normal):'—'}</b></div>
+                <div class="calc-line"><span>Parcela inicial${c.redutorPct>0?' (com redutor)':''}${linhaTotal}</span><b data-derived="inicial:${i}">${r?fmtMoney(r.installments.primeiraParcelaTotal):'—'}</b></div>
+              </div>
+              <details class="pw-adv field full" data-advcota="${i}" ${expandedAdv.has(i)?'open':''}>
+                <summary>Campos técnicos</summary>
+                <div class="form-grid cols3" style="margin-top:6px;">
+                  <div class="field"><label>Tipo de pessoa</label><select data-field="cota.tipoPessoa" data-idx="${i}"><option ${c.tipoPessoa==='Física'?'selected':''}>Física</option><option ${c.tipoPessoa==='Jurídica'?'selected':''}>Jurídica</option></select></div>
+                  ${adminKey==='porto' ? `<div class="field"><label>Parcelas de adesão (diluição)</label><input type="number" min="1" step="1" data-field="cota.parcelasAdesao" data-idx="${i}" value="${c.parcelasAdesao}">${errSlot('adesao',i)}</div>` : ''}
+                  ${(adminKey==='embracon'||adminKey==='cnp') ? `<div class="field"><label>Renda/faturamento informado (R$, opcional)</label><input data-money min="0" data-field="cota.rendaOuFaturamento" data-idx="${i}" value="${c.rendaOuFaturamento?moneyStr(c.rendaOuFaturamento):''}" placeholder="Não informado"></div>` : ''}
+                  ${adminKey==='mapfre' ? `
+                    <div class="field"><label>Parcelas em TCV</label><input type="number" min="0" step="1" data-field="cota.tcv" data-idx="${i}" value="${c.tcv}">${errSlot('tcv',i)}</div>
+                    <div class="field"><label>Upgrade (%)</label><input type="number" min="0" max="100" step="0.1" data-field="cota.percentualUpgrade" data-idx="${i}" data-pct="1" value="${(c.percentualUpgrade*100).toFixed(1)}"></div>` : ''}
+                </div>
+              </details>
             </div>` : ''}
           </div>`;
         }).join('')}
-
-        <div class="form-grid" style="margin-top:14px;">
-          <div class="field full"><label>Observações internas</label><textarea data-field="observacoesInternas">${escapeHtml(draft.observacoesInternas||'')}</textarea></div>
-          <div class="field full"><label>Observações para o cliente</label><textarea data-field="observacoesCliente">${escapeHtml(draft.observacoesCliente||'')}</textarea></div>
-        </div>
       </div>
-      <div class="sim-side"><div id="quickPreview">${renderQuickPreview(cons, rule)}</div></div>
-    </div>
-    `;
+
+      <details class="pw-adv" id="advProposta">
+        <summary>Dados da proposta (número, datas e observações internas)</summary>
+        <div class="form-grid cols3" style="margin-top:6px;">
+          <div class="field"><label>Nº da proposta</label><input data-field="numeroProposta" value="${escapeHtml(draft.numeroProposta||'')}"></div>
+          <div class="field"><label>Data de criação</label><input type="date" data-field="dataCriacao" value="${draft.dataCriacao||''}"></div>
+          <div class="field"><label>Data de envio</label><input type="date" data-field="dataEnvio" value="${draft.dataEnvio||''}"></div>
+          <div class="field"><label>Validade</label><input type="date" data-field="validade" value="${draft.validade||''}"></div>
+          <div class="field full"><label>Observações internas</label><textarea data-field="observacoesInternas">${escapeHtml(draft.observacoesInternas||'')}</textarea></div>
+        </div>
+      </details>
+      ${stepNav('objetivo','estrategia')}
+    </div><aside class="pw-side"><div id="quickPreview">${renderQuickPreview(cons, rule)}</div></aside></div>`;
   }
 
-function renderPersonalizadoResult(cons){
-  const custom = computePersonalizadoScenario(draft, cons);
-  if(!custom) return '<div class="small-note">Informe a parcela ou o prazo desejado para simular.</div>';
-  return `<div class="result-card"><div class="result-line highlight"><span>Parcela</span><b>${fmtMoney(custom.parcela)}</b></div><div class="result-line highlight"><span>Prazo</span><b>${custom.prazo.toFixed(0)} meses</b></div>
-    <div class="small-note" style="margin-top:6px;">Saldo utilizado: ${fmtMoney(custom.saldoUtilizado)} · Diferença vs. manutenção: ${fmtMoney(custom.diferencaParcela)} na parcela, ${custom.diferencaPrazo.toFixed(0)} meses no prazo</div></div>`;
-}
+  /* ---------- ETAPA 3 — Estratégia de contemplação ---------- */
+  const ESTR_DESC = {
+    sorteio: 'Concorre nas assembleias por sorteio, sem ofertar lance.',
+    lanceLivre: 'Oferta um lance livre para concorrer à contemplação antecipada.',
+    lanceFixo: 'Oferta o percentual fixo definido pelo grupo, com prioridade sobre os lances livres.'
+  };
+  function bidbarHtml(r){
+    const b = r.bid; const tot = Number(b.total)||0;
+    if(!(tot>0)) return '<div class="small-note">Nenhum recurso informado para o lance desta cota.</div>';
+    const seg = (v,cls)=> v>0 ? `<i class="${cls}" style="width:${(v/tot*100).toFixed(2)}%"></i>` : '';
+    const leg = (v,l)=> v>0 ? `<span>${l} <b>${fmtMoney(v)}</b></span>` : '';
+    return `<div class="bidbar" role="img" aria-label="Composição do lance">${seg(b.recursoProprio,'b-prop')}${seg(b.embutido,'b-emb')}${seg(b.fgts,'b-fgts')}${seg(b.outro,'b-out')}</div>
+      <div class="bidlegend">${leg(b.recursoProprio,'Recurso próprio')}${leg(b.embutido,'Embutido')}${leg(b.fgts,'FGTS')}${leg(b.outro,'Outro')}<span>Total <b>${fmtMoney(tot)}</b></span></div>`;
+  }
+  function renderEstrategiaTab(){
+    const rule = getAdminRule(draft.administradora); const adminKey = normalizeAdminKey(draft.administradora);
+    const cons = consPrincipal();
+    if(stratCota>=draft.cotas.length) stratCota = 0;
+    const i = stratCota, c = draft.cotas[i], r = cons.results[i];
+    const sorteio = c.estrategiaContemplacao==='sorteio';
+    const objTipo = (draft.objetivo||{}).tipo;
+    const hint = (objTipo==='sorteio' && draft.cotas.some(x=>x.estrategiaContemplacao!=='sorteio')) ? 'O objetivo escolhido é "Participação por sorteio", mas há cotas com lance — revise se faz sentido.'
+      : (objTipo==='lance' && draft.cotas.every(x=>x.estrategiaContemplacao==='sorteio')) ? 'O objetivo escolhido é "Contemplação por lance", mas todas as cotas estão em sorteio — revise se faz sentido.' : '';
+    const chip = (k,label,on)=>`<span class="res-chip ${on?'on':''}" data-reschip="${k}:${i}"><i></i>${label}</span>`;
+    const pers = computePersonalizadoScenario(draft, cons);
+    const postCard = (val, title, body, disabled)=>`<label class="choice-card ${draft.estrategiaEscolhida===val?'selected':''}" ${disabled?'aria-disabled="true"':''}><input type="radio" name="pEstrategia" value="${val}" ${draft.estrategiaEscolhida===val?'checked':''} ${disabled?'disabled':''} style="position:absolute;opacity:0;pointer-events:none;"><b>${title}</b>${body}</label>`;
+    return `<div class="pw"><div class="pw-main">
+      <p class="pw-step-intro">Aqui o analista monta a estratégia. Três decisões diferentes, em blocos separados: <b>como a cota concorre</b>, <b>de onde vem o lance</b> e <b>o que muda depois da contemplação</b>. O objetivo comercial (etapa 1) fica só como enquadramento${objetivoLabel(draft)?`: <b>${escapeHtml(objetivoLabel(draft))}</b>`:''}.</p>
+      ${hint ? `<div class="sum-alert warn" style="margin-bottom:14px;">${escapeHtml(hint)}</div>` : ''}
+      ${draft.cotas.length>1 ? `<div class="cota-pick" role="tablist" aria-label="Cota em edição">${draft.cotas.map((x,k)=>`<button type="button" role="tab" class="${k===i?'active':''}" data-cotapick="${k}">Cota ${escapeHtml(x.numero)} · ${(ESTRATEGIAS_CONTEMPLACAO.find(e=>e.value===x.estrategiaContemplacao)||{}).label||'—'}</button>`).join('')}
+        <button type="button" class="pill-btn sm ghost" data-applyall="${i}" title="Copia estratégia, limites e modalidade — não copia valores de recursos">Aplicar esta estratégia às demais cotas</button></div>` : ''}
 
-  function renderResultadoTab(){
-    const rule = getAdminRule(draft.administradora);
-    const cons = computeConsolidated(draft.cotas, draft.rates, draft.administradora, draft.grupo, draft.segmento);
-    const validation = validateSimulation(draft, cons);
-    return `
-    ${validation.errors.length? `<div class="warn-banner"><b>Pendências que impedem marcar como enviada:</b><br>${validation.errors.map(a=>'⚠ '+escapeHtml(a)).join('<br>')}</div>` : ''}
-    ${cons.avisos.length? `<div class="warn-banner">${cons.avisos.map(a=>'⚠ '+escapeHtml(a)).join('<br>')}</div>` : ''}
-    <div class="toolbar" style="justify-content:space-between;">
-      <div><span class="base-tag">Base do percentual do lance: ${rule.baseLabel}</span> ${cons.todasSorteio?'<span class="badge b-prop">Contemplação por sorteio</span>':''} ${cons.estrategiasMistas?'<span class="badge b-neg">Estratégias mistas entre cotas</span>':''}</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <select id="pStatusSel">${PROPOSAL_STATUS.map(s=>`<option ${draft.status===s?'selected':''}>${s}</option>`).join('')}</select>
-        <button class="pill-btn sm ghost" id="pBtnUpdateStatus">Atualizar status</button>
+      <div class="pw-block">
+        <div class="pw-block-head"><span class="pw-block-tag">1</span><h3>Estratégia de contemplação</h3></div>
+        <p class="pw-block-sub">Como a cota concorre nas assembleias.</p>
+        <div class="choice-grid cols3" role="radiogroup" aria-label="Estratégia de contemplação">
+          ${ESTRATEGIAS_CONTEMPLACAO.map(e=>`<button type="button" class="choice-card ${c.estrategiaContemplacao===e.value?'selected':''}" role="radio" aria-checked="${c.estrategiaContemplacao===e.value}" data-estrchoice="${i}:${e.value}"><b>${e.label}</b><span>${ESTR_DESC[e.value]||''}</span></button>`).join('')}
+        </div>
+        ${errSlot('lanceFixo',i)}
+        ${adminKey==='porto' && !sorteio ? `<div class="form-grid cols3" style="margin-top:12px;"><div class="field"><label>Base do percentual do lance</label><select data-field="cota.baseLance" data-idx="${i}">
+            <option value="categoria" ${c.baseLance==='categoria'?'selected':''}>Categoria (crédito+adesão+taxas)</option>
+            <option value="saldo" ${c.baseLance==='saldo'?'selected':''}>Saldo devedor</option>
+            <option value="credito" ${c.baseLance==='credito'?'selected':''}>Crédito nominal</option>
+          </select>${c.baseLancePrecisaRevisao? '<div class="small-note" style="color:var(--red);margin-top:4px;">⚠ Esta cota foi criada com um padrão anterior — o padrão oficial da Porto é "Categoria". Revise e salve para confirmar.</div>' : ''}</div></div>` : ''}
+        <div class="base-tag" style="margin-top:10px;">Base do percentual do lance: ${escapeHtml(rule.baseLabel)}</div>
+        <div class="small-note">${escapeHtml(rule.note)}</div>
+        ${c.estrategiaContemplacao==='lanceFixo' ? `<div class="form-grid cols3" style="margin-top:12px;">
+          <div class="field"><label>Base do lance fixo</label><select data-field="cota.lanceFixoBase" data-idx="${i}">
+            <option value="" ${!c.lanceFixoBase?'selected':''}>Padrão da administradora (${escapeHtml(rule.baseLabel)})</option>
+            <option value="saldoDevedor" ${c.lanceFixoBase==='saldoDevedor'?'selected':''}>Saldo devedor</option>
+            <option value="creditoCarta" ${c.lanceFixoBase==='creditoCarta'?'selected':''}>Crédito da carta</option>
+          </select></div>
+          <div class="field"><label>Percentual fixo exigido pelo grupo (%)</label><input type="number" min="0" max="100" step="0.1" data-field="cota.lanceFixoPercentual" data-idx="${i}" data-pct="1" value="${(c.lanceFixoPercentual*100).toFixed(1)}"></div>
+          <div class="field"><label>ou valor fixo exigido (R$)</label><input data-money min="0" data-field="cota.lanceFixoValor" data-idx="${i}" value="${moneyStr(c.lanceFixoValor)}"></div>
+        </div><div class="small-note">Informe o percentual OU o valor — o outro é calculado automaticamente. Se a composição não atingir exatamente o exigido, a proposta fica bloqueada para envio. A regra do grupo (obrigatória só para lance fixo) é cadastrada em Configurações → Regras comerciais por administradora, produto e grupo.</div>` : ''}
       </div>
-    </div>
-    ${(p && p.status==='Aceita' && !p.contratoGeradoId)? `<div class="small-note" style="margin-bottom:10px;">Proposta aceita — você pode gerar o contrato agora.</div><button class="pill-btn sm" id="pBtnGenContract" style="margin-bottom:14px;">Gerar contrato a partir desta proposta</button>` : (p&&p.contratoGeradoId? '<div class="small-note" style="margin-bottom:14px;">✓ Contrato já gerado a partir desta proposta.</div>':'')}
 
-    <div class="kpi-grid" style="margin-bottom:18px;">
-      ${kpiCard('Crédito contratado', fmtMoney(cons.creditoTotal))}
-      ${kpiCard('Parcela inicial', fmtMoney(cons.primeiraParcelaTotal))}
-      ${cons.todasSorteio? kpiCard('Lance', '— (sorteio)') : kpiCard('Lance total', fmtMoney(cons.lanceTotal),'gold')}
-      ${cons.todasSorteio? '' : kpiCard('% do lance', (cons.percentualLanceMedio*100).toFixed(1)+'%','gold')}
-      ${kpiCard('Crédito disponível', fmtMoney(cons.creditoDisponivelTotal),'green')}
-      ${kpiCard('Saldo devedor após lance', fmtMoney(cons.saldoRestanteTotal))}
-    </div>
-
-    ${draft.cotas.length>1? `<div class="section-title" style="font-size:13px;">Detalhamento por cota</div>
-    <div class="table-wrap"><table><thead><tr><th>Cota</th><th>Estratégia</th><th>Crédito</th><th>Parcela</th><th>Lance</th><th>% sobre base</th><th>Crédito disponível</th></tr></thead>
-    <tbody>${cons.results.map((r,i)=>`<tr><td>${escapeHtml(draft.cotas[i].numero)}</td><td>${(ESTRATEGIAS_CONTEMPLACAO.find(e=>e.value===r.bid.estrategia)||{}).label||'—'}</td><td>${fmtMoney(draft.cotas[i].credito)}</td><td>${fmtMoney(r.installments.normal)}</td><td>${fmtMoney(r.bid.total)}</td><td>${r.bidPct.naoAplicavel?'—':(r.bidPct.percentual*100).toFixed(1)+'%'}</td><td>${fmtMoney(r.creditoDisponivel)}</td></tr>`).join('')}</tbody></table></div>
-    ${!cons.prazosIguais? `<div class="small-note" style="margin:6px 0 0;">As cotas têm prazos diferentes — "prazo" no consolidado mostra o maior prazo entre elas; os valores individuais estão na tabela acima.</div>`:''}` : ''}
-
-    <div class="section-title" style="font-size:13px;">Cenário pós-contemplação de referência</div>
-    <div class="small-note" style="margin:-4px 0 8px;">Isto só define qual cenário aparece em destaque na proposta — não interfere na estratégia de contemplação de cada cota (definida no card da cota).</div>
-    ${(cons.algumCenarioPrazoIndisponivel && draft.estrategiaEscolhida==='reduzirPrazo') ? `<div class="warn-banner" style="margin-bottom:10px;">Esta proposta está com "Redução de prazo" selecionada, mas esse cenário não está disponível para esta administradora (sem fórmula validada). Selecione "Redução de parcela" ou "Personalizado" abaixo — a proposta não pode ser enviada, aceita, impressa como definitiva ou virar contrato enquanto este cenário estiver selecionado.</div>` : ''}
-    <div class="checkrow" style="margin-bottom:10px;">
-      <label><input type="radio" name="pEstrategia" value="reduzirParcela" ${draft.estrategiaEscolhida==='reduzirParcela'?'checked':''}> Redução de parcela</label>
-      ${!cons.algumCenarioPrazoIndisponivel ? `<label><input type="radio" name="pEstrategia" value="reduzirPrazo" ${draft.estrategiaEscolhida==='reduzirPrazo'?'checked':''}> Redução de prazo</label>` : `<label class="small-note" title="Sem fórmula validada para esta administradora"><input type="radio" disabled> Redução de prazo (indisponível para esta administradora)</label>`}
-      <label><input type="radio" name="pEstrategia" value="personalizado" ${draft.estrategiaEscolhida==='personalizado'?'checked':''}> Personalizado</label>
-    </div>
-
-    <div class="scenario-compare cols3">
-      <div class="scenario-card"><h4>Cenário 1 — Redução da parcela</h4>
-        ${!cons.cenarioParcelaValido && cons.lanceTotal>0? `<div class="warn-banner" style="margin-bottom:8px;font-size:11.5px;">Não caracteriza redução real — parcela não diminuiu.</div>`:''}
-        <div class="result-line"><span>Parcela de referência</span><b>${fmtMoney(cons.parcelaManutencaoTotal)}</b></div>
-        <div class="result-line"><span>Parcela estimada</span><b>${fmtMoney(cons.parcelaCenarioATotal)}</b></div>
-        <div class="result-line"><span>Prazo estimado</span><b>${cons.prazoATotal.toFixed(0)} meses</b></div>
-        <div class="result-line"><span>Saldo remanescente</span><b>${fmtMoney(cons.saldoRestanteTotal)}</b></div>
-        <div class="result-line"><span>Crédito líquido disponível</span><b>${fmtMoney(cons.creditoDisponivelTotal)}</b></div>
+      <div class="pw-block">
+        <div class="pw-block-head"><span class="pw-block-tag">2</span><h3>Origem dos recursos</h3></div>
+        ${sorteio ? `<p class="pw-block-sub">Sorteio não usa lance — não há recursos a compor. Escolha Lance livre ou Lance fixo acima para informar recursos.</p>` : `
+        <p class="pw-block-sub">De onde vem o lance desta cota. Combine as origens preenchendo mais de um campo (ex.: recurso próprio + embutido).</p>
+        <div class="res-chips">
+          ${chip('proprio','Recurso próprio', num2(c.recursoProprio)>0)}
+          ${chip('embutido','Lance embutido', num2(c.lanceEmbutidoValor)>0)}
+          ${rule.allowsFGTS ? chip('fgts','FGTS', num2(c.fgts)>0) : ''}
+          ${rule.allowsOutro ? chip('outro','Outro recurso', num2(c.outroRecurso)>0) : ''}
+          ${adminKey==='mapfre' ? chip('especial','Modalidade especial', c.modalidadeEspecial && c.modalidadeEspecial!=='nenhuma') : ''}
+        </div>
+        <div class="form-grid cols3">
+          <div class="field"><label>Recurso próprio</label><input data-money min="0" data-field="cota.recursoProprio" data-idx="${i}" value="${moneyStr(c.recursoProprio)}"></div>
+          <div class="field"><label>Lance embutido</label><input data-money min="0" data-field="cota.lanceEmbutidoValor" data-idx="${i}" value="${moneyStr(c.lanceEmbutidoValor)}"></div>
+          ${rule.allowsFGTS?`<div class="field"><label>FGTS</label><input data-money min="0" data-field="cota.fgts" data-idx="${i}" value="${moneyStr(c.fgts)}"></div>`:''}
+          ${rule.allowsOutro?`<div class="field"><label>Outro recurso</label><input data-money min="0" data-field="cota.outroRecurso" data-idx="${i}" value="${moneyStr(c.outroRecurso)}"></div>`:''}
+          ${rule.allowsEmbeddedBid?`<div class="field"><label>Limite do lance embutido (%)</label><input type="number" min="0" max="100" step="1" data-field="cota.limiteEmbutidoPct" data-idx="${i}" data-pct="1" value="${(c.limiteEmbutidoPct*100).toFixed(0)}"></div>`:''}
+        </div>
+        ${errSlot('recursos',i)}
+        ${adminKey==='mapfre' ? `<div class="form-grid cols3" style="margin-top:12px;">
+          <div class="field"><label>Modalidade especial</label><select data-field="cota.modalidadeEspecial" data-idx="${i}">
+            <option value="nenhuma" ${c.modalidadeEspecial==='nenhuma'?'selected':''}>Nenhuma</option>
+            <option value="trocaFacil" ${c.modalidadeEspecial==='trocaFacil'?'selected':''}>Lance Troca Fácil</option>
+            <option value="construFacil" ${c.modalidadeEspecial==='construFacil'?'selected':''}>Lance ConstruFácil</option>
+            <option value="quitaFacil" ${c.modalidadeEspecial==='quitaFacil'?'selected':''}>Lance QuitaFácil</option>
+          </select></div>
+          ${c.modalidadeEspecial!=='nenhuma' ? `<div class="field"><label>Percentual da modalidade especial (%)</label><input type="number" min="0" max="100" step="0.1" data-field="cota.percentualEspecial" data-idx="${i}" data-pct="1" value="${(c.percentualEspecial*100).toFixed(1)}"></div>` : ''}
+        </div>` : ''}
+        <div style="margin-top:12px;"><div class="sum-sec-title">Composição do lance desta cota</div><div id="bidbar">${r?bidbarHtml(r):''}</div></div>`}
       </div>
-      ${!cons.algumCenarioPrazoIndisponivel ? `<div class="scenario-card"><h4>Cenário 2 — Redução do prazo</h4>
-        ${!cons.cenarioPrazoValido && cons.lanceTotal>0? `<div class="warn-banner" style="margin-bottom:8px;font-size:11.5px;">Não caracteriza redução real — prazo não diminuiu.</div>`:''}
-        <div class="result-line"><span>Parcela mantida</span><b>${fmtMoney(cons.parcelaCenarioBTotal)}</b></div>
-        <div class="result-line"><span>Prazo anterior</span><b>${cons.prazoRestanteOriginalTotal.toFixed(0)} meses</b></div>
-        <div class="result-line"><span>Novo prazo estimado</span><b>${cons.prazoBTotal.toFixed(0)} meses</b></div>
-        <div class="result-line"><span>Parcelas reduzidas (aprox.)</span><b>${Math.max(0,cons.prazoRestanteOriginalTotal-cons.prazoBTotal).toFixed(0)}</b></div>
-        <div class="result-line"><span>Saldo remanescente</span><b>${fmtMoney(cons.saldoRestanteTotal)}</b></div>
-      </div>` : `<div class="scenario-card"><h4>Cenário 2 — Redução do prazo</h4>
-        <div class="small-note">Indisponível para esta administradora — ainda não há fórmula oficial validada para recalcular o prazo.</div>
-      </div>`}
-      <div class="scenario-card"><h4>Cenário 3 — Manutenção do plano</h4>
-        <div class="small-note" style="margin-bottom:8px;">Base de comparação${cons.todasSorteio?' (cenário principal para sorteio)':''}.</div>
-        <div class="result-line"><span>Parcela de referência</span><b>${fmtMoney(cons.parcelaManutencaoTotal)}</b></div>
-        <div class="result-line"><span>Prazo restante</span><b>${cons.prazoManutencaoTotal.toFixed(0)} meses</b></div>
-        <div class="result-line"><span>Saldo devedor</span><b>${fmtMoney(cons.saldoProjetadoTotal)}</b></div>
-        <div class="result-line"><span>Crédito líquido</span><b>${fmtMoney(cons.creditoDisponivelTotal)}</b></div>
-      </div>
-    </div>
 
-    <div class="section-title" style="font-size:13px;">Cenário C — Personalizado</div>
-    <div class="form-grid">
-      <div class="field"><label>Parcela desejada (R$)</label><input data-money id="pCustomParcela" value="${moneyStr((draft.personalizado||{}).parcelaDesejada)}"></div>
-      <div class="field"><label>Prazo desejado (meses)</label><input type="number" id="pCustomPrazo" value="${(draft.personalizado||{}).prazoDesejado||''}"></div>
-    </div>
-    <div id="pCustomResult" style="margin-top:8px;">${renderPersonalizadoResult(cons)}</div>
-    `;
+      <div class="pw-block">
+        <div class="pw-block-head"><span class="pw-block-tag">3</span><h3>Resultado após a contemplação</h3></div>
+        <p class="pw-block-sub">O que acontece com a parcela e o prazo depois de contemplar. Define o cenário destacado na proposta — não altera a estratégia de contemplação.</p>
+        ${(cons.algumCenarioPrazoIndisponivel && draft.estrategiaEscolhida==='reduzirPrazo') ? `<div class="warn-banner">Redução de prazo está selecionada, mas não está disponível para esta administradora (sem fórmula validada). Escolha "Redução de parcela" ou "Personalizado" — a proposta não pode ser enviada, aceita, impressa como definitiva ou virar contrato com este cenário.</div>` : ''}
+        <div class="choice-grid cols3" role="radiogroup" aria-label="Resultado após a contemplação">
+          ${postCard('reduzirParcela','Redução de parcela',`<span>${fmtMoney(cons.parcelaCenarioATotal)} · ${cons.prazoATotal.toFixed(0)} meses</span><span>Saldo remanescente ${fmtMoney(cons.saldoRestanteTotal)}</span>${!cons.cenarioParcelaValido && cons.lanceTotal>0?'<span style="color:var(--red);">Não caracteriza redução real — parcela não diminuiu.</span>':''}`)}
+          ${!cons.algumCenarioPrazoIndisponivel ? postCard('reduzirPrazo','Redução de prazo',`<span>${fmtMoney(cons.parcelaCenarioBTotal)} · ${cons.prazoBTotal.toFixed(0)} meses</span><span>${Math.max(0,cons.prazoRestanteOriginalTotal-cons.prazoBTotal).toFixed(0)} parcelas a menos (aprox.)</span>${!cons.cenarioPrazoValido && cons.lanceTotal>0?'<span style="color:var(--red);">Não caracteriza redução real — prazo não diminuiu.</span>':''}`) : postCard('reduzirPrazo','Redução de prazo','<span>Indisponível para esta administradora — sem fórmula oficial validada.</span>', true)}
+          ${postCard('personalizado','Personalizado',`<span>${pers?`${fmtMoney(pers.parcela)} · ${pers.prazo.toFixed(0)} meses`:'Informe a parcela ou o prazo desejado.'}</span>`)}
+        </div>
+        <div class="small-note" style="margin-top:8px;">Referência — manutenção do plano: ${fmtMoney(cons.parcelaManutencaoTotal)} por ${cons.prazoManutencaoTotal.toFixed(0)} meses.</div>
+        ${draft.estrategiaEscolhida==='personalizado' ? `<div class="form-grid" style="margin-top:12px;">
+          <div class="field"><label>Parcela desejada (R$)</label><input data-money id="pCustomParcela" value="${moneyStr((draft.personalizado||{}).parcelaDesejada)}"></div>
+          <div class="field"><label>Prazo desejado (meses)</label><input type="number" id="pCustomPrazo" value="${(draft.personalizado||{}).prazoDesejado||''}"></div>
+        </div><div id="pCustomResult" style="margin-top:8px;">${renderPersonalizadoResult(cons)}</div>` : ''}
+        ${adminKey==='mapfre' ? `<div class="form-grid cols3" style="margin-top:12px;"><div class="field"><label>Forma de abatimento (Mapfre) — cota ${escapeHtml(c.numero)}</label><select data-field="cota.formaAbatimento" data-idx="${i}">
+          <option value="reduzirParcela" ${c.formaAbatimento==='reduzirParcela'?'selected':''}>Reduzir parcela</option>
+          <option value="reduzirPrazo" ${c.formaAbatimento==='reduzirPrazo'?'selected':''}>Reduzir prazo</option>
+        </select></div></div>` : ''}
+      </div>
+      ${stepNav('carta','cenarios')}
+    </div><aside class="pw-side"><div id="quickPreview">${renderQuickPreview(cons, rule)}</div></aside></div>`;
+  }
+  function renderPersonalizadoResult(cons){
+    const custom = computePersonalizadoScenario(draft, cons);
+    if(!custom) return '<div class="small-note">Informe a parcela ou o prazo desejado para simular.</div>';
+    return `<div class="result-card"><div class="result-line highlight"><span>Parcela</span><b>${fmtMoney(custom.parcela)}</b></div><div class="result-line highlight"><span>Prazo</span><b>${custom.prazo.toFixed(0)} meses</b></div>
+      <div class="small-note" style="margin-top:6px;">Saldo utilizado: ${fmtMoney(custom.saldoUtilizado)} · Diferença vs. manutenção: ${fmtMoney(custom.diferencaParcela)} na parcela, ${custom.diferencaPrazo.toFixed(0)} meses no prazo</div></div>`;
+  }
+  function setEstrategia(idx, value){
+    const c = draft.cotas[idx]; if(!c || c.estrategiaContemplacao===value) return;
+    if(value==='sorteio'){
+      const temValores = num2(c.recursoProprio)>0 || num2(c.fgts)>0 || num2(c.lanceEmbutidoValor)>0 || num2(c.outroRecurso)>0;
+      if(temValores){
+        const zerar = window.confirm('Esta cota já tem valores de lance preenchidos (recurso próprio, FGTS, embutido ou outro recurso).\n\nA estratégia "Sorteio" não usa lance — esses valores serão ZERADOS se você continuar.\n\nClique OK para zerar os valores e mudar para Sorteio, ou Cancelar para manter os valores e a estratégia atual.');
+        if(!zerar) return;
+      }
+      c.recursoProprio=0; c.fgts=0; c.lanceEmbutidoValor=0; c.outroRecurso=0;
+    }
+    c.estrategiaContemplacao = value;
+    renderTabBody();
+  }
+  function applyStrategyToAll(idx){
+    const src = draft.cotas[idx]; if(!src) return;
+    const keys = ['estrategiaContemplacao','limiteEmbutidoPct','lanceFixoPercentual','lanceFixoValor','lanceFixoBase','modalidadeEspecial','percentualEspecial','formaAbatimento'];
+    draft.cotas.forEach((c,k)=>{ if(k===idx) return; keys.forEach(key=>{ c[key]=src[key]; }); if(src.estrategiaContemplacao==='sorteio'){ c.recursoProprio=0; c.fgts=0; c.lanceEmbutidoValor=0; c.outroRecurso=0; } });
+    showToast('Estratégia aplicada às demais cotas (valores de recursos não foram copiados).');
+    renderTabBody();
+  }
+
+  /* ---------- ETAPA 4 — Comparação de cenários ---------- */
+  const SCEN_FOCOS = [
+    {value:'', label:'Sem foco definido'}, {value:'menorAporte', label:'Menor aporte próprio'}, {value:'maiorCredito', label:'Maior crédito líquido'},
+    {value:'menorParcelaInicial', label:'Menor parcela inicial'}, {value:'menorParcelaPos', label:'Menor parcela após a contemplação'},
+    {value:'menorPrazo', label:'Menor prazo'}, {value:'personalizada', label:'Estratégia personalizada'}
+  ];
+  function scenModels(){
+    const list = [{id:'principal', nome: draft.cenarioPrincipalNome || 'Cenário principal', foco:'', cotas: draft.cotas, alt:null}];
+    (draft.cenarios||[]).forEach((s,k)=> list.push({id:s.id, nome: s.nome || ('Cenário '+String.fromCharCode(66+k)), foco: s.foco||'', cotas: effectiveCotasForScenario(draft, s), alt:s}));
+    list.forEach(m=>{
+      m.cons = consForCotas(draft, m.cotas);
+      m.post = postScenarioOf(Object.assign({}, draft, {cotas:m.cotas}), m.cons);
+    });
+    return list;
+  }
+  const SCEN_ROWS = [
+    {k:'credito', label:'Crédito contratado', get:m=>m.cons.creditoTotal, fmt:fmtMoney},
+    {k:'parcelaInicial', label:'Parcela inicial', get:m=>m.cons.primeiraParcelaTotal, fmt:fmtMoney, best:'min'},
+    {k:'estrategia', label:'Estratégia', text:m=>stratLabelOf(m.cons)},
+    {k:'lance', label:'Lance total', get:m=>m.cons.todasSorteio?null:m.cons.lanceTotal, fmt:fmtMoney},
+    {k:'proprio', label:'Recurso próprio', get:m=>m.cons.todasSorteio?null:m.cons.recursoProprioTotal, fmt:fmtMoney, best:'min'},
+    {k:'embutido', label:'Lance embutido', get:m=>m.cons.todasSorteio?null:m.cons.embutidoTotal, fmt:fmtMoney},
+    {k:'liquido', label:'Crédito líquido', get:m=>m.cons.creditoDisponivelTotal, fmt:fmtMoney, best:'max'},
+    {k:'parcelaPos', label:'Parcela após contemplação', get:m=>(m.post && !m.post.unavailable)?m.post.installment:null, fmt:fmtMoney, best:'min'},
+    {k:'prazoPos', label:'Prazo restante', get:m=>(m.post && !m.post.unavailable)?m.post.remainingTerm:null, fmt:n=>Math.round(n)+' meses', best:'min'}
+  ];
+  function scenGridHtml(){
+    const models = scenModels(); const base = models[0];
+    const bestOf = {};
+    SCEN_ROWS.forEach(row=>{
+      if(!row.best || models.length<2) return;
+      const vals = models.map(m=>row.get(m)).filter(v=>v!==null && v!==undefined && isFinite(v));
+      if(vals.length<2) return;
+      const min = Math.min(...vals), max = Math.max(...vals);
+      if(Math.abs(max-min)<0.005) return;
+      bestOf[row.k] = row.best==='min' ? min : max;
+    });
+    const focoLabel = f=> (SCEN_FOCOS.find(x=>x.value===f)||{}).label || '';
+    const cards = models.map(m=>{
+      const rows = SCEN_ROWS.map(row=>{
+        if(row.text) return `<div class="scen-row"><span>${row.label}</span><div class="v"><b>${escapeHtml(row.text(m))}</b></div></div>`;
+        const v = row.get(m);
+        if(v===null || v===undefined) return `<div class="scen-row"><span>${row.label}</span><div class="v"><b>—</b></div></div>`;
+        let delta = '';
+        if(m!==base){
+          const b0 = row.get(base);
+          if(b0!==null && b0!==undefined){
+            const d = v-b0;
+            if(Math.abs(d)<0.005) delta = '<span class="delta">= principal</span>';
+            else {
+              const good = row.best==='min' ? d<0 : (row.best==='max' ? d>0 : null);
+              const txt = row.k==='prazoPos' ? (d>0?'+':'−')+Math.abs(Math.round(d))+' meses' : (d>0?'+':'−')+fmtMoney(Math.abs(d));
+              delta = `<span class="delta ${good===null?'':(good?'up':'down')}">${txt} vs. principal</span>`;
+            }
+          }
+        }
+        const isBest = bestOf[row.k]!==undefined && Math.abs(v-bestOf[row.k])<0.005;
+        return `<div class="scen-row"><span>${row.label}</span><div class="v ${isBest?'best':''}"><b>${row.fmt(v)}</b>${delta}</div></div>`;
+      }).join('');
+      const nAv = m.cons.avisos.length;
+      const alerts = `<div class="scen-row"><span>Alertas</span><div class="v"><b style="${nAv?'color:var(--red)':'color:var(--green)'}">${nAv?nAv+' alerta'+(nAv===1?'':'s'):'Sem alertas'}</b>${nAv?`<span class="delta" title="${escapeHtml(m.cons.avisos.join(' | '))}">${escapeHtml(m.cons.avisos[0].slice(0,70))}${m.cons.avisos[0].length>70?'…':''}</span>`:''}</div></div>`;
+      const isPrincipal = m===base;
+      return `<div class="scen-card ${isPrincipal?'presented':''}" data-scencard="${m.id}">
+        <div class="scen-head"><h4>${escapeHtml(m.nome)}</h4>${isPrincipal?'<span class="scen-badge">Apresentado ao cliente</span>':''}</div>
+        <p class="scen-strat">${isPrincipal?'Cenário principal — base da comparação, do contrato e da proposta.':(focoLabel(m.foco)||'Alternativa')}</p>
+        ${rows}${alerts}
+        <div class="scen-actions">
+          ${isPrincipal ? '' : `<button type="button" class="pill-btn sm" data-scenpresent="${m.id}">Apresentar este cenário</button><button type="button" class="pill-btn sm ghost" data-scenedit="${m.id}">${editingScen===m.id?'Editando…':'Editar'}</button><button type="button" class="pill-btn sm ghost" data-scendel="${m.id}" style="color:var(--red);border-color:var(--red);">Excluir</button>`}
+        </div>
+      </div>`;
+    });
+    const canAdd = (draft.cenarios||[]).length < 2;
+    const empty = canAdd ? `<div class="scen-empty"><button type="button" class="pill-btn ghost" data-scennew="1">+ Criar cenário alternativo</button><p style="margin:10px 0 0;">Parte do cenário principal — altere só o que muda (estratégia, recursos, redutor, prazo).</p></div>` : '';
+    return cards.join('') + empty;
+  }
+  function scenEditorHtml(){
+    const alt = (draft.cenarios||[]).find(s=>s.id===editingScen); if(!alt) return '';
+    if(scenCota>=draft.cotas.length) scenCota = 0;
+    const rule = getAdminRule(draft.administradora); const adminKey = normalizeAdminKey(draft.administradora);
+    const i = scenCota; const ov = alt.overrides[i] = alt.overrides[i] || {};
+    const eff = Object.assign({}, draft.cotas[i], ov);
+    const sorteio = eff.estrategiaContemplacao==='sorteio';
+    const sid = alt.id;
+    const f = (key,label,inner)=>`<div class="field ${Object.prototype.hasOwnProperty.call(ov,key)?'diff':''}"><label>${label}</label>${inner}</div>`;
+    const attr = (key)=>`data-field="cota.${key}" data-idx="${i}" data-scen="${sid}"`;
+    return `<div class="scen-editor" id="scenEditorBox">
+      <div class="pw-block-head"><h3>Editando: ${escapeHtml(alt.nome||'Cenário')}</h3><button type="button" class="link-btn" data-scenclose="1" style="margin-left:auto;">Concluir edição</button></div>
+      <p class="pw-block-sub">Campos marcados com <b style="color:var(--gold)">•</b> diferem do cenário principal; os demais acompanham o principal automaticamente.</p>
+      <div class="form-grid cols3">
+        <div class="field"><label>Nome do cenário</label><input data-scenname="${sid}" value="${escapeHtml(alt.nome||'')}"></div>
+        <div class="field"><label>Foco</label><select data-scenfoco="${sid}">${SCEN_FOCOS.map(x=>`<option value="${x.value}" ${(alt.foco||'')===x.value?'selected':''}>${x.label}</option>`).join('')}</select></div>
+      </div>
+      ${draft.cotas.length>1 ? `<div class="cota-pick" style="margin-top:12px;">${draft.cotas.map((x,k)=>`<button type="button" class="${k===i?'active':''}" data-scencota="${k}">Cota ${escapeHtml(x.numero)}</button>`).join('')}</div>` : ''}
+      <div class="form-grid cols3" style="margin-top:10px;">
+        ${f('estrategiaContemplacao','Estratégia', `<select data-scenestr="${sid}:${i}">${ESTRATEGIAS_CONTEMPLACAO.map(e=>`<option value="${e.value}" ${eff.estrategiaContemplacao===e.value?'selected':''}>${e.label}</option>`).join('')}</select>`)}
+        ${f('credito','Crédito', `<input data-money min="0" ${attr('credito')} value="${moneyStr(eff.credito)}">`)}
+        ${f('prazoTotal','Prazo (meses)', `<input type="number" min="1" step="1" ${attr('prazoTotal')} value="${eff.prazoTotal}">`)}
+        ${adminKey!=='mapfre' ? f('redutorPct','Redutor (%)', `<input type="number" min="0" max="90" step="1" data-pct="1" ${attr('redutorPct')} value="${(eff.redutorPct*100).toFixed(0)}">`) : ''}
+        ${f('parcelaContemplacao','Contemplação prevista na parcela', `<input type="number" min="1" step="1" ${attr('parcelaContemplacao')} value="${eff.parcelaContemplacao}">`)}
+        ${sorteio ? '' : `
+          ${f('recursoProprio','Recurso próprio', `<input data-money min="0" ${attr('recursoProprio')} value="${moneyStr(eff.recursoProprio)}">`)}
+          ${f('lanceEmbutidoValor','Lance embutido', `<input data-money min="0" ${attr('lanceEmbutidoValor')} value="${moneyStr(eff.lanceEmbutidoValor)}">`)}
+          ${rule.allowsFGTS ? f('fgts','FGTS', `<input data-money min="0" ${attr('fgts')} value="${moneyStr(eff.fgts)}">`) : ''}
+          ${rule.allowsOutro ? f('outroRecurso','Outro recurso', `<input data-money min="0" ${attr('outroRecurso')} value="${moneyStr(eff.outroRecurso)}">`) : ''}
+          ${rule.allowsEmbeddedBid ? f('limiteEmbutidoPct','Limite do embutido (%)', `<input type="number" min="0" max="100" step="1" data-pct="1" ${attr('limiteEmbutidoPct')} value="${(eff.limiteEmbutidoPct*100).toFixed(0)}">`) : ''}
+          ${eff.estrategiaContemplacao==='lanceFixo' ? f('lanceFixoPercentual','% fixo exigido', `<input type="number" min="0" max="100" step="0.1" data-pct="1" ${attr('lanceFixoPercentual')} value="${(eff.lanceFixoPercentual*100).toFixed(1)}">`) + f('lanceFixoValor','ou valor fixo (R$)', `<input data-money min="0" ${attr('lanceFixoValor')} value="${moneyStr(eff.lanceFixoValor)}">`) : ''}
+          ${adminKey==='mapfre' ? f('modalidadeEspecial','Modalidade especial', `<select ${attr('modalidadeEspecial')}><option value="nenhuma" ${eff.modalidadeEspecial==='nenhuma'?'selected':''}>Nenhuma</option><option value="trocaFacil" ${eff.modalidadeEspecial==='trocaFacil'?'selected':''}>Lance Troca Fácil</option><option value="construFacil" ${eff.modalidadeEspecial==='construFacil'?'selected':''}>Lance ConstruFácil</option><option value="quitaFacil" ${eff.modalidadeEspecial==='quitaFacil'?'selected':''}>Lance QuitaFácil</option></select>`) + (eff.modalidadeEspecial!=='nenhuma' ? f('percentualEspecial','% da modalidade especial', `<input type="number" min="0" max="100" step="0.1" data-pct="1" ${attr('percentualEspecial')} value="${(eff.percentualEspecial*100).toFixed(1)}">`) : '') : ''}`}
+      </div>
+    </div>`;
+  }
+  function renderCenariosTab(){
+    const cons = consPrincipal();
+    const many = draft.cotas.length>1;
+    return `<div class="pw-main">
+      <p class="pw-step-intro">Compare até três alternativas da mesma proposta. O <b>cenário apresentado</b> (principal) é o que vai para a proposta, para o contrato e para a comissão; as alternativas partem dele e só guardam o que muda. Nada aqui altera o motor financeiro nem cria propostas duplicadas.</p>
+      ${alertsBlockHtml(cons)}
+      <div class="scen-grid" id="scenGrid">${scenGridHtml()}</div>
+      <p class="scen-legend">● melhor valor entre os cenários naquela linha (menor aporte, menor parcela, menor prazo, maior crédito líquido). "Apresentar este cenário" troca o principal — o anterior vira alternativa.</p>
+      <div id="scenEditor">${scenEditorHtml()}</div>
+      ${many ? `<div class="pw-block" style="margin-top:22px;"><div class="pw-block-head"><h3>Detalhamento por cota — cenário apresentado</h3></div>
+        <div class="table-wrap"><table><thead><tr><th>Cota</th><th>Estratégia</th><th>Crédito</th><th>Parcela</th><th>Lance</th><th>% sobre base</th><th>Crédito disponível</th></tr></thead>
+        <tbody>${cons.results.map((r,i)=>`<tr><td>${escapeHtml(draft.cotas[i].numero)}</td><td>${(ESTRATEGIAS_CONTEMPLACAO.find(e=>e.value===r.bid.estrategia)||{}).label||'—'}</td><td>${fmtMoney(draft.cotas[i].credito)}</td><td>${fmtMoney(r.installments.normal)}</td><td>${fmtMoney(r.bid.total)}</td><td>${r.bidPct.naoAplicavel?'—':(r.bidPct.percentual*100).toFixed(1)+'%'}</td><td>${fmtMoney(r.creditoDisponivel)}</td></tr>`).join('')}</tbody></table></div>
+        ${!cons.prazosIguais? `<div class="small-note" style="margin:6px 0 0;">As cotas têm prazos diferentes — "prazo" no consolidado mostra o maior prazo entre elas; os valores individuais estão na tabela acima.</div>`:''}</div>` : ''}
+      ${stepNav('estrategia','apresentacao')}
+    </div>`;
+  }
+  function presentScenario(id){
+    const oldCotas = draft.cotas; const alts = draft.cenarios||[];
+    const idxAlt = alts.findIndex(s=>s.id===id); if(idxAlt<0) return;
+    const effs = alts.map(s=> oldCotas.map((c,i)=> Object.assign({}, c, (s.overrides&&s.overrides[i])||{})));
+    const newP = effs[idxAlt];
+    alts.forEach((s,k)=>{
+      if(k===idxAlt){
+        s.overrides = oldCotas.map((oc,i)=> diffCotaOverrides(newP[i], oc));
+        const promovido = s.nome; s.nome = draft.cenarioPrincipalNome || 'Cenário principal'; draft.cenarioPrincipalNome = promovido; s.foco = '';
+      } else {
+        s.overrides = effs[k].map((ec,i)=> diffCotaOverrides(newP[i], ec));
+      }
+    });
+    draft.cotas = newP;
+    showToast('Cenário definido como apresentado ao cliente.');
+    renderTabBody();
+  }
+  function scenDelete(id){
+    const s = (draft.cenarios||[]).find(x=>x.id===id); if(!s) return;
+    if(!window.confirm(`Excluir o cenário "${s.nome||'alternativo'}"? Esta ação não pode ser desfeita.`)) return;
+    draft.cenarios = draft.cenarios.filter(x=>x.id!==id);
+    if(editingScen===id) editingScen = null;
+    renderTabBody();
+  }
+  function scenNew(){
+    if((draft.cenarios||[]).length>=2) return;
+    draft.cenarios = draft.cenarios||[];
+    const s = {id: uid('scn'), nome: 'Cenário '+String.fromCharCode(66+draft.cenarios.length), foco:'', overrides: draft.cotas.map(()=>({}))};
+    draft.cenarios.push(s); editingScen = s.id; scenCota = 0;
+    renderTabBody();
+  }
+
+  /* ---------- delegação de cliques das etapas novas ---------- */
+  function delegatedClick(e){
+    const t = e.target.closest('[data-gostep],[data-objetivo],[data-estrchoice],[data-cotapick],[data-applyall],[data-scennew],[data-scenedit],[data-scenpresent],[data-scendel],[data-scenclose],[data-scencota]');
+    if(!t) return;
+    if(t.dataset.gostep){ goStep(t.dataset.gostep); return; }
+    if(t.dataset.objetivo!==undefined){ draft.objetivo = draft.objetivo||{tipo:'',outro:''}; draft.objetivo.tipo = t.dataset.objetivo; renderTabBody(); return; }
+    if(t.dataset.estrchoice){ const [ix,val] = t.dataset.estrchoice.split(':'); setEstrategia(Number(ix), val); return; }
+    if(t.dataset.cotapick!==undefined){ stratCota = Number(t.dataset.cotapick); renderTabBody(); return; }
+    if(t.dataset.applyall!==undefined){ applyStrategyToAll(Number(t.dataset.applyall)); return; }
+    if(t.dataset.scennew){ scenNew(); return; }
+    if(t.dataset.scenedit){ editingScen = t.dataset.scenedit; renderTabBody(); return; }
+    if(t.dataset.scenpresent){ presentScenario(t.dataset.scenpresent); return; }
+    if(t.dataset.scendel){ scenDelete(t.dataset.scendel); return; }
+    if(t.dataset.scenclose){ editingScen = null; renderTabBody(); return; }
+    if(t.dataset.scencota!==undefined){ scenCota = Number(t.dataset.scencota); renderTabBody(); return; }
+  }
+  function scenMetaHandler(e){
+    const el = e.target; if(!el || !el.dataset) return;
+    const findAlt = (sid)=> (draft.cenarios||[]).find(s=>s.id===sid);
+    if(el.dataset.scenname!==undefined){
+      const s = findAlt(el.dataset.scenname); if(!s) return;
+      s.nome = el.value; const sg = document.getElementById('scenGrid'); if(sg) sg.innerHTML = scenGridHtml();
+    } else if(el.dataset.scenfoco!==undefined){
+      const s = findAlt(el.dataset.scenfoco); if(!s) return;
+      s.foco = el.value; const sg = document.getElementById('scenGrid'); if(sg) sg.innerHTML = scenGridHtml();
+    } else if(el.dataset.scenestr!==undefined && e.type==='change'){
+      const [sid, ix] = el.dataset.scenestr.split(':'); const s = findAlt(sid); if(!s) return;
+      const idx = Number(ix); s.overrides[idx] = s.overrides[idx] || {};
+      s.overrides[idx].estrategiaContemplacao = el.value;
+      if(el.value==='sorteio'){ RES_KEYS.forEach(k=>{ s.overrides[idx][k] = 0; }); }
+      renderTabBody();
+    }
   }
 
   function renderApresentacaoTab(){
@@ -9239,10 +9883,17 @@ function renderPersonalizadoResult(cons){
           <option value="comparacao" ${draft.modoCenario==='comparacao'?'selected':''}>Mostrar comparação de cenários</option>
           <option value="oculto" ${draft.modoCenario==='oculto'?'selected':''}>Não mostrar cenários pós-contemplação</option>
         </select></div>
-        <div class="small-note" style="margin:-2px 0 0;">Quando desativado, o conteúdo de lance não é apenas escondido — ele não entra no documento gerado.</div>`;
+        <div class="small-note" style="margin:-2px 0 0;">Quando desativado, o conteúdo de lance não é apenas escondido — ele não entra no documento gerado.</div>
+        <div class="small-note">Cenário apresentado: <b>${escapeHtml(draft.cenarioPrincipalNome || 'Cenário principal')}</b>${(draft.cenarios||[]).length?` · ${(draft.cenarios||[]).length} alternativa(s) na etapa 4`:''} — <button type="button" class="link-btn" data-gostep="cenarios">alterar</button>.</div>
+        ${(draft.objetivo && (draft.objetivo.tipo==='alavancagem'||draft.objetivo.tipo==='revenda')) ? `<div class="small-note">Projeção de ${draft.objetivo.tipo==='revenda'?'revenda':'alavancagem'}: ${projecaoRevenda(draft, cons) ? '<b>será exibida</b> (premissas informadas)' : (!validarProjecao(draft).valid ? '<b style="color:var(--red)">não será exibida — premissas de ágio inconsistentes</b>' : '<b>não será exibida</b> — sem premissa preenchida ou com exibição desligada')} — <button type="button" class="link-btn" data-gostep="objetivo">ajustar na etapa 1</button>.</div>` : ''}`;
+
+    const situacaoBody = `
+        <div class="field full"><label>Status da proposta</label><select id="pStatusSel">${PROPOSAL_STATUS.map(s=>`<option ${draft.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+        <div><button type="button" class="pill-btn sm ghost" id="pBtnUpdateStatus">Atualizar status</button></div>
+        ${(p && p.status==='Aceita' && !p.contratoGeradoId)? `<div class="small-note">Proposta aceita — você pode gerar o contrato agora (segue o cenário apresentado).</div><div><button type="button" class="pill-btn sm" id="pBtnGenContract">Gerar contrato a partir desta proposta</button></div>` : (p&&p.contratoGeradoId? '<div class="small-note">✓ Contrato já gerado a partir desta proposta.</div>':'')}`;
 
     const personalizacaoBody = `
-        <div class="field full"><label>Objetivo do cliente</label><input data-field="comercial.objetivoCliente" value="${escapeHtml(com.objetivoCliente||'')}" placeholder="ex.: Aquisição de imóvel para moradia"></div>
+        <div class="small-note">Objetivo: <b>${escapeHtml(objetivoLabel(draft)||'não definido')}</b>${com.objetivoCliente?` · texto na proposta: "${escapeHtml(com.objetivoCliente)}"`:''} — <button type="button" class="link-btn" data-gostep="objetivo">alterar na etapa 1</button>.</div>
         <div class="field full"><label>Explicação da estratégia</label><textarea data-field="comercial.explicacaoEstrategia" placeholder="${defaultExplicacaoEstrategia(dominant)}">${escapeHtml(com.explicacaoEstrategia||'')}</textarea></div>
         <div class="field full">
           <label>Horizonte estimado de contemplação <span class="small-note">(premissa do analista, opcional)</span></label>
@@ -9268,16 +9919,19 @@ function renderPersonalizadoResult(cons){
         </table></div>` : '<div class="small-note">Nenhum registro cadastrado ainda.</div>'}`;
 
     return `
+    ${alertsBlockHtml(cons)}
     <div class="studio-grid">
       <div class="studio-panel">
         ${studioGroup('apresentacao', 'Apresentação', apresentacaoBody)}
         ${studioGroup('destaques', 'Destaques', destaquesBody)}
         ${studioGroup('personalizacao', 'Personalização', personalizacaoBody)}
         ${studioGroup('historico', 'Histórico', historicoBody)}
+        ${studioGroup('situacao', 'Situação e fechamento', situacaoBody)}
+        <div class="pw-nav" style="margin-top:12px;"><div><button type="button" class="pill-btn ghost" data-gostep="cenarios">← Comparação de cenários</button></div></div>
       </div>
 
       <div class="studio-preview">
-        <div class="proposal-preview-screen" id="studioPreview">${buildApresentacaoHTML(draft, cons, lead, {watermark: draft.status==='Rascunho' && validateSimulation(draft, cons).blocked})}</div>
+        <div class="proposal-preview-screen" id="studioPreview">${buildApresentacaoHTML(draft, cons, lead, {watermark: draft.status==='Rascunho' && validateProposalFull(draft, cons).blocked})}</div>
         <p class="small-note" style="margin-top:12px;text-align:center;">Esta é a prévia exata do que será impresso ou salvo em PDF.</p>
       </div>
     </div>
@@ -9289,7 +9943,7 @@ function renderPersonalizadoResult(cons){
     if(!sp) return;
     const lead = DB.leads.find(l=>l.id===draft.leadId);
     const cons = computeConsolidated(draft.cotas, draft.rates, draft.administradora, draft.grupo, draft.segmento);
-    sp.innerHTML = buildApresentacaoHTML(draft, cons, lead, {watermark: draft.status==='Rascunho' && validateSimulation(draft, cons).blocked});
+    sp.innerHTML = buildApresentacaoHTML(draft, cons, lead, {watermark: draft.status==='Rascunho' && validateProposalFull(draft, cons).blocked});
   }
 
   function genericFieldHandler(e){
@@ -9309,15 +9963,33 @@ function renderPersonalizadoResult(cons){
     }
     else val = el.value;
     if(el.dataset.pct==='1') val = val/100;
+    if(path.startsWith('cota.') && el.dataset.scen){
+      // v36_36 — campo de um cenário ALTERNATIVO: grava só o override (o que muda em
+      // relação ao principal). Na coleta em lote (salvar) é ignorado — o "input" já
+      // gravou cada alteração, e regravar tudo transformaria todo campo em override.
+      if(e.skipRefresh) return;
+      const alt = (draft.cenarios||[]).find(s=>s.id===el.dataset.scen); if(!alt) return;
+      const idx = Number(el.dataset.idx); const key = path.slice(5);
+      alt.overrides[idx] = alt.overrides[idx] || {}; alt.overrides[idx][key] = val;
+      const fld = el.closest('.field'); if(fld) fld.classList.add('diff');
+      if(key==='modalidadeEspecial'){ renderTabBody(); return; }
+      refreshLive(); return;
+    }
     if(path.startsWith('cota.')){ const idx=Number(el.dataset.idx); const key=path.slice(5); if(draft.cotas[idx]){ draft.cotas[idx][key]=val; if(key==='baseLance') draft.cotas[idx].baseLancePrecisaRevisao = false; } }
     else if(path.startsWith('historico.')){ const idx=Number(el.dataset.idx); const key=path.slice(10); if(draft.historicoGrupo[idx]) draft.historicoGrupo[idx][key]=val; }
     else if(path.startsWith('comercial.')){ draft.comercial[path.slice(10)] = val; }
+    else if(path.startsWith('objetivo.')){ draft.objetivo = draft.objetivo||{tipo:'',outro:''}; draft.objetivo[path.slice(9)] = val; }
+    else if(path.startsWith('projecao.')){
+      draft.projecao = draft.projecao||{exibir:true,agioConservadorPct:0,faixaMinPct:0,faixaMaxPct:0,observacao:''};
+      // v36_37 — valor não finito (ex.: 1e999) NÃO é convertido em silêncio: guarda o texto
+      // digitado (JSON não representa Infinity/NaN) para a validação acusar o erro.
+      if(typeof val==='number' && !Number.isFinite(val)) val = String(el.value);
+      draft.projecao[path.slice(9)] = val;
+    }
     else if(path.startsWith('rates.seguro.')){ draft.rates.seguro[path.slice(13)] = val; }
     else if(path.startsWith('rates.')){ draft.rates[path.slice(6)] = val; }
     else { draft[path] = val; }
-    const qp = document.getElementById('quickPreview');
-    if(qp){ const rule=getAdminRule(draft.administradora); const cons=computeConsolidated(draft.cotas, draft.rates, draft.administradora, draft.grupo, draft.segmento); qp.innerHTML = renderQuickPreview(cons, rule); }
-    refreshStudioPreview();
+    if(!e.skipRefresh) refreshLive();
   }
   function refreshCustomResult(){ const cons = computeConsolidated(draft.cotas, draft.rates, draft.administradora, draft.grupo, draft.segmento); const el=document.getElementById('pCustomResult'); if(el) el.innerHTML = renderPersonalizadoResult(cons); }
 
@@ -9383,10 +10055,22 @@ function renderPersonalizadoResult(cons){
     const container = document.getElementById('propTabBody');
     wireLeadPicker();
     const admSel = document.getElementById('pf_administradora');
-    if(admSel) admSel.onchange = ()=>{ draft.administradora = admSel.value; renderTabBody(); };
+    if(admSel) admSel.onchange = ()=>{
+      draft.administradora = admSel.value;
+      // v36_37 — seguro compatível é preservado; incompatível vira "Sem seguro" COM aviso
+      // (nunca mantém em silêncio uma modalidade não validada para a nova administradora).
+      const tipoAtual = (draft.rates.seguro && draft.rates.seguro.tipo) || 'semSeguro';
+      if(seguroCompativel(draft.administradora, tipoAtual)){ seguroAviso = ''; }
+      else {
+        draft.rates.seguro = {tipo:'semSeguro', valor:0};
+        seguroAviso = `O seguro "${SEGURO_LABELS[tipoAtual]||tipoAtual}" não é validado para ${draft.administradora}; foi alterado para "Sem seguro". Revise as taxas antes de enviar.`;
+        showToast(seguroAviso);
+      }
+      renderTabBody();
+    };
     const seguroTipoSel = document.getElementById('sf_seguro_tipo');
-    if(seguroTipoSel) seguroTipoSel.onchange = ()=>{ draft.rates.seguro.tipo = seguroTipoSel.value; draft.rates.seguro.valor = 0; renderTabBody(); };
-    container.querySelectorAll('[data-field="cota.modalidadeEspecial"]').forEach(sel=> sel.onchange = ()=>{
+    if(seguroTipoSel) seguroTipoSel.onchange = ()=>{ seguroAviso = ''; draft.rates.seguro.tipo = seguroTipoSel.value; draft.rates.seguro.valor = 0; renderTabBody(); };
+    container.querySelectorAll('[data-field="cota.modalidadeEspecial"]:not([data-scen])').forEach(sel=> sel.onchange = ()=>{
       const idx = Number(sel.dataset.idx);
       draft.cotas[idx].modalidadeEspecial = sel.value;
       if(sel.value==='nenhuma') draft.cotas[idx].percentualEspecial = 0;
@@ -9409,22 +10093,18 @@ function renderPersonalizadoResult(cons){
     const addHistBtn = document.getElementById('pBtnAddHistorico');
     if(addHistBtn) addHistBtn.onclick = ()=>{ draft.historicoGrupo = draft.historicoGrupo||[]; draft.historicoGrupo.push({data:'', menorPercentual:0, percentualMedio:0, qtdContemplacoes:0, observacao:''}); renderTabBody(); };
     container.querySelectorAll('[data-delhistorico]').forEach(btn=> btn.onclick=()=>{ draft.historicoGrupo.splice(Number(btn.dataset.delhistorico),1); renderTabBody(); });
-    container.querySelectorAll('[data-estrselect]').forEach(sel=> sel.onchange = ()=>{
-      const idx = Number(sel.dataset.estrselect);
-      const c = draft.cotas[idx];
-      if(sel.value==='sorteio'){
-        const temValores = num2(c.recursoProprio)>0 || num2(c.fgts)>0 || num2(c.lanceEmbutidoValor)>0 || num2(c.outroRecurso)>0;
-        if(temValores){
-          const zerar = window.confirm('Esta cota já tem valores de lance preenchidos (recurso próprio, FGTS, embutido ou outro recurso).\n\nA estratégia "Sorteio" não usa lance — esses valores serão ZERADOS se você continuar.\n\nClique OK para zerar os valores e mudar para Sorteio, ou Cancelar para manter os valores e a estratégia atual.');
-          if(!zerar){ sel.value = c.estrategiaContemplacao; return; }
-        }
-        c.recursoProprio=0; c.fgts=0; c.lanceEmbutidoValor=0; c.outroRecurso=0;
-      }
-      c.estrategiaContemplacao = sel.value;
-      renderTabBody();
-    });
+    // v36_36 — a troca de estratégia agora é feita por cartões (data-estrchoice →
+    // setEstrategia, mesma regra de zerar recursos ao ir para Sorteio) e os
+    // cliques das etapas novas passam por delegação (delegatedClick).
+    container.addEventListener('click', delegatedClick);
+    container.addEventListener('input', scenMetaHandler);
+    container.addEventListener('change', scenMetaHandler);
+    container.querySelectorAll('[data-advcota]').forEach(det=> det.addEventListener('toggle', ()=>{
+      const k = Number(det.dataset.advcota);
+      if(det.open) expandedAdv.add(k); else expandedAdv.delete(k);
+    }));
     const addBtn = document.getElementById('pBtnAddCota');
-    if(addBtn) addBtn.onclick = ()=>{ const newIdx = draft.cotas.length; draft.cotas.push(blankCota(String(newIdx+1).padStart(3,'0'))); expandedCotas.add(newIdx); renderTabBody(); };
+    if(addBtn) addBtn.onclick = ()=>{ const newIdx = draft.cotas.length; draft.cotas.push(blankCota(String(newIdx+1).padStart(3,'0'))); (draft.cenarios||[]).forEach(s=>s.overrides.push({})); expandedCotas.add(newIdx); renderTabBody(); };
     container.querySelectorAll('[data-togglecota]').forEach(el=> el.onclick=(e)=>{
       if(e.target.closest('[data-dupcota]') || e.target.closest('[data-delcota]')) return;
       const idx = Number(el.dataset.togglecota);
@@ -9437,6 +10117,7 @@ function renderPersonalizadoResult(cons){
       const copy = JSON.parse(JSON.stringify(draft.cotas[idx]));
       copy.numero = String(draft.cotas.length+1).padStart(3,'0');
       draft.cotas.splice(idx+1, 0, copy);
+      (draft.cenarios||[]).forEach(s=> s.overrides.splice(idx+1, 0, JSON.parse(JSON.stringify(s.overrides[idx]||{}))));
       reindexExpandedAfterInsert(idx+1);
       renderTabBody();
     });
@@ -9444,6 +10125,7 @@ function renderPersonalizadoResult(cons){
       e.stopPropagation();
       const idx = Number(btn.dataset.delcota);
       draft.cotas.splice(idx,1);
+      (draft.cenarios||[]).forEach(s=> s.overrides.splice(idx,1));
       reindexExpandedAfterRemove(idx);
       renderTabBody();
     });
@@ -9451,8 +10133,8 @@ function renderPersonalizadoResult(cons){
     container.addEventListener('change', genericFieldHandler);
     container.querySelectorAll('[name="pEstrategia"]').forEach(r=> r.onchange=()=>{ draft.estrategiaEscolhida = r.value; renderTabBody(); });
     const cp = document.getElementById('pCustomParcela'); const cprazo = document.getElementById('pCustomPrazo');
-    if(cp) cp.addEventListener('input', ()=>{ draft.personalizado = draft.personalizado||{}; draft.personalizado.parcelaDesejada = parseMoneyUI(cp.value); draft.personalizado.prazoDesejado=0; if(cprazo) cprazo.value=''; refreshCustomResult(); });
-    if(cprazo) cprazo.addEventListener('input', ()=>{ draft.personalizado = draft.personalizado||{}; draft.personalizado.prazoDesejado = Number(cprazo.value||0); draft.personalizado.parcelaDesejada=0; if(cp) cp.value='0,00'; refreshCustomResult(); });
+    if(cp) cp.addEventListener('input', ()=>{ draft.personalizado = draft.personalizado||{}; draft.personalizado.parcelaDesejada = parseMoneyUI(cp.value); draft.personalizado.prazoDesejado=0; if(cprazo) cprazo.value=''; refreshCustomResult(); refreshLive(); });
+    if(cprazo) cprazo.addEventListener('input', ()=>{ draft.personalizado = draft.personalizado||{}; draft.personalizado.prazoDesejado = Number(cprazo.value||0); draft.personalizado.parcelaDesejada=0; if(cp) cp.value='0,00'; refreshCustomResult(); refreshLive(); });
     const stBtn = document.getElementById('pBtnUpdateStatus');
     if(stBtn) stBtn.onclick = ()=>{
       const sel=document.getElementById('pStatusSel');
@@ -9493,7 +10175,7 @@ function renderPersonalizadoResult(cons){
 
   function collectDraftFromDOM(){
     const container = document.getElementById('propTabBody');
-    if(container) container.querySelectorAll('[data-field]').forEach(el=> genericFieldHandler({target:el}));
+    if(container) container.querySelectorAll('[data-field]').forEach(el=> genericFieldHandler({target:el, skipRefresh:true}));
     const leadSel = document.getElementById('pf_lead'); if(leadSel) draft.leadId = leadSel.value;
     const admSel = document.getElementById('pf_administradora'); if(admSel) draft.administradora = admSel.value;
   }
@@ -9511,9 +10193,18 @@ function renderPersonalizadoResult(cons){
     const lead = DB.leads.find(l=>l.id===draft.leadId);
     const cons = computeConsolidated(draft.cotas, draft.rates, draft.administradora, draft.grupo, draft.segmento);
     if((opts.statusOverride==='Enviada' || opts.statusOverride==='Aceita')){
-      const validation = validateSimulation(draft, cons);
+      const validation = validateProposalFull(draft, cons);
       if(validation.blocked){
-        showToast('Não é possível marcar como '+opts.statusOverride.toLowerCase()+': há pendências no simulador (veja a Etapa 2 — Resultado e cenários). A proposta pode ser salva como rascunho.');
+        showToast('Não é possível marcar como '+opts.statusOverride.toLowerCase()+': há pendências no simulador (veja o Resumo financeiro do simulador (Pendências)).'+notaProjecao(validation)+' A proposta pode ser salva como rascunho.');
+        return;
+      }
+    }
+    // v36_37 — premissas de ágio inconsistentes: só é permitido salvar como rascunho
+    // (ou marcar como perdida). Nunca corrige/inverte os valores — só bloqueia.
+    {
+      const statusFinal = opts.asNewVersion ? (opts.statusOverride||'Rascunho') : (opts.statusOverride || (p ? p.status : (draft.status||'Rascunho')));
+      if(!validarProjecao(draft).valid && statusFinal!=='Rascunho' && statusFinal!=='Perdida'){
+        showToast('Premissas de ágio inconsistentes (etapa 1 — Objetivo do cliente): corrija antes de salvar como "'+statusFinal+'". Como rascunho é possível salvar.');
         return;
       }
     }
@@ -9592,10 +10283,10 @@ function renderPersonalizadoResult(cons){
     collectDraftFromDOM();
     const lead = DB.leads.find(l=>l.id===draft.leadId);
     const cons = computeConsolidated(draft.cotas, draft.rates, draft.administradora, draft.grupo, draft.segmento);
-    const validation = validateSimulation(draft, cons);
+    const validation = validateProposalFull(draft, cons);
     let watermark = false;
     if(draft.status==='Enviada' || draft.status==='Aceita'){
-      if(validation.blocked){ showToast('Esta proposta tem pendências no simulador — corrija antes de imprimir como versão definitiva (Enviada/Aceita).'); return; }
+      if(validation.blocked){ showToast('Esta proposta tem pendências no simulador — corrija antes de imprimir como versão definitiva (Enviada/Aceita).'+notaProjecao(validation)); return; }
     } else if(validation.blocked){
       watermark = true; // rascunho com pendências: pode imprimir, mas com marca d'água obrigatória
     }
@@ -9607,8 +10298,8 @@ function renderPersonalizadoResult(cons){
     const lead = DB.leads.find(l=>l.id===draft.leadId);
     const cons = computeConsolidated(draft.cotas, draft.rates, draft.administradora, draft.grupo, draft.segmento);
     const rule = getAdminRule(draft.administradora);
-    const validation = validateSimulation(draft, cons);
-    if(validation.blocked){ showToast('Resumo não copiado: há pendências no simulador (veja a Etapa 2 — Resultado e cenários).'); return; }
+    const validation = validateProposalFull(draft, cons);
+    if(validation.blocked){ showToast('Resumo não copiado: há pendências no simulador (veja o Resumo financeiro do simulador (Pendências)).'+notaProjecao(validation)); return; }
     const exibirLance = shouldShowLance(draft, cons);
     let text = `*Proposta de Consórcio — ${draft.numeroProposta}*\n`+
       `Cliente: ${lead?lead.nome:'—'}\nAdministradora: ${draft.administradora}\n`+
@@ -10027,7 +10718,9 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
       ['fmtPct', global.fmtPct],
       ['fmtDate', global.fmtDate],
       ['fmtMonthBr', global.fmtMonthBr],
-      ['todayISO', global.todayISO]
+      ['todayISO', global.todayISO],
+      ['objetivoLabel', global.objetivoLabel],
+      ['projecaoRevenda', global.projecaoRevenda]
     ];
     const missing = required.filter(([, value]) => typeof value !== 'function').map(([name]) => name);
     if (missing.length) {
@@ -10251,7 +10944,10 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
 
   function coverHtml(draft, cons, vm, lead) {
     const rawClientName = lead && lead.nome ? lead.nome : 'Cliente';
-    const objective = vm.com.objetivoCliente ? h(vm.com.objetivoCliente) : '';
+    // v36_36 — o texto livre do analista (comercial.objetivoCliente) continua tendo
+    // prioridade; sem ele, usa o rótulo do objetivo escolhido na etapa 1 do simulador.
+    const objText = String(vm.com.objetivoCliente || '').trim() || global.objetivoLabel(draft);
+    const objective = objText ? h(objText) : '';
     const validity = draft.validade ? global.fmtDate(draft.validade) : 'Consulte o analista';
     const logo = global.LOGO_BFR_WHITE || '';
 
@@ -10833,6 +11529,32 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
     return notes.map(n => `<div class="bfrp-note">${h(n)}</div>`).join('');
   }
 
+  // v36_36 — "Potencial de revenda/alavancagem": só existe quando o analista
+  // escolheu esse objetivo E preencheu a premissa conservadora (draft.projecao).
+  // Todos os valores são crédito líquido (já calculado pelo motor) × o percentual
+  // digitado — nenhuma fórmula nova, nenhuma promessa; a premissa é sempre
+  // identificada como tal e o bloco nunca aparece sem ela.
+  function projectionHtml(draft, cons, vm) {
+    const pr = global.projecaoRevenda(draft, cons);
+    if (!pr) return '';
+    const isRevenda = draft.objetivo && draft.objetivo.tipo === 'revenda';
+    // v36_37 — terminologia: o percentual informado incide sobre o crédito líquido e
+    // representa o ÁGIO potencial (não o valor de revenda). O valor total projetado
+    // (crédito líquido + ágio) é mostrado separadamente; os três são premissas.
+    const baseLabel = cons.todasSorteio ? 'Crédito disponível' : 'Crédito líquido';
+    return `
+      <div class="bfrp-section">
+        <h2 class="bfrp-section-title">${isRevenda ? 'Potencial de revenda' : 'Potencial de alavancagem patrimonial'}</h2>
+        <div class="bfrp-financial-grid">
+          <div class="bfrp-metric"><span>${h(baseLabel)}</span><strong class="bfrp-num">${money(pr.base)}</strong></div>
+          <div class="bfrp-metric bfrp-metric-accent"><span>Ágio potencial estimado · ${pct(pr.agioConservadorPct)} sobre o crédito líquido</span><strong class="bfrp-num">${money(pr.agioEstimado)}</strong></div>
+          ${pr.faixaAgioMin !== null && pr.faixaAgioMax !== null ? `<div class="bfrp-metric"><span>Faixa potencial de ágio</span><strong class="bfrp-num">${money(pr.faixaAgioMin)} a ${money(pr.faixaAgioMax)}</strong></div>` : ''}
+          <div class="bfrp-metric"><span>Valor total projetado de revenda · crédito líquido + ágio</span><strong class="bfrp-num">${money(pr.valorTotalProjetado)}</strong></div>
+        </div>
+        <div class="bfrp-note">Crédito líquido, ágio potencial estimado e valor total projetado são premissas informadas pelo analista${pr.observacao ? ` (${h(pr.observacao)})` : ''}. Não constituem promessa de valorização, venda ou retorno; dependem das condições de mercado e das regras da administradora.</div>
+      </div>`;
+  }
+
   function contentPageHtml(draft, cons, vm, lead, selected) {
     const rawClientName = lead && lead.nome ? lead.nome : 'Cliente';
     const opening = vm.com.mensagemAbertura
@@ -10879,7 +11601,9 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
 
         ${scenariosHtml(draft, cons, vm, selected)}
 
-        ${draft.observacoesCliente ? `<div class="bfrp-section"><h2 class="bfrp-section-title">Observações do planejamento</h2><div class="bfrp-observation">${h(draft.observacoesCliente)}</div></div>` : ''}
+        ${projectionHtml(draft, cons, vm)}
+
+        ${draft.observacoesCliente ? `<div class="bfrp-section"><h2 class="bfrp-section-title">Observações e premissas</h2><div class="bfrp-observation">${h(draft.observacoesCliente)}</div></div>` : ''}
 
         <div class="bfrp-section">
           <h2 class="bfrp-section-title">Próximos passos</h2>
@@ -11098,6 +11822,9 @@ function buildApresentacaoHTML(draft, cons, lead, opts){
 
   global.buildApresentacaoPremiumHTML = buildApresentacaoPremiumHTML;
   global.buildApresentacaoHTML = buildApresentacaoPremiumHTML;
+  // v36_36 — o simulador (resumo lateral e comparação de cenários) usa a MESMA seleção
+  // de cenário pós-contemplação da proposta ao cliente, sem reimplementá-la.
+  global.bfrpSelectedScenario = selectedConsolidatedScenario;
 })(window);
 
 /* ===================== fim BFR Proposta Premium v2 ===================== */
@@ -11204,8 +11931,8 @@ function openContractFormFromProposal(p, draft, onCommitted){
   if(!lead){ showToast('Selecione o cliente antes de fechar a proposta.'); return; }
   if(!lead.responsavel){ showToast('Defina o assessor do cliente antes de fechar esta proposta.'); return; }
   const { pending, cons } = buildPendingProposalForClosing(p, draft);
-  const validation = validateSimulation(pending, cons);
-  if(validation.blocked){ showToast('Não é possível fechar: há pendências no simulador desta proposta (veja a Etapa 2 — Resultado e cenários).'); return; }
+  const validation = validateProposalFull(pending, cons);
+  if(validation.blocked){ showToast('Não é possível fechar: há pendências no simulador desta proposta (veja o Resumo financeiro do simulador (Pendências)).'+notaProjecao(validation)); return; }
   const estrategiaLabel = {reduzirParcela:'Redução de parcela', reduzirPrazo:'Redução de prazo', personalizado:'Personalizado', manutencao:'Manutenção do plano'}[pending.estrategiaEscolhida] || (pending.estrategiaEscolhida||'—');
   document.getElementById('modalBody').innerHTML = `
     <h2>Confirmar fechamento</h2>
@@ -11408,8 +12135,8 @@ function generateContractFromProposal(p){
   }
   if(p.contratoGeradoId){ showToast('Contrato já foi gerado para esta proposta'); return; }
   const consCheck = computeConsolidated(p.cotas||[], p.rates||{taxaAdministracao:0,fundoReserva:0,taxaAdesao:0,seguro:{tipo:'semSeguro',valor:0}}, p.administradora, p.grupo, p.segmento);
-  const validation = validateSimulation(p, consCheck);
-  if(validation.blocked){ showToast('Não é possível gerar contrato: há pendências no simulador desta proposta.'); return; }
+  const validation = validateProposalFull(p, consCheck);
+  if(validation.blocked){ showToast('Não é possível gerar contrato: há pendências no simulador desta proposta.'+notaProjecao(validation)); return; }
   const lead = DB.leads.find(l=>l.id===p.leadId);
   if(!lead){ showToast('Cliente da proposta não encontrado.'); return; }
   // Bloqueia o fechamento enquanto o assessor do cliente não estiver definido
