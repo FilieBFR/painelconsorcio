@@ -142,6 +142,10 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .badge.b-atend{background:var(--purple-soft);color:#553E75;} .badge.b-sim{background:#E7F0F6;color:#2A5779;}
 .badge.b-prop{background:var(--gold-soft);color:#8A5A17;} .badge.b-neg{background:#FDEBD3;color:#8A5A17;}
 .badge.b-fechado{background:var(--green-soft);color:#1E6B41;} .badge.b-perdido{background:var(--red-soft);color:#8A2E22;}
+/* v36_38 — 'Cancelado' (cliente que já teve cota ativa, cancelada depois) precisa
+   ser visualmente distinto de 'Perdido' (nunca converteu) — tom neutro/slate, não
+   vermelho, para não ler como "mesma coisa que perdido" num relatório. */
+.badge.b-cancel{background:#E2E8F0;color:#334155;}
 .badge.b-pos{background:#E4F4F1;color:#166860;}
 .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:var(--sp-4);flex-wrap:wrap;}
 .toolbar select, .toolbar input[type=text]{height:38px;padding:0 11px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px;background:#fff;}
@@ -2782,8 +2786,13 @@ const PROPOSAL_STATUS_SIMPLES = ['Rascunho','Enviada','Visualizada','Em negocia�
 // estágios de pós-venda de COTA (POSVENDA_STAGES) continuam existindo e
 // granulares — são conceitos separados, só o rótulo exibido no CLIENTE foi
 // simplificado.
-const STATUS_LIST = ['Novo Lead','Em Negociação','Fechado','Perdido'];
-const STATUS_BADGE = {'Novo Lead':'b-novo','Em Negociação':'b-neg','Fechado':'b-fechado','Perdido':'b-perdido',
+// v36_38 — 'Cancelado' adicionado como 5º status canônico do cliente (ver
+// recomputeClientCommercialStatus): cliente que já teve cota, mas todas as
+// cotas foram canceladas e não há proposta ativa em andamento. Distinto de
+// 'Perdido' (nunca chegou a ter cota) — a distinção importa para relatórios
+// de churn vs. relatórios de conversão nunca concretizada.
+const STATUS_LIST = ['Novo Lead','Em Negociação','Fechado','Cancelado','Perdido'];
+const STATUS_BADGE = {'Novo Lead':'b-novo','Em Negociação':'b-neg','Fechado':'b-fechado','Cancelado':'b-cancel','Perdido':'b-perdido',
   // Compatibilidade: dados antigos (ainda não recalculados) podem carregar
   // temporariamente um status pré-v24 até a primeira passagem de
   // recomputeClientCommercialStatus — mapeados para uma badge razoável para
@@ -2794,8 +2803,8 @@ const POSVENDA_STAGES_HISTORICO = ['Contrato assinado','Cota ativa','Estratégia
  *  cotas antigas que já estavam nesse estágio continuam existindo e visíveis (não é
  *  apagado silenciosamente). Use esta lista em qualquer seletor de "novo estágio". */
 const POSVENDA_STAGES = POSVENDA_STAGES_HISTORICO.filter(s=>s!=='Documentação');
-// Estágios comerciais considerados "pipeline aberto" (fora Fechado/Perdido/Pós-venda)
-const OPEN_STAGES = STATUS_LIST.filter(s=>!['Fechado','Perdido','Pós-venda'].includes(s));
+// Estágios comerciais considerados "pipeline aberto" (fora Fechado/Cancelado/Perdido/Pós-venda)
+const OPEN_STAGES = STATUS_LIST.filter(s=>!['Fechado','Cancelado','Perdido','Pós-venda'].includes(s));
 
 const NAV = [
   {id:'inicio', label:'Início', icon:'☀'},
@@ -3248,14 +3257,46 @@ function normalizeDB(){
   });
   // Defensivo: cotas cadastradas antes deste ajuste não têm os campos
   // cancelada/dataCancelamento — garante que existam, sem alterar nada mais.
+  // v36_38 — motivoCancelamento/motivoCancelamentoDetalhe são novos (exigidos
+  // pelo fluxo de cancelamento desta rodada); cota cancelada por uma versão
+  // anterior (sem passar pelo fluxo novo) simplesmente fica com motivo vazio,
+  // nunca inventado.
   DB.quotas.forEach(q=>{
     if(q.cancelada===undefined) q.cancelada = false;
     if(q.dataCancelamento===undefined) q.dataCancelamento = '';
+    if(q.motivoCancelamento===undefined) q.motivoCancelamento = '';
+    if(q.motivoCancelamentoDetalhe===undefined) q.motivoCancelamentoDetalhe = '';
   });
   // v25: contratos gerados antes deste ajuste não têm proposalId — deixa
   // explícito null (nunca inventa um vínculo) para findProposalLinkedRecords
   // poder sempre contar com o campo presente.
-  DB.contracts.forEach(c=>{ if(c.proposalId===undefined) c.proposalId = null; });
+  // v36_38 — cancelado/dataCancelamento: marcador persistido, só para
+  // exibição/histórico — a fonte de verdade de "contrato ativo" continua
+  // sendo isContractActive() (derivada das cotas), nunca este campo sozinho.
+  DB.contracts.forEach(c=>{
+    if(c.proposalId===undefined) c.proposalId = null;
+    if(c.cancelado===undefined) c.cancelado = false;
+    if(c.dataCancelamento===undefined) c.dataCancelamento = '';
+  });
+  // v36_38 — cancelamento de cota integrado à comissão: 'Cancelada'/'Estornada'
+  // são novos valores possíveis para p.status (antes só Pendente/Recebida).
+  // Registros antigos nunca tinham esses valores, então nada precisa migrar —
+  // só garante os campos de sinalização de revisão manual (ver cancelQuota).
+  Object.values(DB.commissionMeta).forEach(cm=>{
+    if(cm.revisaoNecessaria===undefined) cm.revisaoNecessaria = false;
+    if(cm.revisaoNecessariaMotivo===undefined) cm.revisaoNecessariaMotivo = '';
+  });
+  // v36_38 — comissões de assessor ganham modalidade ('vista20'|'proporcional25'|
+  // 'legado'). Registro existente (criado antes desta rodada) NUNCA é
+  // reclassificado/recalculado — só rotulado 'legado' para aparecer
+  // corretamente segmentado na tela nova, preservando 100% dos valores/
+  // parcelas como estavam.
+  DB.assessorCommissions.forEach(ac=>{
+    if(ac.modalidade===undefined) ac.modalidade = 'legado';
+    if(ac.incluiPrestamista===undefined) ac.incluiPrestamista = false;
+    if(ac.historico===undefined) ac.historico = [{when:ac.criadoEm||new Date().toISOString(), texto:'Registro migrado de versão anterior (modalidade Legado).'}];
+    if(ac.contractId===undefined) ac.contractId = null;
+  });
   // Correção de dados: clientes marcados "Fechado" que ficaram sem data de
   // fechamento por causa do bug em commitSaveLead (o Object.assign gravava o
   // novo status antes de applyStatusChange comparar com o antigo, então o
@@ -3433,6 +3474,13 @@ function normalizeDB(){
     if(p.motivoPerda===undefined) p.motivoPerda = '';
     if(p.motivoPerdaDetalhe===undefined) p.motivoPerdaDetalhe = '';
   });
+  // v36_39 — item 1: reconcilia contratos cujas cotas já estavam TODAS
+  // canceladas ANTES do cancelamento integrado existir (v36_38) — sem isso,
+  // esses contratos nunca tinham contract.cancelado marcado nem as parcelas
+  // de comissão ainda Pendente canceladas, mesmo sem nenhuma cota ativa.
+  // Idempotente por construção (ver função) e nunca inventa motivo/data que
+  // a cota não tinha registrado.
+  const cancelamentosReconciliados = reconciliarCancelamentosAntigos();
   // MIGRAÇÃO — move os campos comerciais antigos do cadastro do cliente
   // ("Interesse comercial": crédito, recurso, parcela, administradora,
   // segmento, status, motivo de perda, próxima ação) para uma proposta
@@ -3461,7 +3509,7 @@ function normalizeDB(){
   // v27: normalizeDB() nunca persiste sozinha (nenhum saveDB() aqui dentro)
   // — só informa ao chamador (loadDB) se algo mudou de verdade, para que a
   // decisão de gravar seja tomada em UM único lugar.
-  return { administradorasForamCorrigidas, proximasAcoesMigradas };
+  return { administradorasForamCorrigidas, proximasAcoesMigradas, cancelamentosReconciliados };
 }
 /** Mapeia o status ANTIGO do cliente (STATUS_LIST) para o status de proposta
  *  equivalente (PROPOSAL_STATUS) — usado só pela migração, para dar à
@@ -3565,7 +3613,8 @@ async function loadDB(){
       // incondicional a cada carregamento, senão a mesma gravação
       // "desnecessária" de antes voltaria a acontecer todo load.
       // v32 — mesma regra vale para a migração de próximas ações -> tarefas.
-      if(resultado && (resultado.administradorasForamCorrigidas || resultado.proximasAcoesMigradas)) saveDB();
+      // v36_39 — idem para a reconciliação de cancelamentos antigos (item 1).
+      if(resultado && (resultado.administradorasForamCorrigidas || resultado.proximasAcoesMigradas || resultado.cancelamentosReconciliados)) saveDB();
       return;
     }catch(parseErr){
       // A chave existe mas está corrompida — NUNCA cair silenciosamente para dados de
@@ -5101,27 +5150,31 @@ function applyStatusChange(lead, newStatus, motivoCategoria, motivoDetalhe){
 }
 /** ÚNICA fonte de verdade para o status comercial de um cliente. Nunca defina
  *  lead.status diretamente — sempre chame recomputeClientCommercialStatus(leadId)
- *  depois de qualquer criação, edição ou exclusão de proposta, contrato ou
- *  cota (e também é chamada em massa ao carregar a base, dentro de normalizeDB()).
+ *  depois de qualquer criação, edição ou exclusão de proposta, contrato, cota
+ *  OU cancelamento de cota (e também é chamada em massa ao carregar a base,
+ *  dentro de normalizeDB() — nenhum dado legado fica com status desatualizado).
  *
- *  v24 — status do cliente simplificado para 4 valores (Novo Lead / Em
- *  Negociação / Fechado / Perdido), sempre derivado. Precedência (da mais
+ *  v24 — status do cliente simplificado; v36_38 — adicionado 'Cancelado' como
+ *  5º valor. Sempre derivado, nunca editável diretamente. Precedência (da mais
  *  forte para a mais fraca):
- *  1. Cliente com contrato ativo (ou proposta 'Fechado' vinculada a contrato)
- *     → 'Fechado'. Contrato ativo SEMPRE prevalece sobre propostas perdidas —
- *     um cliente com uma proposta perdida e outra ainda ativa, mas que já tem
- *     contrato, continua 'Fechado' (a cota/pós-venda em si continua com seu
- *     próprio estágio granular em POSVENDA_STAGES; aqui só cabe o rótulo do
- *     cliente).
+ *  1. Cliente com contrato/cota ATIVA (ou proposta 'Fechado' vinculada a
+ *     contrato) → 'Fechado'. Uma cota cancelada NUNCA sustenta 'Fechado' —
+ *     mas um contrato com 2 cotas, sendo 1 ativa e 1 cancelada, continua
+ *     'Fechado' (basta UMA cota ativa). Reativar uma cota (desmarcar
+ *     cancelada) faz o cliente voltar para 'Fechado' na próxima recomputação.
  *  2. Proposta com status 'Fechado' sem contrato local (proteção defensiva
  *     para dados legados).
- *  3. Sem contrato, mas com ao menos uma proposta ATIVA (Rascunho/Enviada/
- *     Visualizada/Em negociação/Aceita) → 'Em Negociação'. Precede a regra 4:
- *     uma proposta perdida ao lado de outra ainda ativa NÃO torna o cliente
- *     'Perdido'.
- *  4. Sem contrato e com TODAS as propostas encerradas como perdidas/
- *     recusadas (Perdida/Substituída) → 'Perdido'.
- *  5. Sem propostas nem contratos → 'Novo Lead'. */
+ *  3. Sem cota/contrato ativo, mas com ao menos uma proposta ATIVA
+ *     (Rascunho/Enviada/Visualizada/Em negociação/Aceita) → 'Em Negociação'.
+ *     Precede as regras 4 e 5 — inclusive um cliente já 'Cancelado' que
+ *     recebe uma proposta nova ativa volta para 'Em Negociação'.
+ *  4. Sem cota/contrato ativo e sem proposta ativa, mas com histórico de AO
+ *     MENOS UMA cota (mesmo que hoje todas estejam canceladas) → 'Cancelado'.
+ *     Só cabe aqui um cliente que JÁ teve cota ativa — nunca um 'Novo Lead'
+ *     ou um 'Perdido' que nunca chegou a fechar.
+ *  5. Sem contrato/cota (nunca houve) e com TODAS as propostas encerradas
+ *     como perdidas/recusadas (Perdida/Substituída) → 'Perdido'.
+ *  6. Sem propostas nem contratos/cotas → 'Novo Lead'. */
 function recomputeClientCommercialStatus(leadId){
   const lead = DB.leads.find(l=>l.id===leadId);
   if(!lead) return;
@@ -5166,10 +5219,19 @@ function recomputeClientCommercialStatus(leadId){
     return;
   }
 
-  // 4. Perdido: não há cota/contrato ativo e todas as propostas estão
-  // encerradas sem fechamento (existe ao menos uma proposta, e nenhuma é
-  // Fechado/ativa) — inclui o caso de cotas canceladas cobrindo tudo que
-  // existia, já filtrado fora na regra 1.
+  // 4. NOVO (v36_38) — Cancelado: já existiu ao menos 1 cota para este
+  // cliente (cotas.length>0) e TODAS estão canceladas hoje, sem nenhum
+  // contrato/cota ativa (já garantido pela regra 1 não ter disparado) e sem
+  // proposta ativa (já garantido pela regra 3 não ter disparado). Nunca se
+  // confunde com 'Perdido' — 'Perdido' é reservado para quem NUNCA teve cota.
+  if(cotas.length && cotas.every(q=>q.cancelada)){
+    if(lead.status !== 'Cancelado') applyStatusChange(lead, 'Cancelado');
+    return;
+  }
+
+  // 5. Perdido: nunca houve cota/contrato (regra 4 não disparou) e todas as
+  // propostas estão encerradas sem fechamento (existe ao menos uma proposta,
+  // e nenhuma é Fechado/ativa).
   if(propostas.length && propostas.every(p=>['Perdida','Substituída'].includes(p.status))){
     if(lead.status!=='Perdido'){
       const maisRecentePerdida = propostas.slice().sort((a,b)=> new Date(b.dataUltimaAlteracao||b.dataCriacao||0) - new Date(a.dataUltimaAlteracao||a.dataCriacao||0))[0];
@@ -5178,7 +5240,8 @@ function recomputeClientCommercialStatus(leadId){
     return;
   }
 
-  // 5. Nenhuma proposta (nem ativa, nem perdida, nem fechada) → Novo Lead.
+  // 6. Nenhuma proposta (nem ativa, nem perdida, nem fechada) e nenhuma cota
+  // → Novo Lead.
   if(lead.status !== 'Novo Lead') applyStatusChange(lead, 'Novo Lead');
 }
 /* ================= DADOS DE DEMONSTRAÇÃO =================
@@ -5298,6 +5361,7 @@ let assembleiasTab = 'proximas';
 let comissoesFilters = { administradora:'Todas', assessor:'Todos', competencia:'', situacao:'Todos', busca:'' };
 let comissoesExpandedRows = new Set(); // ids de contrato com prévia de parcelas expandida — só apresentação
 let comissoesSearchDebounceTimer = null;
+let assessorCommSearchDebounceTimer = null; // v36_38 — aba "Comissões dos assessores"
 
 /* Barra de filtros ÚNICA, compartilhada pela Visão Geral e por Relatórios —
    selecionar período/assessor/segmento/administradora/origem/status muda as
@@ -7555,7 +7619,7 @@ function commissionForecast12Months(){
     Object.values(DB.commissionMeta).forEach(cm=>{
       if(!itemMatchesFilterBar(cm.leadId)) return;
       cm.parcelas.forEach(p=>{
-        if(p.status==='Recebida' || !p.dataPrevista) return; // "a receber" = ainda pendente
+        if(p.status!=='Pendente' || !p.dataPrevista) return; // "a receber" = ainda pendente (v36_38: nunca Cancelada/Estornada)
         const py = Number(p.dataPrevista.slice(0,4)), pm = Number(p.dataPrevista.slice(5,7))-1;
         if(py===mo.y && pm===mo.m) total += p.valor;
       });
@@ -8411,7 +8475,7 @@ function renderClientContractsTab(l){
         <button class="pill-btn sm ghost" data-deletecontract="${c.id}" style="color:var(--red);border-color:var(--red);">Excluir contrato</button>
       </div>
       ${quotas.length? `<div class="table-wrap" style="margin-top:8px;"><table><thead><tr><th>Cota</th><th>Grupo</th><th>Crédito</th><th>Estágio pós-venda</th><th></th></tr></thead>
-        <tbody>${quotas.map(q=>`<tr><td>${escapeHtml(q.numero)}</td><td>${escapeHtml(q.grupo||'—')}</td><td>${fmtMoney(q.credito)}</td><td>${quotaStageBadge(q)}</td><td><button class="link-btn" data-editquota="${q.id}">Abrir</button></td></tr>`).join('')}</tbody></table></div>` : ''}
+        <tbody>${quotas.map(q=>`<tr><td>${escapeHtml(q.numero)}</td><td>${escapeHtml(q.grupo||'—')}</td><td>${fmtMoney(q.credito)}</td><td>${quotaStageBadge(q)}</td><td><button class="link-btn" data-editquota="${q.id}">Abrir</button> · ${q.cancelada?`<button class="link-btn" data-reactivatequota="${q.id}">Reativar</button>`:`<button class="link-btn" data-cancelquota="${q.id}" style="color:var(--red);">Cancelar</button>`}</td></tr>`).join('')}</tbody></table></div>` : ''}
     </div>`;
   }).join('') : '<div class="empty">Nenhum contrato cadastrado. Gere um contrato manualmente ou a partir de uma proposta aceita.</div>'}`;
 }
@@ -8420,7 +8484,7 @@ function renderClientQuotasTab(l){
   const quotas = DB.quotas.filter(q=>contractIds.includes(q.contractId));
   if(!quotas.length) return '<div class="empty">Este cliente ainda não possui cotas. Crie um contrato na aba "Contratos".</div>';
   return `<div class="table-wrap"><table><thead><tr><th>Cota</th><th>Administradora</th><th>Grupo</th><th>Crédito</th><th>Prazo</th><th>Estágio</th><th>Contemplada</th><th></th></tr></thead>
-  <tbody>${quotas.map(q=>`<tr><td>${escapeHtml(q.numero)}</td><td>${escapeHtml(q.administradora||'—')}</td><td>${escapeHtml(q.grupo||'—')}</td><td>${fmtMoney(q.credito)}</td><td>${q.prazo||'—'}</td><td>${quotaStageBadge(q)}</td><td>${q.contemplado?('Sim — '+fmtDate(q.dataContemplacao)):'Não'}</td><td><button class="link-btn" data-editquota="${q.id}">Abrir</button></td></tr>`).join('')}</tbody></table></div>`;
+  <tbody>${quotas.map(q=>`<tr><td>${escapeHtml(q.numero)}</td><td>${escapeHtml(q.administradora||'—')}</td><td>${escapeHtml(q.grupo||'—')}</td><td>${fmtMoney(q.credito)}</td><td>${q.prazo||'—'}</td><td>${quotaStageBadge(q)}</td><td>${q.contemplado?('Sim — '+fmtDate(q.dataContemplacao)):'Não'}</td><td><button class="link-btn" data-editquota="${q.id}">Abrir</button> · ${q.cancelada?`<button class="link-btn" data-reactivatequota="${q.id}">Reativar</button>`:`<button class="link-btn" data-cancelquota="${q.id}" style="color:var(--red);">Cancelar</button>`}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function renderClientAgendaTab(l){
   const tasks = DB.tasks.filter(t=>t.clientId===l.id).sort((a,b)=>(a.data+a.hora).localeCompare(b.data+b.hora));
@@ -8472,22 +8536,30 @@ function renderClientCommissionsTab(l){
   const contratosDoCliente = DB.contracts.filter(c=>c.leadId===l.id);
   const admBlock = !contratosDoCliente.length ? '<div class="empty">Este cliente ainda não possui contrato (disponível após o fechamento de uma proposta).</div>' : contratosDoCliente.map(contract=>{
     const cm = DB.commissionMeta[contract.id];
+    const contratoTag = contract.cancelado ? ` <span class="badge b-cancel">Cancelado${contract.dataCancelamento?' — '+fmtDate(contract.dataCancelamento):''}</span>` : '';
     if(!cm){
-      return `<div class="small-note" style="margin-bottom:6px;"><b>Contrato ${escapeHtml(contract.numero)}</b> · ${displayAdmin(resolveContractAdministradora(contract))} · ${fmtMoney(contract.valorContratado)} · <span class="badge b-perdido">Sem comissão configurada</span></div>
+      return `<div class="small-note" style="margin-bottom:6px;"><b>Contrato ${escapeHtml(contract.numero)}</b>${contratoTag} · ${displayAdmin(resolveContractAdministradora(contract))} · ${fmtMoney(contract.valorContratado)} · <span class="badge b-perdido">Sem comissão configurada</span></div>
       <button class="pill-btn sm ghost" data-manualcomm="${contract.id}" style="margin-bottom:10px;">Configurar comissão da administradora</button>`;
     }
     const recebido = cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
+    const pendente = cm.parcelas.filter(p=>p.status==='Pendente').reduce((s,p)=>s+p.valor,0);
+    const cancelado = cm.parcelas.filter(p=>p.status==='Cancelada'||p.status==='Estornada').reduce((s,p)=>s+p.valor,0);
     const divergente = Math.abs(Number(contract.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
     const prestamistaTxt = (cm.prestamista && cm.prestamista.ativo) ? ` · Prestamista: ${cm.prestamista.percentual}% sobre ${fmtMoney(cm.prestamista.baseCalculo)} = ${fmtMoney(cm.prestamista.totalPrevisto)} em ${cm.prestamista.parcelasQtd}x` : '';
-    return `<div class="small-note" style="margin-bottom:10px;"><b>Contrato ${escapeHtml(contract.numero)}</b> · ${displayAdmin(resolveCommissionAdministradora(cm, contract))} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelasQtd}x · Recebido até agora: ${fmtMoney(recebido)}${divergente?' <span class="badge b-perdido">⚠ divergência de crédito</span>':''}${prestamistaTxt}</div>
+    return `<div class="small-note" style="margin-bottom:10px;"><b>Contrato ${escapeHtml(contract.numero)}</b>${contratoTag} · ${displayAdmin(resolveCommissionAdministradora(cm, contract))} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelasQtd}x · Recebido: ${fmtMoney(recebido)} · Pendente: ${fmtMoney(pendente)}${cancelado?' · Cancelado: '+fmtMoney(cancelado):''}${divergente?' <span class="badge b-perdido">⚠ divergência de crédito</span>':''}${cm.revisaoNecessaria?' <span class="badge b-perdido" title="'+escapeHtml(cm.revisaoNecessariaMotivo||'')+'">⚠ Revisão necessária</span>':''}${prestamistaTxt}</div>
     <button class="pill-btn sm" data-managecomm="${contract.id}" style="margin-bottom:10px;">Gerenciar parcelas — contrato ${escapeHtml(contract.numero)}</button>`;
   }).join('');
   const assessorComms = DB.assessorCommissions.filter(c=>c.leadId===l.id);
+  const MODALIDADE_LABEL = {vista20:'20% à vista', proporcional25:'25% proporcional', legado:'Legado'};
   const assessorBlock = `
     <div class="section-title" style="font-size:13px;margin-top:18px;">Comissão destinada ao assessor</div>
-    <div class="small-note" style="margin-bottom:10px;">Conceito separado da comissão recebida da administradora acima — é o que a BFR destina ao assessor de origem deste cliente.</div>
-    ${assessorComms.length? assessorComms.map(ac=>{ const assessor=DB.assessores.find(a=>a.id===ac.assessorId); const pago=ac.parcelas.filter(p=>p.status==='Paga').reduce((s,p)=>s+(p.valorPago||p.valor),0);
-      return `<div class="small-note" style="margin-bottom:6px;">${escapeHtml(assessor?assessor.nome:'—')} · ${ac.percentual}% sobre ${fmtMoney(ac.baseCalculo)} = ${fmtMoney(ac.valorTotal)} em ${ac.parcelas.length}x · Pago até agora: ${fmtMoney(pago)} <button class="link-btn" data-manageassessorcomm="${ac.id}">Gerenciar</button></div>`;
+    <div class="small-note" style="margin-bottom:10px;">Conceito separado da comissão recebida da administradora acima — calculada sobre a comissão do escritório, nunca sobre o crédito do cliente.</div>
+    ${assessorComms.length? assessorComms.map(ac=>{ const assessor=DB.assessores.find(a=>a.id===ac.assessorId); const ctr=ac.contractId?DB.contracts.find(x=>x.id===ac.contractId):null;
+      const pago=ac.parcelas.filter(p=>p.status==='Paga').reduce((s,p)=>s+(p.valorPago||p.valor),0);
+      const pendenteAc=ac.parcelas.filter(p=>!['Paga','Cancelada','Estornada'].includes(p.status)).reduce((s,p)=>s+p.valor,0);
+      const canceladoAc=ac.parcelas.filter(p=>p.status==='Cancelada'||p.status==='Estornada').reduce((s,p)=>s+p.valor,0);
+      const statusBadge = ac.status==='Cancelada'?'b-cancel':'b-fechado';
+      return `<div class="small-note" style="margin-bottom:6px;">${escapeHtml(assessor?assessor.nome:'—')} <span class="badge b-prop">${MODALIDADE_LABEL[ac.modalidade]||ac.modalidade}</span> <span class="badge ${statusBadge}">${escapeHtml(ac.status)}</span>${ctr?' · Contrato '+escapeHtml(ctr.numero):''} · ${ac.percentual}% sobre ${fmtMoney(ac.baseCalculo)}${ac.modalidade==='proporcional25'?' (recebida)':''} · Pago: ${fmtMoney(pago)} · Pendente: ${fmtMoney(pendenteAc)}${canceladoAc?' · Cancelado: '+fmtMoney(canceladoAc):''} <button class="link-btn" data-manageassessorcomm="${ac.id}">Gerenciar</button></div>`;
     }).join('') : '<div class="empty">Nenhuma comissão de assessor gerada para este cliente ainda.</div>'}
     <button class="pill-btn sm ghost" data-newassessorcomm="${l.id}">+ Gerar comissão do assessor</button>
   `;
@@ -8518,9 +8590,29 @@ function wireClientSubTabHandlers(t, l, renderTab){
     document.querySelectorAll('[data-editquota]').forEach(btn=> btn.onclick=()=>openQuotaForm(btn.dataset.editquota, null, l.id));
     document.querySelectorAll('[data-editcontract]').forEach(btn=> btn.onclick=()=>openContractForm(btn.dataset.editcontract, l.id));
     document.querySelectorAll('[data-deletecontract]').forEach(btn=> btn.onclick=()=>{ deleteContract(btn.dataset.deletecontract); renderTab('contratos'); });
+    document.querySelectorAll('[data-cancelquota]').forEach(btn=> btn.onclick=()=>openCancelQuotaConfirm(btn.dataset.cancelquota));
+    document.querySelectorAll('[data-reactivatequota]').forEach(btn=> btn.onclick=()=>{
+      if(!window.confirm('Reativar esta cota? Ela volta a contar como cota ativa (o cliente volta para "Fechado"). Parcelas de comissão já canceladas não são revertidas automaticamente.')) return;
+      const r = reactivateQuota(btn.dataset.reactivatequota);
+      if(!r.ok) return;
+      showToast('Cota reativada');
+      // v36_39 — item 2: atalho para abrir a comissão vinculada quando o
+      // contrato voltou a ficar ativo (foi marcado para revisão).
+      if(r.contratoReativado && r.temComissao && window.confirm('O contrato voltou a ficar ativo e a comissão foi marcada para revisão. Abrir a comissão agora?')) openCommissionForm(r.contractId);
+      else renderTab('contratos');
+    });
   }
   if(t==='cotas'){
     document.querySelectorAll('[data-editquota]').forEach(btn=> btn.onclick=()=>openQuotaForm(btn.dataset.editquota, null, l.id));
+    document.querySelectorAll('[data-cancelquota]').forEach(btn=> btn.onclick=()=>openCancelQuotaConfirm(btn.dataset.cancelquota));
+    document.querySelectorAll('[data-reactivatequota]').forEach(btn=> btn.onclick=()=>{
+      if(!window.confirm('Reativar esta cota? Ela volta a contar como cota ativa (o cliente volta para "Fechado"). Parcelas de comissão já canceladas não são revertidas automaticamente.')) return;
+      const r = reactivateQuota(btn.dataset.reactivatequota);
+      if(!r.ok) return;
+      showToast('Cota reativada');
+      if(r.contratoReativado && r.temComissao && window.confirm('O contrato voltou a ficar ativo e a comissão foi marcada para revisão. Abrir a comissão agora?')) openCommissionForm(r.contractId);
+      else renderTab('cotas');
+    });
   }
   if(t==='agenda'){
     const b1=document.getElementById('tabNewTask'); if(b1) b1.onclick=()=>openTaskForm(null, l.id);
@@ -12205,7 +12297,7 @@ function renderQuotasKanban(){
   const leadsById = new Map(DB.leads.map(l=>[l.id,l]));
   return renderGenericKanban(POSVENDA_STAGES_HISTORICO, DB.quotas, q=>q.posVendaStage, q=>{
     const lead = leadsById.get(q.leadId);
-    return `<b>${lead?escapeHtml(lead.nome):'—'}</b><div class="meta">Cota ${escapeHtml(q.numero)} · Grupo ${escapeHtml(q.grupo||'—')}</div><div class="meta">${fmtMoney(q.credito)}</div>`;
+    return `<b>${lead?escapeHtml(lead.nome):'—'}</b><div class="meta">Cota ${escapeHtml(q.numero)} · Grupo ${escapeHtml(q.grupo||'—')}</div><div class="meta">${fmtMoney(q.credito)}</div>${q.cancelada?'<div class="meta">'+quotaStageBadge(q)+'</div>':''}`;
   }, q=>q.id);
 }
 function renderContractsList(){
@@ -12355,6 +12447,274 @@ function deleteContract(contractId){
   saveDB();
   showToast('Contrato excluído');
 }
+/* ================= CANCELAMENTO DE COTA (integrado à comissão) =================
+   v36_38 — cancelamento passa a ser uma OPERAÇÃO própria, nunca mais um campo
+   solto no formulário de edição de cota (ver openQuotaForm — o campo lá agora
+   fica desabilitado ao editar). Sempre: resumo antes de confirmar
+   (openCancelQuotaConfirm) → cancelQuota() grava tudo de uma vez. */
+/** v36_39 (fix item 6) — cancela SOMENTE as parcelas do assessor com status
+ *  ainda ABERTO (Prevista/A pagar/Vencida/Suspensa) — nunca mexe em
+ *  Paga/Cancelada/Estornada (preservadas integralmente, nunca revividas nem
+ *  recanceladas). Usada tanto pela cascata de cancelamento (cancelQuota)
+ *  quanto pela reconciliação retroativa de cancelamentos antigos
+ *  (reconciliarCancelamentosAntigos) — fonte única da regra "o que pode
+ *  virar Cancelada" nos dois lugares. Retorna true se alterou alguma
+ *  parcela (para o chamador decidir se grava histórico). */
+function cancelarParcelasAbertasDoAssessor(ac){
+  const ABERTOS = ['Prevista','A pagar','Vencida','Suspensa'];
+  let mudou = false;
+  ac.parcelas.forEach(p=>{ if(ABERTOS.includes(p.status)){ p.status = 'Cancelada'; mudou = true; } });
+  if(ac.parcelas.length && ac.parcelas.every(p=>['Cancelada','Estornada'].includes(p.status))) ac.status = 'Cancelada';
+  return mudou;
+}
+/** v36_39 — item 1: reconciliação idempotente de contratos cujas cotas já
+ *  estavam TODAS canceladas ANTES do cancelamento integrado existir
+ *  (v36_38) — esses contratos nunca passaram pela cascata de cancelQuota,
+ *  então nunca ficaram marcados contract.cancelado e suas comissões
+ *  (escritório, prestamista, assessor) continuavam Pendente/Prevista/etc.
+ *  para sempre, mesmo sem nenhuma cota ativa. Aplica a MESMA regra da
+ *  cascata nova, retroativamente: só cotas 'Pendente' (escritório/
+ *  prestamista) e só os status abertos do assessor (via
+ *  cancelarParcelasAbertasDoAssessor) viram 'Cancelada' — 'Recebida'/'Paga'/
+ *  'Cancelada'/'Estornada' nunca são tocadas. Nunca inventa motivo (a cota
+ *  fica com o motivo que já tinha — normalmente vazio, por ter sido
+ *  cancelada antes de o campo existir); usa a MAIOR data de cancelamento
+ *  entre as cotas do contrato quando existir alguma. Idempotente por
+ *  construção: cada mutação só altera o que ainda está no status aberto
+ *  correspondente — rodar de novo sobre um contrato já reconciliado é
+ *  sempre um no-op completo (nenhuma escrita, nenhum histórico duplicado).
+ *  Nunca mexe em contrato que ainda tenha alguma cota ativa. Retorna true
+ *  se alterou algo de verdade (para normalizeDB()/loadDB() decidir se
+ *  persiste). */
+function reconciliarCancelamentosAntigos(){
+  let alterouAlgo = false;
+  const quotasPorContrato = new Map();
+  DB.quotas.forEach(q=>{
+    if(!q.contractId) return;
+    if(!quotasPorContrato.has(q.contractId)) quotasPorContrato.set(q.contractId, []);
+    quotasPorContrato.get(q.contractId).push(q);
+  });
+  quotasPorContrato.forEach((quotas, contractId)=>{
+    const contract = DB.contracts.find(c=>c.id===contractId);
+    if(!contract) return;
+    if(!(quotas.length>0 && quotas.every(q=>q.cancelada))) return; // ainda tem cota ativa — nunca mexe
+    let mudouEsteContrato = false;
+    if(!contract.cancelado){
+      contract.cancelado = true;
+      const dataMaisRecente = quotas.reduce((max,q)=> (q.dataCancelamento && q.dataCancelamento>max) ? q.dataCancelamento : max, '');
+      if(dataMaisRecente) contract.dataCancelamento = dataMaisRecente;
+      mudouEsteContrato = true;
+    }
+    const cm = DB.commissionMeta[contractId];
+    if(cm){
+      cm.parcelas.forEach(p=>{ if(p.status==='Pendente'){ p.status = 'Cancelada'; mudouEsteContrato = true; } });
+      if(cm.prestamista && cm.prestamista.ativo){
+        cm.prestamista.parcelas.forEach(p=>{ if(p.status==='Pendente'){ p.status = 'Cancelada'; mudouEsteContrato = true; } });
+      }
+    }
+    DB.assessorCommissions.filter(ac=>ac.contractId===contractId && ac.status!=='Cancelada').forEach(ac=>{
+      const mudouAc = cancelarParcelasAbertasDoAssessor(ac);
+      if(mudouAc){
+        ac.historico = ac.historico||[];
+        ac.historico.push({when:new Date().toISOString(), texto:'Reconciliação automática (v36_39): contrato identificado como cancelado — todas as cotas já estavam canceladas antes de o cancelamento integrado existir. Parcelas ainda abertas foram canceladas retroativamente.'});
+        mudouEsteContrato = true;
+      }
+    });
+    if(mudouEsteContrato){
+      alterouAlgo = true;
+      const lead = DB.leads.find(l=>l.id===contract.leadId);
+      if(lead) addTimeline(lead, `Reconciliação automática: contrato ${contract.numero} identificado como cancelado (todas as cotas já estavam canceladas) — comissões pendentes canceladas retroativamente.`);
+    }
+  });
+  return alterouAlgo;
+}
+/** Única função que marca uma cota como cancelada — nunca chamada direto pela
+ *  UI (sempre via openCancelQuotaConfirm, que exige resumo + motivo + data).
+ *  Idempotente: cota já cancelada → no-op (protege contra duplo clique/
+ *  reentrância). Cascata na comissão SÓ quando TODAS as cotas do contrato
+ *  ficam canceladas (uma cota cancelada nunca cancela a comissão de um
+ *  contrato que ainda tem outra cota ativa — nesse caso só sinaliza
+ *  cm.revisaoNecessaria, nunca altera valores). Parcelas 'Recebida'/'Paga'
+ *  NUNCA são tocadas (preservadas como histórico) — só 'Pendente' (escritório)
+ *  e não-'Paga' (assessor) viram 'Cancelada'. Retorna {ok, cascataComissao}. */
+function cancelQuota(quotaId, opts){
+  opts = opts || {};
+  const q = DB.quotas.find(x=>x.id===quotaId);
+  if(!q || q.cancelada) return {ok:false, motivo:'Cota não encontrada ou já cancelada.'};
+  const lead = DB.leads.find(l=>l.id===q.leadId);
+  const contract = q.contractId ? DB.contracts.find(c=>c.id===q.contractId) : null;
+  const dataCanc = opts.dataCancelamento || todayISO();
+
+  q.cancelada = true;
+  q.dataCancelamento = dataCanc;
+  q.motivoCancelamento = opts.motivo || '';
+  q.motivoCancelamentoDetalhe = opts.motivoDetalhe || '';
+
+  let cascataComissao = false;
+  if(contract){
+    const cotasDoContrato = DB.quotas.filter(x=>x.contractId===contract.id);
+    const todasCanceladas = cotasDoContrato.length>0 && cotasDoContrato.every(x=>x.cancelada);
+    const cm = DB.commissionMeta[contract.id];
+    if(todasCanceladas){
+      cascataComissao = true;
+      contract.cancelado = true;
+      contract.dataCancelamento = dataCanc;
+      if(cm){
+        cm.parcelas.forEach(p=>{ if(p.status==='Pendente') p.status = 'Cancelada'; });
+        if(cm.prestamista && cm.prestamista.ativo){
+          cm.prestamista.parcelas.forEach(p=>{ if(p.status==='Pendente') p.status = 'Cancelada'; });
+        }
+        cm.revisaoNecessaria = false; cm.revisaoNecessariaMotivo = '';
+      }
+      const cancelarParcelasAssessor = ac=>{
+        cancelarParcelasAbertasDoAssessor(ac);
+        ac.historico = ac.historico||[];
+        ac.historico.push({when:new Date().toISOString(), texto:`Parcelas futuras canceladas — contrato ${contract.numero} cancelado (cota ${q.numero}).`});
+      };
+      // Comissões de assessor já vinculadas a ESTE contrato (modelo novo).
+      DB.assessorCommissions.filter(ac=>ac.contractId===contract.id && ac.status!=='Cancelada').forEach(cancelarParcelasAssessor);
+      // Comissões de assessor LEGADAS (sem contractId, só leadId) — só
+      // cascateia com segurança se o cliente tiver exatamente 1 contrato no
+      // total; com mais de um, não há como saber a qual pertence (sinaliza
+      // revisão em vez de adivinhar — nunca altera valor às cegas).
+      if(lead){
+        const contratosDoLead = DB.contracts.filter(c=>c.leadId===lead.id);
+        const legadosDoLead = DB.assessorCommissions.filter(ac=>ac.leadId===lead.id && !ac.contractId && ac.status!=='Cancelada');
+        if(legadosDoLead.length){
+          if(contratosDoLead.length===1) legadosDoLead.forEach(cancelarParcelasAssessor);
+          else legadosDoLead.forEach(ac=>{ ac.revisaoNecessaria = true; ac.revisaoNecessariaMotivo = `Cliente tem mais de um contrato e esta comissão legada não está vinculada a um contrato específico — revise manualmente após o cancelamento da cota ${q.numero}.`; });
+        }
+      }
+    } else if(cm){
+      // Contrato ainda tem cota ativa — comissão é POR CONTRATO, não por
+      // cota, então não há como determinar automaticamente qual parcela
+      // corresponde a esta cota especificamente. Nunca altera valores às
+      // cegas — só sinaliza para revisão humana.
+      cm.revisaoNecessaria = true;
+      cm.revisaoNecessariaMotivo = `Cota ${q.numero} foi cancelada, mas o contrato ${contract.numero} ainda tem outra(s) cota(s) ativa(s) — não é possível determinar automaticamente qual parcela de comissão corresponde a esta cota. Revise manualmente se algum ajuste for necessário.`;
+    }
+  }
+
+  if(lead){
+    addTimeline(lead, `Cota ${q.numero} cancelada${opts.motivo?' — motivo: '+opts.motivo:''}${opts.motivoDetalhe?' ('+opts.motivoDetalhe+')':''}${cascataComissao?' · comissão do contrato cancelada (parcelas ainda pendentes)':''}`);
+    recomputeClientCommercialStatus(lead.id);
+  }
+  saveDB();
+  return {ok:true, cascataComissao};
+}
+/** Reativa uma cota cancelada. Reverte a cota (cancelada=false); se o
+ *  contrato tinha sido marcado cancelado e volta a ter alguma cota ativa,
+ *  reverte também contract.cancelado/dataCancelamento — sem isso, o
+ *  contrato ficaria "ativo por baixo" (cota ativa de novo) mas ainda exibido
+ *  como cancelado em toda a interface (dashboard, ficha, contrato,
+ *  comissão), um estado inconsistente. Recalcula o status do cliente (volta
+ *  para 'Fechado', regra 1 de recomputeClientCommercialStatus). A comissão
+ *  cancelada em cascata NUNCA é revivida automaticamente — decisão
+ *  financeira exige revisão humana: em vez disso, marca
+ *  cm.revisaoNecessaria explicando o motivo, o que também reabilita
+ *  "Ajustar comissão"/"Recalcular pela regra atual" em openCommissionForm
+ *  (ambos ficam desativados só enquanto contract.cancelado é true). Use
+ *  "Gerenciar parcelas" (openCommissionForm) para reverter manualmente as
+ *  parcelas que devem voltar a valer, exatamente como qualquer estorno.
+ *  Retorna {ok, contractId, temComissao, contratoReativado} — a UI usa isso
+ *  para oferecer o atalho de abrir a comissão vinculada. */
+function reactivateQuota(quotaId){
+  const q = DB.quotas.find(x=>x.id===quotaId);
+  if(!q || !q.cancelada) return {ok:false};
+  q.cancelada = false;
+  q.dataCancelamento = '';
+  q.motivoCancelamento = '';
+  q.motivoCancelamentoDetalhe = '';
+  const lead = DB.leads.find(l=>l.id===q.leadId);
+  const contract = q.contractId ? DB.contracts.find(c=>c.id===q.contractId) : null;
+  let contratoReativado = false;
+  if(contract && contract.cancelado){
+    const temCotaAtiva = DB.quotas.some(x=>x.contractId===contract.id && !x.cancelada);
+    if(temCotaAtiva){
+      contract.cancelado = false;
+      contract.dataCancelamento = '';
+      contratoReativado = true;
+      const cm = DB.commissionMeta[contract.id];
+      if(cm){
+        cm.revisaoNecessaria = true;
+        cm.revisaoNecessariaMotivo = `Cota ${q.numero} foi reativada em ${fmtDate(todayISO())} — o contrato voltou a ficar ativo, mas as parcelas de comissão já canceladas NÃO são revividas automaticamente. Revise manualmente o cronograma financeiro ("Ajustar comissão" ou "Recalcular pela regra atual", se necessário).`;
+      }
+    }
+  }
+  if(lead){
+    addTimeline(lead, `Cota ${q.numero} reativada${contratoReativado?' — contrato voltou a ficar ativo; comissão marcada para revisão':''}`);
+    recomputeClientCommercialStatus(lead.id);
+  }
+  saveDB();
+  return {ok:true, contractId: contract?contract.id:null, temComissao: !!(contract && DB.commissionMeta[contract.id]), contratoReativado};
+}
+/** Tela de confirmação de cancelamento — único caminho de UI que chama
+ *  cancelQuota(). Mostra cliente/contrato/cota, outras cotas ativas, comissão
+ *  do escritório (recebida/pendente) e do(s) assessor(es) (paga/pendente), e
+ *  o que será preservado vs. cancelado. Exige data e motivo. Bloqueia clique
+ *  duplo (mesmo padrão de confirmProposalClosing/openContractFormFromProposal
+ *  — trava local `jaConfirmado`, independente do estado do botão no DOM). */
+function openCancelQuotaConfirm(quotaId, onDone){
+  const q = DB.quotas.find(x=>x.id===quotaId);
+  if(!q){ showToast('Cota não encontrada.'); return; }
+  if(q.cancelada){ showToast('Esta cota já está cancelada.'); return; }
+  const lead = DB.leads.find(l=>l.id===q.leadId);
+  const contract = q.contractId ? DB.contracts.find(c=>c.id===q.contractId) : null;
+  const outrasCotasAtivas = contract ? DB.quotas.filter(x=>x.contractId===contract.id && x.id!==q.id && !x.cancelada) : [];
+  const vaiCancelarComissao = !!contract && outrasCotasAtivas.length===0;
+  const cm = contract ? DB.commissionMeta[contract.id] : null;
+  const escritorioRecebido = cm ? cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0) : 0;
+  const escritorioPendente = cm ? cm.parcelas.filter(p=>p.status==='Pendente').reduce((s,p)=>s+p.valor,0) : 0;
+  const assessorComms = contract
+    ? DB.assessorCommissions.filter(ac=>ac.contractId===contract.id && ac.status!=='Cancelada')
+    : (lead ? DB.assessorCommissions.filter(ac=>ac.leadId===lead.id && !ac.contractId && ac.status!=='Cancelada') : []);
+  const assessorPago = assessorComms.reduce((s,ac)=> s + ac.parcelas.filter(p=>p.status==='Paga').reduce((s2,p)=>s2+(p.valorPago||p.valor),0), 0);
+  const assessorPendente = assessorComms.reduce((s,ac)=> s + ac.parcelas.filter(p=>!['Paga','Cancelada','Estornada'].includes(p.status)).reduce((s2,p)=>s2+p.valor,0), 0);
+
+  document.getElementById('modalBody').innerHTML = `
+    <h2>Cancelar cota</h2>
+    <div class="modal-sub">${lead?escapeHtml(lead.nome):'—'}${contract?` · Contrato ${escapeHtml(contract.numero)}`:''} · Cota ${escapeHtml(q.numero)}</div>
+    ${outrasCotasAtivas.length? `<div class="small-note" style="margin-bottom:10px;">Este contrato tem ${outrasCotasAtivas.length} outra(s) cota(s) ainda ativa(s) (${outrasCotasAtivas.map(x=>escapeHtml(x.numero)).join(', ')}) — a comissão do contrato <b>não</b> será alterada, só esta cota.</div>` : ''}
+    ${!contract? `<div class="small-note" style="margin-bottom:10px;">Esta cota não está vinculada a um contrato — não há comissão para sincronizar.</div>` : ''}
+    <div class="card" style="padding:14px;margin-bottom:14px;">
+      <h3 style="margin:0 0 8px;font-size:13px;">Comissão do escritório</h3>
+      <div class="result-line"><span>Já recebida — preservada como histórico</span><b>${fmtMoney(escritorioRecebido)}</b></div>
+      <div class="result-line"><span>Pendente ${vaiCancelarComissao?'— será cancelada':'— não será alterada'}</span><b>${fmtMoney(escritorioPendente)}</b></div>
+      <h3 style="margin:14px 0 8px;font-size:13px;">Comissão do(s) assessor(es)</h3>
+      <div class="result-line"><span>Já paga — preservada</span><b>${fmtMoney(assessorPago)}</b></div>
+      <div class="result-line"><span>Pendente ${vaiCancelarComissao?'— será cancelada':'— não será alterada'}</span><b>${fmtMoney(assessorPendente)}</b></div>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label>Data do cancelamento*</label><input type="date" id="cq_data" value="${todayISO()}"></div>
+      <div class="field"><label>Motivo*</label><select id="cq_motivo"><option value="">Selecione o motivo</option>${(DB.settings.motivosPerda||[]).map(m=>`<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('')}</select></div>
+      <div class="field full"><label>Detalhe (opcional)</label><input id="cq_detalhe" placeholder="Observação adicional"></div>
+    </div>
+    <div class="modal-actions"><button class="pill-btn ghost" id="cancelForm">Voltar</button><button class="pill-btn" id="cqConfirmBtn" style="background:var(--red);border-color:var(--red);">Confirmar cancelamento</button></div>
+  `;
+  document.getElementById('cancelForm').onclick = ()=>{ if(selectedClientId) closeNestedFormAndReturn(); else closeModalFn(); };
+  let jaConfirmado = false;
+  document.getElementById('cqConfirmBtn').onclick = ()=>{
+    if(jaConfirmado) return;
+    const dataCancelamento = document.getElementById('cq_data').value;
+    const motivo = document.getElementById('cq_motivo').value;
+    const motivoDetalhe = document.getElementById('cq_detalhe').value.trim();
+    if(!dataCancelamento){ showToast('Informe a data do cancelamento.'); return; }
+    if(!motivo){ showToast('Selecione o motivo do cancelamento.'); return; }
+    jaConfirmado = true;
+    const btn = document.getElementById('cqConfirmBtn'); btn.disabled = true; btn.textContent = 'Cancelando...';
+    const result = cancelQuota(q.id, {motivo, motivoDetalhe, dataCancelamento});
+    if(!result.ok){
+      showToast(result.motivo || 'Não foi possível cancelar esta cota.');
+      jaConfirmado = false; btn.disabled = false; btn.textContent = 'Confirmar cancelamento';
+      return;
+    }
+    showToast('Cota cancelada'+(result.cascataComissao?' — comissão do contrato cancelada (parcelas ainda pendentes).':'.'));
+    if(typeof onDone==='function') onDone();
+    else if(selectedClientId) closeNestedFormAndReturn();
+    else { closeModalFn(); renderView(); }
+  };
+  openModal();
+}
 /** v26 — Formulário de contrato manual (fora do fechamento transacional a
  *  partir de proposta). Administradora agora é campo OBRIGATÓRIO, sempre a
  *  partir de DB.settings.administradoras — nunca herdada do cadastro do
@@ -12475,8 +12835,8 @@ function openQuotaForm(id, presetContractId, presetLeadId){
       <div class="field"><label>% do lance</label><input type="number" step="0.1" id="qt_pctlance" value="${q?.percentualLance||0}"></div>
       <div class="field"><label>Contemplada?</label><select id="qt_contemplado"><option value="nao" ${!q?.contemplado?'selected':''}>Não</option><option value="sim" ${q?.contemplado?'selected':''}>Sim</option></select></div>
       <div class="field"><label>Data de contemplação</label><input type="date" id="qt_datacontemplacao" value="${q?.dataContemplacao||''}"></div>
-      <div class="field"><label>Cota cancelada?</label><select id="qt_cancelada"><option value="nao" ${!q?.cancelada?'selected':''}>Não</option><option value="sim" ${q?.cancelada?'selected':''}>Sim</option></select></div>
-      <div class="field"><label>Data do cancelamento</label><input type="date" id="qt_datacancelamento" value="${q?.dataCancelamento||''}"></div>
+      <div class="field"><label>Cota cancelada?</label><select id="qt_cancelada" ${q?'disabled':''}><option value="nao" ${!q?.cancelada?'selected':''}>Não</option><option value="sim" ${q?.cancelada?'selected':''}>Sim</option></select>${q?`<div class="small-note" style="margin-top:4px;">Para cancelar ou reativar esta cota, use o botão "${q.cancelada?'Reativar':'Cancelar'} cota" na lista de cotas — o cancelamento passa por uma tela própria que sincroniza a comissão vinculada.</div>`:''}</div>
+      <div class="field"><label>Data do cancelamento</label><input type="date" id="qt_datacancelamento" value="${q?.dataCancelamento||''}" ${q?'disabled':''}></div>
       <div class="field"><label>Crédito liberado (R$)</label><input id="qt_creditoliberado" data-money value="${moneyStr(q?.creditoLiberado)}"></div>
       <div class="field full"><label>Observações</label><textarea id="qt_obs">${escapeHtml(q?.observacoes||'')}</textarea></div>
     </div>
@@ -12544,6 +12904,13 @@ function openQuotaForm(id, presetContractId, presetLeadId){
       DB.quotas.push(Object.assign({id:uid('qt')}, data));
     }
     const lead = DB.leads.find(l=>l.id===data.leadId); if(lead) addTimeline(lead, `Cota ${data.numero} ${q?'atualizada':'cadastrada'} (estágio: ${data.posVendaStage})`);
+    // v36_38 — gap corrigido: nenhum caminho de salvar cota deixava de
+    // recalcular o status comercial do cliente. O campo "cancelada" fica
+    // desabilitado ao editar (ver acima — cancelamento/reativação passam por
+    // cancelQuota/reactivateQuota), mas uma cota NOVA pode nascer já marcada
+    // cancelada, e mesmo sem essa possibilidade este é o ponto correto e
+    // único de recomputar sempre que uma cota é criada ou editada.
+    if(lead) recomputeClientCommercialStatus(lead.id);
     saveDB(); showToast('Cota salva');
     if(selectedClientId && data.leadId===selectedClientId) closeNestedFormAndReturn();
     else { closeModalFn(); renderView(); }
@@ -13604,20 +13971,25 @@ function deleteAssembly(a, onDone){
 
 /** "Situação" do contrato — deriva de status/data das parcelas, nunca um
  *  campo persistido novo:
- *  Quitada = toda parcela principal está 'Recebida';
- *  Atrasada = existe ao menos 1 parcela não recebida com dataPrevista<hoje;
+ *  Cancelada = contrato cancelado (v36_38 — nenhuma parcela principal ainda
+ *    'Pendente'; existe ao menos 1 'Cancelada'). Prevalece sobre as demais —
+ *    um contrato cancelado nunca aparece como "Atrasada"/"Em dia".
+ *  Quitada = toda parcela principal está 'Recebida' (nenhuma cancelada);
+ *  Atrasada = existe ao menos 1 parcela AINDA PENDENTE com dataPrevista<hoje;
  *  Em dia = tem parcela pendente, mas nenhuma vencida. */
 function commissaoSituacao(cm){
   if(!cm.parcelas.length) return 'Em dia';
   if(cm.parcelas.every(p=>p.status==='Recebida')) return 'Quitada';
+  if(cm.parcelas.some(p=>p.status==='Cancelada') && !cm.parcelas.some(p=>p.status==='Pendente')) return 'Cancelada';
   const hoje = todayISO();
-  if(cm.parcelas.some(p=>p.status!=='Recebida' && p.dataPrevista<hoje)) return 'Atrasada';
+  if(cm.parcelas.some(p=>p.status==='Pendente' && p.dataPrevista<hoje)) return 'Atrasada';
   return 'Em dia';
 }
-/** Próxima parcela ainda não recebida (mesma lógica já usada inline em
- *  viewComissoes original — só extraída para reuso). */
+/** Próxima parcela ainda PENDENTE (v36_38 — 'Cancelada'/'Estornada' nunca são
+ *  "a próxima a receber"; mesma lógica já usada inline em viewComissoes
+ *  original — só extraída para reuso). */
 function commissaoProximaParcela(cm){
-  return cm.parcelas.find(p=>p.status!=='Recebida') || null;
+  return cm.parcelas.find(p=>p.status==='Pendente') || null;
 }
 /** v36_25 — CORREÇÃO DE SEMÂNTICA FINANCEIRA (causa raiz documentada no
  *  relatório desta rodada): "Previsto no mês" somava TODAS as parcelas com
@@ -13632,7 +14004,9 @@ function commissaoProximaParcela(cm){
  *  cm.prestamista.parcelas — comissão de prestamista permanece inteiramente
  *  separada, como já era. */
 function isCommissionParcelaPendingThisMonth(p){
-  if(p.status==='Recebida') return false;
+  // v36_38 — 'Cancelada'/'Estornada' nunca contam como "a receber" — só
+  // 'Pendente' é, de fato, dinheiro ainda esperado.
+  if(p.status!=='Pendente') return false;
   // v36_25 — bug real encontrado durante os testes desta rodada (não citado
   // no pedido original, mas necessário para o predicado funcionar
   // corretamente): `new Date('YYYY-MM-DD')` sem horário é interpretado como
@@ -13729,9 +14103,12 @@ function getComissoesContratosFiltrados(){
 function comissaoContratoMatchesSituacao(cm, situacao){
   if(situacao==='Todos') return true;
   const hoje = todayISO();
-  if(situacao==='aReceber') return cm.parcelas.some(p=>p.status!=='Recebida');
-  if(situacao==='atrasadas') return cm.parcelas.some(p=>p.status!=='Recebida' && p.dataPrevista<hoje);
+  // v36_38 — "a receber"/"atrasadas" só contam parcela 'Pendente' de verdade
+  // (nunca 'Cancelada'/'Estornada' — essas não são mais dinheiro esperado).
+  if(situacao==='aReceber') return cm.parcelas.some(p=>p.status==='Pendente');
+  if(situacao==='atrasadas') return cm.parcelas.some(p=>p.status==='Pendente' && p.dataPrevista<hoje);
   if(situacao==='recebidas') return cm.parcelas.some(p=>p.status==='Recebida'); // definição A — ver comentário acima
+  if(situacao==='cancelado') return !!(cm.revisaoNecessaria) || cm.parcelas.some(p=>p.status==='Cancelada');
   // v36_25 — mesma fonte de verdade do KPI "Previsto no mês" (ver
   // isCommissionParcelaPendingThisMonth): um contrato só entra neste quick
   // filter se tiver ao menos uma parcela AINDA NÃO recebida prevista para o
@@ -13760,15 +14137,21 @@ function comissaoProximosRecebimentos(contratosComComissao, limit){
   contratosComComissao.forEach(c=>{
     const cm = DB.commissionMeta[c.id];
     const lead = leadsById.get(c.leadId);
-    cm.parcelas.filter(p=>p.status!=='Recebida').forEach(p=>{
+    cm.parcelas.filter(p=>p.status==='Pendente').forEach(p=>{
       linhas.push({ data:p.dataPrevista, valor:p.valor, cliente:lead?lead.nome:'—', administradora:resolveCommissionAdministradora(cm,c), contrato:c.numero, atrasada:p.dataPrevista<hoje });
     });
   });
   return linhas.sort((a,b)=> a.data.localeCompare(b.data)).slice(0, limit||6);
 }
-/** Agrupamentos "por assessor"/"por administradora" — só soma cm.totalPrevisto
- *  (comissão principal, nunca prestamista) e cm.parcelas por contrato já
- *  filtrado. Linguagem neutra (sem "melhor/pior/ranking") — só uma tabela. */
+/** Agrupamentos "por assessor"/"por administradora" — soma cm.parcelas
+ *  (comissão principal, nunca prestamista) por contrato já filtrado.
+ *  Linguagem neutra (sem "melhor/pior/ranking") — só uma tabela.
+ *  v36_39 (item 5) — "total" é o valor VIGENTE (recebido + ainda pendente),
+ *  nunca cm.totalPrevisto puro: esse campo não é decrementado quando uma
+ *  parcela é cancelada, então continuava inflando esta coluna mesmo depois
+ *  do contrato ser cancelado. Com "total" já vigente, aReceber = total -
+ *  recebido é suficiente (cancelado já está fora do total, não precisa mais
+ *  ser subtraído de novo). */
 function comissaoPorAssessor(contratosComComissao){
   const grupos = {};
   const leadsById = new Map(DB.leads.map(l=>[l.id,l]));
@@ -13776,11 +14159,14 @@ function comissaoPorAssessor(contratosComComissao){
     const cm = DB.commissionMeta[c.id];
     const lead = leadsById.get(c.leadId);
     const nome = (lead && lead.responsavel) || 'Não informado';
-    if(!grupos[nome]) grupos[nome] = {total:0, recebido:0};
-    grupos[nome].total += cm.totalPrevisto||0;
-    grupos[nome].recebido += cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
+    if(!grupos[nome]) grupos[nome] = {total:0, recebido:0, cancelado:0};
+    cm.parcelas.forEach(p=>{
+      if(p.status==='Cancelada' || p.status==='Estornada'){ grupos[nome].cancelado += p.valor; return; }
+      grupos[nome].total += p.valor;
+      if(p.status==='Recebida') grupos[nome].recebido += (p.valorRecebido||p.valor);
+    });
   });
-  return Object.entries(grupos).map(([nome,v])=>({nome, total:v.total, recebido:v.recebido, aReceber:v.total-v.recebido})).sort((a,b)=>b.total-a.total);
+  return Object.entries(grupos).map(([nome,v])=>({nome, total:v.total, recebido:v.recebido, cancelado:v.cancelado, aReceber:v.total-v.recebido})).sort((a,b)=>b.total-a.total);
 }
 function comissaoPorAdministradora(contratosComComissao){
   const grupos = {};
@@ -13790,7 +14176,10 @@ function comissaoPorAdministradora(contratosComComissao){
     const admin = resolveCommissionAdministradora(cm, c) || 'Não informado';
     if(!grupos[admin]) grupos[admin] = {aReceber:0, esteMes:0, atrasado:0};
     cm.parcelas.forEach(p=>{
-      if(p.status!=='Recebida'){
+      // v36_38 — só 'Pendente' conta como "a receber"/"atrasado" — 'Cancelada'/
+      // 'Estornada' saem completamente desta soma (antes: qualquer status
+      // diferente de 'Recebida' contava, o que incluía cancelamentos).
+      if(p.status==='Pendente'){
         grupos[admin].aReceber += p.valor;
         if(p.dataPrevista<hoje) grupos[admin].atrasado += p.valor;
       }
@@ -13842,7 +14231,7 @@ function commissionScheduleForComissoesScreen(){
       if(comissoesFilters.busca && !comissaoMatchesSearch(contract, leadsById.get(contract.leadId), comissoesFilters.busca)) return;
       if(comissoesFilters.situacao!=='Todos' && !comissaoContratoMatchesSituacao(cm, comissoesFilters.situacao)) return;
       cm.parcelas.forEach(p=>{
-        if(p.status==='Recebida' || !p.dataPrevista) return;
+        if(p.status!=='Pendente' || !p.dataPrevista) return; // v36_38: nunca Cancelada/Estornada
         const py = Number(p.dataPrevista.slice(0,4)), pm = Number(p.dataPrevista.slice(5,7))-1;
         if(py===mo.y && pm===mo.m) total += p.valor;
       });
@@ -13861,7 +14250,24 @@ function renderCommissoesChart(){
   const sched = commissionScheduleForComissoesScreen();
   newChart('commSchedChart','bar', sched.labels, [{label:'Previsto a receber', data:sched.data, backgroundColor:CHART_PALETTE.gold, borderRadius:5, maxBarThickness:34}], {money:true});
 }
+// v36_38 — módulo Comissões ganhou duas abas claras (mesmo padrão de
+// contratosViewMode/viewContratos): "Comissões do escritório" (conteúdo já
+// existente, intocado) e "Comissões dos assessores" (nova, lê
+// DB.assessorCommissions diretamente — conceito já era separado, agora tem
+// tela própria em vez de só a tabela agregada "por assessor" dentro da aba
+// do escritório, que continua existindo e é OUTRA coisa — ver nota na
+// função). currentView permanece 'comissoes' o tempo todo; só este estado
+// interno alterna o conteúdo.
+let comissoesViewMode = 'escritorio';
 function viewComissoes(){
+  return `
+  <div class="toolbar">
+    <div class="view-toggle"><button data-commmode="escritorio" class="${comissoesViewMode==='escritorio'?'active':''}">Comissões do escritório</button><button data-commmode="assessores" class="${comissoesViewMode==='assessores'?'active':''}">Comissões dos assessores</button></div>
+  </div>
+  ${comissoesViewMode==='escritorio' ? viewComissoesEscritorio() : viewComissoesAssessores()}
+  `;
+}
+function viewComissoesEscritorio(){
   // Comissão agora é por CONTRATO (item 3) — um cliente pode ter vários
   // contratos, cada um com sua própria linha/comissão nesta tela.
   const leadsById = new Map(DB.leads.map(l=>[l.id,l]));
@@ -13871,7 +14277,7 @@ function viewComissoes(){
   // aqui, só eliminação da duplicação.
   let contratosComComissao = getComissoesContratosFiltrados();
   const contratosSemComissao = DB.contracts.filter(c=>!DB.commissionMeta[c.id]);
-  let totFuturas=0,totAtrasadas=0,totAtrasadasCount=0,totRecebido=0,totPendente=0,totAjustadas=0;
+  let totFuturas=0,totAtrasadas=0,totAtrasadasCount=0,totRecebido=0,totPendente=0,totAjustadas=0,totCancelado=0,totCanceladoCount=0;
   // v29 — totais SEPARADOS de prestamista (item 1): nunca somados aos totais
   // acima (que continuam representando só a comissão principal) — só
   // combinados no indicador explícito "Total consolidado".
@@ -13879,18 +14285,28 @@ function viewComissoes(){
   contratosComComissao.forEach(c=>{
     const cm = DB.commissionMeta[c.id];
     if(cm.ajustadaManualmente) totAjustadas++;
-    totPrincipalPrevisto += cm.totalPrevisto||0;
+    // v36_39 (item 5) — total VIGENTE (Recebida + Pendente), nunca
+    // cm.totalPrevisto puro: esse campo não é decrementado quando uma
+    // parcela é cancelada, então ficaria inflado para sempre em qualquer
+    // contrato com cancelamento parcial ou total. Soma completa do
+    // contrato, sempre — independente do filtro de competência (mesmo
+    // escopo de antes, só a fórmula mudou).
+    totPrincipalPrevisto += cm.parcelas.reduce((s,p)=> (p.status==='Cancelada'||p.status==='Estornada') ? s : s+p.valor, 0);
     cm.parcelas.forEach(p=>{
       if(comissoesFilters.competencia && p.dataPrevista.slice(0,7)!==comissoesFilters.competencia) return;
       // "Divergência" (valor recebido != valor previsto) deixou de ser sinalizada
       // de propósito: administradoras diferentes pagam em fluxos diferentes, e
       // agora tanto o valor quanto a data previstos de cada parcela podem ser
       // ajustados diretamente para refletir a realidade — ver openCommissionForm.
+      // v36_38 — 'Cancelada'/'Estornada' saem inteiramente de pendente/atrasada/
+      // futura (nunca mais "dinheiro esperado") e passam a ter seu próprio total.
       if(p.status==='Recebida'){ totRecebido+=(p.valorRecebido||p.valor); }
+      else if(p.status==='Cancelada' || p.status==='Estornada'){ totCancelado+=p.valor; totCanceladoCount++; }
       else { totPendente+=p.valor; if(p.dataPrevista<todayISO()){ totAtrasadas+=p.valor; totAtrasadasCount++; } else totFuturas+=p.valor; }
     });
     if(cm.prestamista && cm.prestamista.ativo){
-      totPrestamistaPrevisto += cm.prestamista.totalPrevisto||0;
+      // v36_39 (item 5) — mesma correção (vigente) aplicada ao prestamista.
+      totPrestamistaPrevisto += cm.prestamista.parcelas.reduce((s,p)=> (p.status==='Cancelada'||p.status==='Estornada') ? s : s+p.valor, 0);
       totPrestamistaRecebido += cm.prestamista.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
     }
   });
@@ -13979,8 +14395,13 @@ function viewComissoes(){
       <div class="comm-hero-value" style="color:var(--green);">${fmtMoney(totRecebidoNoMes)}</div>
       <div class="comm-hero-sub">${parcelasRecebidasMes.length} recebimento${parcelasRecebidasMes.length===1?'':'s'}</div>
     </div>
+    <div class="comm-hero-item ${totCanceladoCount?'clickable':''}" ${totCanceladoCount?'data-commsituacao="cancelado" tabindex="0"':''} title="Parcelas canceladas por cancelamento de cota/contrato — nunca contam mais como a receber. Parcelas já recebidas antes do cancelamento não entram aqui (continuam em 'Recebido').">
+      <div class="comm-hero-label">Cancelado ⓘ</div>
+      <div class="comm-hero-value" style="color:var(--ink-soft);">${fmtMoney(totCancelado)}</div>
+      ${totCanceladoCount? `<div class="comm-hero-sub">${totCanceladoCount} parcela${totCanceladoCount===1?'':'s'}</div>` : ''}
+    </div>
   </div>
-  <p class="small-note comm-secondary-line">Futuras ${fmtMoney(totFuturas)} · Recebido${comissoesFilters.competencia?' (competência selecionada)':' (total, todas as competências)'} ${fmtMoney(totRecebido)} · Ajustadas manualmente ${totAjustadas} · Prestamista ${fmtMoney(totPrestamistaPrevisto)} · Total consolidado (principal + prestamista) ${fmtMoney(totPrincipalPrevisto+totPrestamistaPrevisto)}</p>
+  <p class="small-note comm-secondary-line">Futuras ${fmtMoney(totFuturas)} · Recebido${comissoesFilters.competencia?' (competência selecionada)':' (total, todas as competências)'} ${fmtMoney(totRecebido)} · Cancelado ${fmtMoney(totCancelado)} · Ajustadas manualmente ${totAjustadas} · Prestamista vigente ${fmtMoney(totPrestamistaPrevisto)} · Total consolidado vigente (principal + prestamista, exclui cancelado/estornado) ${fmtMoney(totPrincipalPrevisto+totPrestamistaPrevisto)}</p>
   <p class="small-note" style="margin-bottom:14px;">As regras de comissão (percentual, parcelas, início) são definidas em Configurações → Comissões e ficam registradas no contrato no momento do fechamento — alterações futuras na regra não afetam comissões já geradas. Cada contrato gera sua própria comissão — um cliente com vários contratos aparece várias vezes aqui, uma por contrato. A comissão de seguro prestamista (quando houver) é sempre separada da comissão principal — nunca somada nos valores acima — e não entra no cálculo da comissão destinada ao assessor (conceito financeiro separado, não tratado nesta tela).</p>
 
   <div class="filter-bar comm-filter-bar">
@@ -13991,7 +14412,7 @@ function viewComissoes(){
     <span class="small-note" style="margin-left:auto;white-space:nowrap;">${contratosComComissao.length} contrato${contratosComComissao.length===1?'':'s'}</span>
   </div>
   <div class="comm-quickviews">
-    ${[{id:'Todos',label:'Todos'},{id:'aReceber',label:'A receber'},{id:'esteMes',label:'Previsto no mês'},{id:'atrasadas',label:'Atrasadas'},{id:'recebidas',label:'Com recebimentos'}].map(q=>`<button class="pill-btn ghost sm ${comissoesFilters.situacao===q.id?'active':''}" data-commsituacao="${q.id}">${q.label}</button>`).join('')}
+    ${[{id:'Todos',label:'Todos'},{id:'aReceber',label:'A receber'},{id:'esteMes',label:'Previsto no mês'},{id:'atrasadas',label:'Atrasadas'},{id:'recebidas',label:'Com recebimentos'},{id:'cancelado',label:'Canceladas'}].map(q=>`<button class="pill-btn ghost sm ${comissoesFilters.situacao===q.id?'active':''}" data-commsituacao="${q.id}">${q.label}</button>`).join('')}
   </div>
 
   ${proximosRecebimentos.length? `<div class="comm-section-title">Próximos recebimentos</div>
@@ -14012,29 +14433,38 @@ function viewComissoes(){
     const cm = DB.commissionMeta[c.id];
     const lead = leadsById.get(c.leadId);
     const recebido = cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
-    const aReceber = (cm.totalPrevisto||0) - recebido;
+    // v36_38 — "A receber" soma direto as parcelas 'Pendente' (nunca mais
+    // totalPrevisto-recebido, que incluía silenciosamente o que foi cancelado).
+    const aReceber = cm.parcelas.filter(p=>p.status==='Pendente').reduce((s,p)=>s+p.valor,0);
+    const cancelado = cm.parcelas.filter(p=>p.status==='Cancelada'||p.status==='Estornada').reduce((s,p)=>s+p.valor,0);
+    // v36_39 (item 5) — "Comissão total" e o % da barra de progresso usam o
+    // valor VIGENTE (recebido+pendente), nunca cm.totalPrevisto puro (não é
+    // decrementado no cancelamento — inflaria a coluna e sub-avaliaria o %
+    // recebido em qualquer contrato com cancelamento parcial ou total).
+    const totalVigente = recebido + aReceber;
     const proxima = commissaoProximaParcela(cm);
     const divergente = Math.abs(Number(c.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
     const situacao = commissaoSituacao(cm);
-    const situacaoBadge = situacao==='Quitada'?'b-fechado':situacao==='Atrasada'?'b-perdido':'b-novo';
-    const pct = cm.totalPrevisto>0 ? Math.min(100, Math.round((recebido/cm.totalPrevisto)*100)) : null;
+    const situacaoBadge = situacao==='Quitada'?'b-fechado':situacao==='Atrasada'?'b-perdido':situacao==='Cancelada'?'b-cancel':'b-novo';
+    const pct = totalVigente>0 ? Math.min(100, Math.round((recebido/totalVigente)*100)) : null;
     const expanded = comissoesExpandedRows.has(c.id);
     return `<tr>
       <td><button class="link-btn comm-expand-btn" data-commexpand="${c.id}" aria-expanded="${expanded}">${expanded?'▾':'▸'}</button></td>
       <td><b>${lead?escapeHtml(lead.nome):'—'}</b><div class="clientes-td-sub">${escapeHtml(c.numero)}${lead&&lead.responsavel?' · '+escapeHtml(lead.responsavel):''}</div></td>
       <td>${displayAdmin(resolveCommissionAdministradora(cm, c))}</td>
       <td class="num">${fmtMoney(cm.valorVenda)}${divergente?' <span class="badge b-perdido" title="Valor vendido registrado na comissão diverge do valor contratado do contrato">⚠</span>':''}</td>
-      <td class="num">${fmtMoney(cm.totalPrevisto)}<div class="clientes-td-sub">${cm.percentual}%</div></td>
+      <td class="num">${fmtMoney(totalVigente)}<div class="clientes-td-sub">${cm.percentual}%${cancelado?' · '+fmtMoney(cancelado)+' cancelado':''}</div></td>
       <td class="num">${fmtMoney(recebido)}${pct!==null?`<div class="comm-progress" title="${pct}% recebido"><div class="comm-progress-fill" style="width:${pct}%;"></div></div>`:''}</td>
       <td class="num">${fmtMoney(aReceber)}</td>
-      <td>${proxima?`${fmtDate(proxima.dataPrevista)}<div class="clientes-td-sub">${fmtMoney(proxima.valor)}</div>`:'Todas recebidas'}</td>
-      <td><span class="badge ${situacaoBadge}">${situacao}</span></td>
+      <td>${proxima?`${fmtDate(proxima.dataPrevista)}<div class="clientes-td-sub">${fmtMoney(proxima.valor)}</div>`:(cancelado?'Cancelada':'Todas recebidas')}</td>
+      <td><span class="badge ${situacaoBadge}">${situacao}</span>${cm.revisaoNecessaria?` <span class="badge b-perdido" title="${escapeHtml(cm.revisaoNecessariaMotivo||'')}">⚠ Revisão necessária</span>`:''}</td>
       <td><button class="link-btn" data-editcomm="${c.id}">Ver parcelas</button></td>
     </tr>
     ${expanded? `<tr class="comm-expand-row"><td></td><td colspan="9">
       <table class="parcel-table comm-mini-parcel-table"><thead><tr><th>Nº</th><th>Vencimento</th><th class="num">Valor</th><th>Situação</th><th>Recebido em</th></tr></thead>
-      <tbody>${cm.parcelas.map(p=>`<tr><td>${p.n}</td><td>${fmtDate(p.dataPrevista)}</td><td class="num">${fmtMoney(p.valor)}</td><td><span class="badge ${p.status==='Recebida'?'b-fechado':(p.dataPrevista<todayISO()?'b-perdido':'b-novo')}">${p.status==='Recebida'?'Recebida':(p.dataPrevista<todayISO()?'Atrasada':'Futura')}</span></td><td>${p.dataRecebida?fmtDate(p.dataRecebida):'—'}</td></tr>`).join('')}</tbody></table>
+      <tbody>${cm.parcelas.map(p=>{ const rot = p.status==='Recebida'?'Recebida':p.status==='Cancelada'?'Cancelada':p.status==='Estornada'?'Estornada':(p.dataPrevista<todayISO()?'Atrasada':'Futura'); const cls = p.status==='Recebida'?'b-fechado':(p.status==='Cancelada'||p.status==='Estornada')?'b-cancel':(p.dataPrevista<todayISO()?'b-perdido':'b-novo'); return `<tr><td>${p.n}</td><td>${fmtDate(p.dataPrevista)}</td><td class="num">${fmtMoney(p.valor)}</td><td><span class="badge ${cls}">${rot}</span></td><td>${p.dataRecebida?fmtDate(p.dataRecebida):'—'}</td></tr>`; }).join('')}</tbody></table>
       ${cm.ajustadaManualmente? '<p class="small-note" style="padding:8px 2px;">⚠ Comissão deste contrato foi ajustada manualmente — os valores acima refletem o ajuste, não a regra padrão original.</p>' : ''}
+      ${cm.revisaoNecessaria? `<p class="small-note" style="padding:4px 2px;color:var(--red);">⚠ ${escapeHtml(cm.revisaoNecessariaMotivo||'Revisão necessária.')}</p>` : ''}
       <p class="small-note" style="padding:4px 2px 10px;">Para marcar parcelas como recebidas ou editar valores/datas, use "Ver parcelas".</p>
     </td></tr>` : ''}
     `;
@@ -14065,6 +14495,94 @@ function viewComissoes(){
   ${contratosSemComissao.length? `<div class="comm-section-title">Contratos sem comissão configurada</div>
   <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Contrato</th><th>Administradora</th><th></th></tr></thead>
   <tbody>${contratosSemComissao.map(c=>{ const lead=leadsById.get(c.leadId); return `<tr><td>${lead?escapeHtml(lead.nome):'—'}</td><td>${escapeHtml(c.numero)}</td><td>${displayAdmin(resolveContractAdministradora(c))}</td><td><button class="link-btn" data-manualcomm="${c.id}">Configurar comissão</button></td></tr>`; }).join('')}</tbody></table></div>` : ''}
+  `;
+}
+/* ================= COMISSÕES DOS ASSESSORES (aba própria, v36_38) =================
+   Lê DB.assessorCommissions diretamente — conceito já era separado da comissão
+   do escritório (DB.commissionMeta), agora com tela própria em vez de só a
+   tabela agregada "Comissões por assessor" (comissaoPorAssessor, que soma
+   DB.commissionMeta por lead.responsavel — OUTRA coisa, continua existindo
+   dentro da aba do escritório, sem nenhuma mudança). */
+let assessorCommFilters = { assessor:'Todos', modalidade:'Todas', status:'Todos', busca:'' };
+function assessorCommMatchesFilters(ac, lead, assessor){
+  if(assessorCommFilters.assessor!=='Todos' && (!assessor || assessor.nome!==assessorCommFilters.assessor)) return false;
+  if(assessorCommFilters.modalidade!=='Todas' && ac.modalidade!==assessorCommFilters.modalidade) return false;
+  if(assessorCommFilters.status!=='Todos' && ac.status!==assessorCommFilters.status) return false;
+  if(assessorCommFilters.busca){
+    const s = normalizeStr(assessorCommFilters.busca);
+    const contract = ac.contractId ? DB.contracts.find(c=>c.id===ac.contractId) : null;
+    const texto = normalizeStr([lead?lead.nome:'', contract?contract.numero:'', assessor?assessor.nome:''].join(' '));
+    if(!texto.includes(s)) return false;
+  }
+  return true;
+}
+function viewComissoesAssessores(){
+  const leadsById = new Map(DB.leads.map(l=>[l.id,l]));
+  const assessoresById = new Map(DB.assessores.map(a=>[a.id,a]));
+  const MODALIDADE_LABEL = {vista20:'20% à vista', proporcional25:'25% proporcional', legado:'Legado'};
+  const rows = DB.assessorCommissions
+    .map(ac=>({ac, lead:leadsById.get(ac.leadId), assessor:assessoresById.get(ac.assessorId), contract: ac.contractId?DB.contracts.find(c=>c.id===ac.contractId):null}))
+    .filter(r=> assessorCommMatchesFilters(r.ac, r.lead, r.assessor));
+
+  // v36_39 (item 5) — "Previsto" é o valor VIGENTE (pago + ainda pendente) —
+  // parcelas Cancelada/Estornada saem inteiramente daqui e só contam no
+  // card "Cancelado" separado (antes somava tudo, qualquer status).
+  let totPrevisto=0, totPago=0, totPendente=0, totCancelado=0;
+  rows.forEach(({ac})=>{
+    ac.parcelas.forEach(p=>{
+      const v = Number(p.valor)||0;
+      if(p.status==='Paga'){ totPago += Number(p.valorPago||p.valor)||0; totPrevisto += v; }
+      else if(p.status==='Cancelada'||p.status==='Estornada'){ totCancelado += v; }
+      else { totPendente += v; totPrevisto += v; }
+    });
+  });
+
+  const nomesAssessores = new Set(DB.assessores.map(a=>a.nome));
+  return `
+  <div class="comm-header">
+    <div>
+      <div class="comm-title">Comissões dos assessores</div>
+      <div class="comm-subtitle">O que a BFR destina a cada assessor — calculado sobre a comissão que o escritório recebe da administradora, nunca sobre o crédito do cliente.</div>
+    </div>
+  </div>
+  <div class="comm-hero-strip">
+    <div class="comm-hero-item comm-hero-main"><div class="comm-hero-label">Previsto</div><div class="comm-hero-value">${fmtMoney(totPrevisto)}</div></div>
+    <div class="comm-hero-item"><div class="comm-hero-label">Pago</div><div class="comm-hero-value" style="color:var(--green);">${fmtMoney(totPago)}</div></div>
+    <div class="comm-hero-item"><div class="comm-hero-label">Pendente</div><div class="comm-hero-value">${fmtMoney(totPendente)}</div></div>
+    <div class="comm-hero-item"><div class="comm-hero-label">Cancelado</div><div class="comm-hero-value" style="color:var(--ink-soft);">${fmtMoney(totCancelado)}</div></div>
+  </div>
+  <p class="small-note" style="margin:10px 0 14px;">"Previsto" é o valor vigente (pago + ainda pendente) — parcelas canceladas/estornadas saem daqui e aparecem só no card "Cancelado". Modalidade "25% proporcional" só gera parcela quando o escritório efetivamente recebe — não confundir com o previsto da comissão do escritório, que pode ser maior.</p>
+  <div class="filter-bar comm-filter-bar">
+    <input type="text" id="acSearch" placeholder="Buscar por cliente, contrato ou assessor" value="${escapeHtml(assessorCommFilters.busca)}" style="min-width:240px;">
+    <select id="acFilterAssessor"><option value="Todos">Todos os assessores</option>${[...nomesAssessores].sort().map(n=>`<option ${assessorCommFilters.assessor===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}</select>
+    <select id="acFilterModalidade"><option value="Todas">Todas as modalidades</option>${Object.keys(MODALIDADE_LABEL).map(m=>`<option value="${m}" ${assessorCommFilters.modalidade===m?'selected':''}>${MODALIDADE_LABEL[m]}</option>`).join('')}</select>
+    <select id="acFilterStatus"><option value="Todos">Todos os status</option>${['Ativa','Cancelada'].map(s=>`<option ${assessorCommFilters.status===s?'selected':''}>${s}</option>`).join('')}</select>
+    <span class="small-note" style="margin-left:auto;white-space:nowrap;">${rows.length} registro${rows.length===1?'':'s'}</span>
+  </div>
+  <div class="table-wrap"><table class="comm-table">
+    <thead><tr><th>Cliente / contrato</th><th>Assessor</th><th>Modalidade</th><th class="num">Base (comissão do escritório)</th><th class="num">Previsto</th><th class="num">Pago</th><th class="num">Pendente</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows.length? rows.map(({ac,lead,assessor,contract})=>{
+      const pago = ac.parcelas.filter(p=>p.status==='Paga').reduce((s,p)=>s+(p.valorPago||p.valor),0);
+      const pendente = ac.parcelas.filter(p=>!['Paga','Cancelada','Estornada'].includes(p.status)).reduce((s,p)=>s+p.valor,0);
+      // v36_39 (item 5) — vigente, nunca ac.valorTotal puro: esse campo não
+      // é decrementado quando uma parcela é cancelada (20% à vista) e, na
+      // modalidade proporcional, só é recalculado por syncComissaoAssessor-
+      // Proporcional — que não roda de novo quando cancelQuota cancela a
+      // parcela diretamente.
+      const previstoVigente = pago + pendente;
+      return `<tr>
+        <td><b>${lead?escapeHtml(lead.nome):'—'}</b><div class="clientes-td-sub">${contract?escapeHtml(contract.numero):'—'}</div></td>
+        <td>${assessor?escapeHtml(assessor.nome):'—'}</td>
+        <td>${MODALIDADE_LABEL[ac.modalidade]||ac.modalidade}</td>
+        <td class="num">${fmtMoney(ac.baseCalculo)}</td>
+        <td class="num">${fmtMoney(previstoVigente)}</td>
+        <td class="num">${fmtMoney(pago)}</td>
+        <td class="num">${fmtMoney(pendente)}</td>
+        <td><span class="badge ${ac.status==='Cancelada'?'b-cancel':'b-fechado'}">${escapeHtml(ac.status)}</span></td>
+        <td><button class="link-btn" data-manageassessorcommglobal="${ac.id}">Gerenciar</button></td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="9" class="empty">Nenhuma comissão de assessor encontrada com os filtros atuais</td></tr>'}</tbody>
+  </table></div>
   `;
 }
 
@@ -14171,68 +14689,273 @@ function renderCommissionReceivedModal(){
  *  administradora. O percentual nunca tem padrão assumido silenciosamente: se o
  *  assessor tem um % padrão cadastrado, ele só aparece como sugestão pré-preenchida,
  *  mas o analista precisa confirmar (o campo não vem bloqueado nem oculto). */
+/* ================= COMISSÃO DO ASSESSOR — v36_38: duas modalidades ================= */
+/** Base de cálculo da comissão do assessor: SEMPRE a comissão do escritório
+ *  (cm.totalPrevisto), nunca o crédito do cliente nem lead.valor. */
+function comissaoEscritorioBase(contractId){
+  const cm = DB.commissionMeta[contractId];
+  return cm ? Number(cm.totalPrevisto)||0 : 0;
+}
+/** v36_39 (item 3) — as duas modalidades são ALTERNATIVAS, nunca cumulativas:
+ *  só pode haver UMA comissão de assessor ativa por combinação contrato+
+ *  assessor, qualquer que seja a modalidade. Usada pelos dois geradores
+ *  abaixo (antes cada um só verificava duplicidade DENTRO da própria
+ *  modalidade, permitindo as duas coexistirem para o mesmo par). */
+function assessorComissaoAtivaExistente(contractId, assessorId){
+  return DB.assessorCommissions.find(ac=> ac.contractId===contractId && ac.assessorId===assessorId && ac.status!=='Cancelada') || null;
+}
+function nomeModalidadeAssessor(m){
+  return m==='vista20' ? '20% à vista' : m==='proporcional25' ? '25% proporcional' : 'Legado';
+}
+/** Modalidade A — 20% à vista sobre a comissão do escritório. Uma única
+ *  parcela, com data de pagamento/vencimento informada pelo formulário
+ *  (opts.vencimento — por ser "à vista", o padrão é hoje quando omitida).
+ *  Bloqueia (nunca apaga/substitui silenciosamente) quando: contrato não
+ *  encontrado, contrato cancelado, comissão do escritório ainda não
+ *  configurada, ou já existe uma comissão ativa (qualquer modalidade) para
+ *  este contrato+assessor — devolve {ok:false, motivo, existente} nesses
+ *  casos. Nunca inclui prestamista nesta modalidade. */
+function gerarComissaoAssessorVista20(contractId, assessorId, opts){
+  opts = opts || {};
+  const contract = DB.contracts.find(c=>c.id===contractId);
+  if(!contract) return {ok:false, motivo:'Contrato não encontrado.'};
+  if(contract.cancelado) return {ok:false, motivo:'Este contrato está cancelado — não é possível gerar comissão de assessor sobre ele.'};
+  const cm = DB.commissionMeta[contractId];
+  if(!cm) return {ok:false, motivo:'A comissão do escritório ainda não foi configurada para este contrato.'};
+  const existente = assessorComissaoAtivaExistente(contractId, assessorId);
+  if(existente) return {ok:false, motivo:`Já existe uma comissão ativa (modalidade ${nomeModalidadeAssessor(existente.modalidade)}) para este assessor neste contrato.`, existente};
+  const base = comissaoEscritorioBase(contractId);
+  const pct = 20;
+  const valor = Math.round(base*pct/100*100)/100;
+  const venc = opts.vencimento || todayISO();
+  const novo = {
+    id: uid('acomm'), contractId, leadId: contract.leadId, assessorId,
+    modalidade:'vista20', percentual: pct, baseCalculo: base, incluiPrestamista:false,
+    valorTotal: valor, competencia: todayISO().slice(0,7),
+    parcelas: [{n:1, vencimento:venc, status:'Prevista', valor, valorPago:0, dataPagamento:'', observacao:'20% à vista sobre a comissão do escritório', origemParcelaN:null}],
+    status:'Ativa', criadoEm:new Date().toISOString(),
+    historico:[{when:new Date().toISOString(), texto:`Gerada — 20% à vista sobre ${fmtMoney(base)} (comissão do escritório) = ${fmtMoney(valor)}, com vencimento em ${fmtDate(venc)}.`}]
+  };
+  DB.assessorCommissions.push(novo);
+  return {ok:true, registro:novo};
+}
+/** Modalidade B — 25% proporcional ao recebimento. Cria o registro "vazio"
+ *  (sem parcelas ainda — elas só nascem quando o escritório efetivamente
+ *  recebe, via syncComissaoAssessorProporcional). Mesmos bloqueios de
+ *  gerarComissaoAssessorVista20 (contrato cancelado, sem comissão do
+ *  escritório, ou já existe comissão ativa — qualquer modalidade — para
+ *  este contrato+assessor). */
+function gerarComissaoAssessorProporcional25(contractId, assessorId, opts){
+  opts = opts || {};
+  const contract = DB.contracts.find(c=>c.id===contractId);
+  if(!contract) return {ok:false, motivo:'Contrato não encontrado.'};
+  if(contract.cancelado) return {ok:false, motivo:'Este contrato está cancelado — não é possível gerar comissão de assessor sobre ele.'};
+  const cm = DB.commissionMeta[contractId];
+  if(!cm) return {ok:false, motivo:'A comissão do escritório ainda não foi configurada para este contrato.'};
+  const existente = assessorComissaoAtivaExistente(contractId, assessorId);
+  if(existente) return {ok:false, motivo:`Já existe uma comissão ativa (modalidade ${nomeModalidadeAssessor(existente.modalidade)}) para este assessor neste contrato.`, existente};
+  const novo = {
+    id: uid('acomm'), contractId, leadId: contract.leadId, assessorId,
+    modalidade:'proporcional25', percentual: 25, baseCalculo: comissaoEscritorioBase(contractId), incluiPrestamista: !!opts.incluiPrestamista,
+    valorTotal: 0, competencia: todayISO().slice(0,7),
+    parcelas: [], status:'Ativa', criadoEm:new Date().toISOString(),
+    historico:[{when:new Date().toISOString(), texto:'Gerada — 25% proporcional a cada parcela recebida da administradora (sem valor a pagar até o primeiro recebimento).'}]
+  };
+  DB.assessorCommissions.push(novo);
+  return {ok:true, registro:novo};
+}
+/** Sincroniza as comissões 'proporcional25' de um contrato com os
+ *  RECEBIMENTOS reais da comissão do escritório (cm.parcelas + prestamista,
+ *  quando incluído) — chamada sempre que uma parcela do escritório é salva em
+ *  openCommissionForm. Idempotente (origemParcelaN é a chave de
+ *  correspondência 1:1 — nunca duplica). Nunca gera valor antes do
+ *  recebimento; recebimento parcial gera 25% do valor efetivamente recebido;
+ *  estorno/alteração da parcela de origem suspende a parcela do assessor
+ *  ainda não paga (nunca mexe na que já foi 'Paga'). */
+function syncComissaoAssessorProporcional(contractId){
+  const cm = DB.commissionMeta[contractId];
+  if(!cm) return;
+  const acs = DB.assessorCommissions.filter(ac=>ac.contractId===contractId && ac.modalidade==='proporcional25' && ac.status!=='Cancelada');
+  if(!acs.length) return;
+  acs.forEach(ac=>{
+    const origens = ac.incluiPrestamista && cm.prestamista && cm.prestamista.ativo ? cm.parcelas.concat(cm.prestamista.parcelas) : cm.parcelas;
+    let mudou = false;
+    origens.forEach(p=>{
+      const chave = p.n + (cm.prestamista && cm.prestamista.parcelas.includes(p) ? '-pr' : '');
+      let parc = ac.parcelas.find(x=>x.origemParcelaN===chave);
+      if(p.status==='Recebida'){
+        const valorRecebido = Number(p.valorRecebido!=null && p.valorRecebido!=='' ? p.valorRecebido : p.valor)||0;
+        const valorAssessor = Math.round(valorRecebido*ac.percentual/100*100)/100;
+        if(!parc){
+          parc = { n: ac.parcelas.length+1, origemParcelaN:chave, vencimento:p.dataRecebida||todayISO(), status:'Prevista', valor:valorAssessor, valorPago:0, dataPagamento:'', observacao:`25% da parcela ${p.n} recebida em ${p.dataRecebida?fmtDate(p.dataRecebida):'—'}${chave.endsWith('-pr')?' (prestamista)':''}.` };
+          ac.parcelas.push(parc); mudou = true;
+        } else if(Math.abs(parc.valor - valorAssessor) > 0.005 && parc.status!=='Paga'){
+          // v36_38 — recebimento da parcela de origem foi editado (valor
+          // diferente) depois de a parcela do assessor já existir: atualiza o
+          // valor proporcional, nunca a que já foi paga.
+          parc.valor = valorAssessor; mudou = true;
+        }
+      } else if(parc && parc.status!=='Paga' && parc.status!=='Suspensa'){
+        // Origem deixou de estar 'Recebida' (estorno/edição manual) — nunca
+        // apaga a parcela do assessor (rastreabilidade), só suspende o que
+        // ainda não foi pago.
+        parc.status = 'Suspensa';
+        parc.observacao = (parc.observacao||'') + ' — suspensa: a parcela de origem não está mais Recebida (recebimento estornado ou alterado). Revise manualmente.';
+        mudou = true;
+      }
+    });
+    if(mudou){
+      ac.valorTotal = ac.parcelas.reduce((s,p)=>s+(p.valor||0),0);
+      ac.historico = ac.historico||[];
+      ac.historico.push({when:new Date().toISOString(), texto:'Parcelas sincronizadas com os recebimentos atuais da comissão do escritório.'});
+    }
+  });
+}
+const ASSESSOR_COMM_PARCELA_STATUS = ['Prevista','A pagar','Paga','Vencida','Suspensa','Cancelada','Estornada'];
+/** v36_38 — reescrito em duas modalidades (a spec anterior era um percentual
+ *  genérico livre, sobre uma "base de cálculo" arbitrária — normalmente
+ *  lead.valor, nunca a comissão do escritório de verdade). Registros gerados
+ *  ANTES desta rodada nunca são convertidos — ficam com modalidade 'legado'
+ *  (ver normalizeDB) e continuam editáveis exatamente como sempre foram. */
 function openAssessorCommissionForm(id, leadId){
   const ac = id ? DB.assessorCommissions.find(x=>x.id===id) : null;
   const lead = ac ? DB.leads.find(l=>l.id===ac.leadId) : DB.leads.find(l=>l.id===leadId);
   if(!lead) return;
+  function voltar(){ selectedClientTab = 'comissoes'; closeNestedFormAndReturn(); }
+
   if(!ac){
-    const assessorPadrao = DB.assessores.find(a=>a.nome===lead.responsavel);
+    // v36_39 (item 3) — contratos cancelados saem do seletor de geração.
+    const contratosDoLead = DB.contracts.filter(c=>c.leadId===lead.id && !c.cancelado);
+    let modalidade = 'vista20';
+    let contractId = contratosDoLead[0] ? contratosDoLead[0].id : '';
+    let incluiPrestamista = false;
+    let assessorId = (DB.assessores.find(a=>a.ativo && a.nome===lead.responsavel) || DB.assessores.find(a=>a.ativo) || {}).id || '';
+    let dataVista = todayISO(); // item 4 — "à vista": padrão é hoje, ajustável antes de confirmar
+
+    function render(){
+      const contract = DB.contracts.find(c=>c.id===contractId);
+      const cm = contract ? DB.commissionMeta[contract.id] : null;
+      const base = cm ? Number(cm.totalPrevisto)||0 : 0;
+      const temPrestamista = !!(cm && cm.prestamista && cm.prestamista.ativo);
+      const previewVista = Math.round(base*20/100*100)/100;
+      // v36_39 (item 3) — modalidades são ALTERNATIVAS: só uma comissão
+      // ativa por contrato+assessor, qualquer que seja a modalidade.
+      const existente = (contract && assessorId) ? assessorComissaoAtivaExistente(contract.id, assessorId) : null;
+      document.getElementById('modalBody').innerHTML = `
+        <h2>Gerar comissão do assessor</h2>
+        <div class="modal-sub">Cliente: ${escapeHtml(lead.nome)}</div>
+        <div class="small-note" style="margin-bottom:10px;">A base é sempre a comissão que o escritório recebe da administradora (nunca o crédito do cliente).</div>
+        <div class="form-grid">
+          ${contratosDoLead.length>1
+            ? `<div class="field full"><label>Contrato*</label><select id="ac_contract">${contratosDoLead.map(c=>`<option value="${c.id}" ${c.id===contractId?'selected':''}>${escapeHtml(c.numero)}${DB.commissionMeta[c.id]?' — comissão '+fmtMoney(DB.commissionMeta[c.id].totalPrevisto):' — sem comissão configurada'}</option>`).join('')}</select></div>`
+            : (contract? `<div class="field full"><label>Contrato</label><div class="readonly-field">${escapeHtml(contract.numero)}${cm?' — comissão '+fmtMoney(cm.totalPrevisto):' — sem comissão configurada'}</div></div>` : `<div class="field full"><div class="small-note" style="color:var(--red);">Este cliente não tem contrato ativo — gere o contrato antes de criar a comissão do assessor.</div></div>`)}
+          <div class="field"><label>Assessor beneficiário*</label><select id="ac_assessor">${DB.assessores.filter(a=>a.ativo).map(a=>`<option value="${a.id}" ${a.id===assessorId?'selected':''}>${escapeHtml(a.nome)}</option>`).join('')}</select></div>
+        </div>
+        ${!cm && contract ? `<div class="dup-warning" style="margin:8px 0;">⚠ Este contrato ainda não tem a comissão do escritório configurada — configure-a primeiro (aba Comissões do cliente) para poder gerar a comissão do assessor sobre ela.</div>` : ''}
+        ${existente ? `<div class="dup-warning" style="margin:8px 0;">⚠ Este assessor já tem uma comissão ativa neste contrato — modalidade <b>${nomeModalidadeAssessor(existente.modalidade)}</b>. As modalidades são alternativas: não é possível gerar uma segunda comissão para o mesmo contrato+assessor. <button type="button" class="link-btn" id="acOpenExistente">Abrir comissão existente</button></div>` : ''}
+        <div class="choice-grid" style="margin:14px 0;" role="radiogroup" aria-label="Modalidade">
+          <button type="button" class="choice-card ${modalidade==='vista20'?'selected':''}" data-acmodpick="vista20"><b>20% à vista</b><span>Uma parcela única, sobre a comissão total prevista do escritório para este contrato: ${fmtMoney(previewVista)}.</span></button>
+          <button type="button" class="choice-card ${modalidade==='proporcional25'?'selected':''}" data-acmodpick="proporcional25"><b>25% proporcional ao recebimento</b><span>Uma parcela para cada parcela efetivamente recebida da administradora — nunca antes do recebimento. Nenhum valor a pagar ainda hoje.</span></button>
+        </div>
+        ${modalidade==='vista20' ? `<div class="field"><label>Data de pagamento/vencimento*</label><input type="date" id="ac_datavista" value="${dataVista}"></div>` : ''}
+        ${modalidade==='proporcional25' ? `<div class="checkrow"><label><input type="checkbox" id="ac_prestamista" ${incluiPrestamista?'checked':''} ${temPrestamista?'':'disabled'}> Incluir também a comissão de prestamista na proporção${temPrestamista?'':' (este contrato não tem prestamista)'}</label></div>` : ''}
+        <div class="modal-actions"><button class="pill-btn ghost" id="cancelForm">Cancelar</button><button class="pill-btn" id="genAssessorCommBtn" ${(!contract||!cm||!!existente)?'disabled':''}>Gerar</button></div>
+      `;
+      document.getElementById('cancelForm').onclick = voltar;
+      const contractSel = document.getElementById('ac_contract'); if(contractSel) contractSel.onchange = ()=>{ contractId = contractSel.value; render(); };
+      const assessorSel = document.getElementById('ac_assessor'); if(assessorSel) assessorSel.onchange = ()=>{ assessorId = assessorSel.value; render(); };
+      document.querySelectorAll('[data-acmodpick]').forEach(btn=> btn.onclick = ()=>{ modalidade = btn.dataset.acmodpick; render(); });
+      const prBtn = document.getElementById('ac_prestamista'); if(prBtn) prBtn.onchange = ()=>{ incluiPrestamista = prBtn.checked; };
+      const dvInput = document.getElementById('ac_datavista'); if(dvInput) dvInput.onchange = ()=>{ dataVista = dvInput.value; };
+      const openExistenteBtn = document.getElementById('acOpenExistente'); if(openExistenteBtn) openExistenteBtn.onclick = ()=> openAssessorCommissionForm(existente.id, lead.id);
+      document.getElementById('genAssessorCommBtn').onclick = ()=>{
+        if(!contract || !cm){ showToast('Selecione um contrato com comissão do escritório já configurada.'); return; }
+        if(!assessorId){ showToast('Selecione o assessor beneficiário.'); return; }
+        if(modalidade==='vista20' && !dataVista){ showToast('Informe a data de pagamento/vencimento.'); return; }
+        const resultado = modalidade==='vista20'
+          ? gerarComissaoAssessorVista20(contract.id, assessorId, {vencimento:dataVista})
+          : gerarComissaoAssessorProporcional25(contract.id, assessorId, {incluiPrestamista});
+        if(!resultado.ok){ showToast(resultado.motivo||'Não foi possível gerar a comissão.'); render(); return; }
+        if(modalidade==='proporcional25') syncComissaoAssessorProporcional(contract.id);
+        saveDB(); showToast('Comissão do assessor gerada');
+        openAssessorCommissionForm(resultado.registro.id, lead.id);
+      };
+    }
+    render();
+    openModal();
+    return;
+  }
+
+  // ---- Edição de uma comissão já existente ----
+  const assessor = DB.assessores.find(a=>a.id===ac.assessorId);
+  const contract = ac.contractId ? DB.contracts.find(c=>c.id===ac.contractId) : null;
+
+  if(ac.modalidade==='legado'){
+    // v36_38 — registro anterior a esta rodada: UI e comportamento
+    // preservados byte a byte (mesmos campos, mesma tabela livremente
+    // editável) — nunca migrado para uma das duas modalidades novas.
     document.getElementById('modalBody').innerHTML = `
-      <h2>Gerar comissão do assessor</h2>
-      <div class="modal-sub">Cliente: ${escapeHtml(lead.nome)}</div>
-      <div class="form-grid">
-        <div class="field"><label>Assessor beneficiário*</label><select id="ac_assessor">${DB.assessores.filter(a=>a.ativo).map(a=>`<option value="${a.id}" ${a.nome===lead.responsavel?'selected':''}>${escapeHtml(a.nome)}</option>`).join('')}</select></div>
-        <div class="field"><label>Base de cálculo (R$)</label><input id="ac_base" data-money value="${moneyStr(lead.valor||0)}"></div>
-        <div class="field"><label>Percentual (%)*</label><input type="number" min="0" max="100" step="0.01" id="ac_pct" value="${assessorPadrao&&assessorPadrao.percentualComissaoPadrao!=null?assessorPadrao.percentualComissaoPadrao:''}" placeholder="Confirme — nunca é assumido automaticamente"></div>
-        <div class="field"><label>Número de parcelas</label><input type="number" min="1" id="ac_parc" value="12"></div>
-        <div class="field"><label>Competência (mês de referência)</label><input type="month" id="ac_competencia" value="${todayISO().slice(0,7)}"></div>
-        <div class="field"><label>Vencimento da 1ª parcela</label><input type="date" id="ac_venc1" value="${addMonths(todayISO(),1)}"></div>
-      </div>
-      <div class="small-note">O percentual não tem padrão assumido — confirme antes de gerar. A soma exata das parcelas sempre bate com o total (diferença de arredondamento concentrada na última).</div>
-      <div class="modal-actions"><button class="pill-btn ghost" id="cancelForm">Cancelar</button><button class="pill-btn" id="genAssessorCommBtn">Gerar parcelas</button></div>
+      <h2>Comissão do assessor — ${escapeHtml(assessor?assessor.nome:'—')} <span class="badge b-novo">Legado</span></h2>
+      <div class="modal-sub">${escapeHtml(lead.nome)} · ${ac.percentual}% sobre ${fmtMoney(ac.baseCalculo)} = ${fmtMoney(ac.valorTotal)}</div>
+      <div class="small-note" style="margin-bottom:10px;">Registro gerado antes desta rodada — preservado como estava, sem reclassificar ou recalcular.</div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>Vencimento</th><th>Valor previsto</th><th>Status</th><th>Valor pago</th><th>Data pagamento</th></tr></thead>
+      <tbody>${ac.parcelas.map((p,i)=>`<tr>
+        <td>${p.n}</td><td>${fmtDate(p.vencimento)}</td><td>${fmtMoney(p.valor)}</td>
+        <td><select data-acstatus="${i}">${['Prevista','A pagar','Paga','Vencida','Suspensa','Estornada'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
+        <td><input data-acvalor="${i}" data-money value="${moneyStr(p.valorPago||p.valor)}"></td>
+        <td><input type="date" data-acdata="${i}" value="${p.dataPagamento||''}"></td>
+      </tr>`).join('')}</tbody></table></div>
+      <div class="modal-actions"><button class="pill-btn ghost" id="cancelForm">Fechar</button><button class="pill-btn" id="saveAcParcBtn">Salvar</button></div>
     `;
-    document.getElementById('cancelForm').onclick = closeModalFn;
-    document.getElementById('genAssessorCommBtn').onclick = ()=>{
-      const pct = Number(document.getElementById('ac_pct').value);
-      if(!(pct>0)){ showToast('Confirme um percentual maior que zero antes de gerar.'); return; }
-      const nParc = Math.max(1, Math.round(Number(document.getElementById('ac_parc').value||12)));
-      const base = moneyVal('ac_base');
-      const total = Math.round(base*pct/100*100)/100;
-      const valores = splitCentsExact(total, nParc);
-      const venc1 = document.getElementById('ac_venc1').value || addMonths(todayISO(),1);
-      const parcelas = [];
-      for(let i=0;i<nParc;i++) parcelas.push({n:i+1, vencimento: i===0?venc1:addMonths(venc1,i), status:'Prevista', valor:valores[i], valorPago:0, dataPagamento:'', observacao:''});
-      const novo = { id:uid('acomm'), assessorId: document.getElementById('ac_assessor').value, leadId: lead.id, contractId: null,
-        baseCalculo: base, percentual: pct, valorTotal: total, competencia: document.getElementById('ac_competencia').value,
-        parcelas, status:'Prevista', criadoEm:new Date().toISOString() };
-      DB.assessorCommissions.push(novo);
-      saveDB(); closeModalFn(); renderView(); showToast('Comissão do assessor gerada');
+    document.getElementById('cancelForm').onclick = voltar;
+    document.getElementById('saveAcParcBtn').onclick = ()=>{
+      ac.parcelas.forEach((p,i)=>{
+        p.status = document.querySelector(`[data-acstatus="${i}"]`).value;
+        p.dataPagamento = document.querySelector(`[data-acdata="${i}"]`).value;
+        const vi = document.querySelector(`[data-acvalor="${i}"]`);
+        p.valorPago = parseMoneyBR(vi.value).conflict ? p.valor : parseMoneyBR(vi.value).value;
+      });
+      saveDB(); showToast('Parcelas atualizadas'); voltar();
     };
     openModal();
     return;
   }
-  const assessor = DB.assessores.find(a=>a.id===ac.assessorId);
+
+  const isVista = ac.modalidade==='vista20';
+  const pago = ac.parcelas.filter(p=>p.status==='Paga').reduce((s,p)=>s+(p.valorPago||p.valor),0);
   document.getElementById('modalBody').innerHTML = `
-    <h2>Comissão do assessor — ${escapeHtml(assessor?assessor.nome:'—')}</h2>
-    <div class="modal-sub">${escapeHtml(lead.nome)} · ${ac.percentual}% sobre ${fmtMoney(ac.baseCalculo)} = ${fmtMoney(ac.valorTotal)}</div>
-    <div class="table-wrap"><table><thead><tr><th>#</th><th>Vencimento</th><th>Valor previsto</th><th>Status</th><th>Valor pago</th><th>Data pagamento</th></tr></thead>
-    <tbody>${ac.parcelas.map((p,i)=>`<tr>
-      <td>${p.n}</td><td>${fmtDate(p.vencimento)}</td><td>${fmtMoney(p.valor)}</td>
-      <td><select data-acstatus="${i}">${['Prevista','A pagar','Paga','Vencida','Suspensa','Estornada'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
+    <h2>Comissão do assessor — ${escapeHtml(assessor?assessor.nome:'—')} <span class="badge ${ac.status==='Cancelada'?'b-cancel':'b-fechado'}">${escapeHtml(ac.status)}</span></h2>
+    <div class="modal-sub">${escapeHtml(lead.nome)}${contract?` · Contrato ${escapeHtml(contract.numero)}`:''} · ${isVista?'20% à vista':'25% proporcional ao recebimento'}${ac.incluiPrestamista?' (inclui prestamista)':''}</div>
+    <div class="small-note" style="margin-bottom:10px;">Base de cálculo: comissão do escritório = ${fmtMoney(ac.baseCalculo)}. ${isVista?'20% à vista sobre a comissão do escritório':'25% de cada parcela efetivamente recebida da administradora — nunca antes do recebimento; parcelas novas aparecem automaticamente aqui conforme o escritório recebe.'}</div>
+    <div class="table-wrap"><table><thead><tr><th>#</th><th>${isVista?'Vencimento':'Referência'}</th><th>Valor</th><th>Status</th><th>Valor pago</th><th>Data pagamento</th></tr></thead>
+    <tbody>${ac.parcelas.length? ac.parcelas.map((p,i)=>`<tr>
+      <td>${p.n}</td><td>${isVista?fmtDate(p.vencimento):escapeHtml((p.observacao||'').replace(/^25% da /,'').replace(/\.$/,''))}</td><td>${fmtMoney(p.valor)}</td>
+      <td><select data-acstatus="${i}">${ASSESSOR_COMM_PARCELA_STATUS.map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
       <td><input data-acvalor="${i}" data-money value="${moneyStr(p.valorPago||p.valor)}"></td>
       <td><input type="date" data-acdata="${i}" value="${p.dataPagamento||''}"></td>
-    </tr>`).join('')}</tbody></table></div>
-    <div class="modal-actions"><button class="pill-btn ghost" id="cancelForm">Fechar</button><button class="pill-btn" id="saveAcParcBtn">Salvar</button></div>
+    </tr>`).join('') : `<tr><td colspan="6" class="empty">${isVista?'—':'Nenhuma parcela ainda — a primeira aparece quando o escritório receber a primeira parcela da comissão deste contrato.'}</td></tr>`}</tbody></table></div>
+    <div class="small-note" style="margin-top:8px;">Pago até agora: ${fmtMoney(pago)}${!isVista?' · A tabela é sincronizada automaticamente a cada recebimento da comissão do escritório — o valor previsto de cada parcela não é editável à mão.':''}</div>
+    ${ac.historico && ac.historico.length? `<details class="pw-adv" style="margin-top:10px;"><summary>Histórico (${ac.historico.length})</summary><div class="small-note" style="padding:8px 2px;">${ac.historico.slice().reverse().map(h=>`${fmtDate((h.when||'').slice(0,10))} — ${escapeHtml(h.texto)}`).join('<br>')}</div></details>` : ''}
+    <div class="modal-actions">
+      <button class="pill-btn ghost" id="cancelForm">Fechar</button>
+      ${contract? `<button class="pill-btn ghost" id="acOpenContract">Abrir contrato</button>` : ''}
+      <button class="pill-btn" id="saveAcParcBtn">Salvar</button>
+    </div>
   `;
-  document.getElementById('cancelForm').onclick = closeModalFn;
+  document.getElementById('cancelForm').onclick = voltar;
+  const openContractBtn = document.getElementById('acOpenContract'); if(openContractBtn) openContractBtn.onclick = ()=>openContractForm(contract.id, lead.id);
   document.getElementById('saveAcParcBtn').onclick = ()=>{
     ac.parcelas.forEach((p,i)=>{
       p.status = document.querySelector(`[data-acstatus="${i}"]`).value;
       p.dataPagamento = document.querySelector(`[data-acdata="${i}"]`).value;
       const vi = document.querySelector(`[data-acvalor="${i}"]`);
-      p.valorPago = parseMoneyBR(vi.value).conflict ? p.valor : parseMoneyBR(vi.value).value;
+      // v36_38 — modalidade proporcional: o VALOR previsto continua sendo o
+      // que a sincronização calculou (25% do recebido) — só valorPago é de
+      // fato editável aqui, mesmo padrão de "Valor recebido" em
+      // openCommissionForm (fallback de exibição, nunca gravação automática).
+      p.valorPago = parseMoneyBR(vi.value).conflict ? (p.valorPago||p.valor) : parseMoneyBR(vi.value).value;
     });
-    saveDB(); closeModalFn(); renderView(); showToast('Parcelas atualizadas');
+    saveDB(); showToast('Parcelas atualizadas'); voltar();
   };
   openModal();
 }
@@ -14242,6 +14965,12 @@ function openAssessorCommissionForm(id, leadId){
  *  número de parcelas cair abaixo do necessário para preservá-la. */
 function maiorParcelaRecebida(parcelas){
   return (parcelas||[]).filter(p=>p.status==='Recebida').reduce((max,p)=> Math.max(max, Number(p.n)||0), 0);
+}
+/** v36_38 — mesma ideia de maiorParcelaRecebida, generalizada para qualquer
+ *  status TERMINAL/fixo (Recebida, Cancelada ou Estornada) — nenhum desses
+ *  três pode ser "engolido" por uma redução do número de parcelas. */
+function maiorParcelaFixa(parcelas){
+  return (parcelas||[]).filter(p=>p.status==='Recebida'||p.status==='Cancelada'||p.status==='Estornada').reduce((max,p)=> Math.max(max, Number(p.n)||0), 0);
 }
 /** v25 — Redistribui o TOTAL PREVISTO de uma comissão entre suas parcelas,
  *  preservando integralmente qualquer parcela já marcada "Recebida" — nunca
@@ -14261,9 +14990,15 @@ function maiorParcelaRecebida(parcelas){
  *  recalculada aqui. */
 function redistributePendingCommission(parcelasAntigas, novoNParc, novoTotalPrevisto, dateForIndex){
   const recebidas = parcelasAntigas.filter(p=>p.status==='Recebida');
-  const maiorRecebida = maiorParcelaRecebida(parcelasAntigas);
-  if(novoNParc < maiorRecebida){
-    throw new Error(`Não é possível reduzir para ${novoNParc} parcela(s): a parcela ${maiorRecebida} já está marcada como Recebida — o número de parcelas não pode ficar abaixo dela.`);
+  // v36_38 — 'Cancelada'/'Estornada' são preservadas com a MESMA força que
+  // 'Recebida' (nunca "revividas" para Pendente por um recálculo/ajuste —
+  // mesma defesa que já existia só para Recebida, generalizada para
+  // qualquer status terminal/fixo).
+  const fixas = parcelasAntigas.filter(p=>p.status==='Recebida'||p.status==='Cancelada'||p.status==='Estornada');
+  const maiorFixa = maiorParcelaFixa(parcelasAntigas);
+  if(novoNParc < maiorFixa){
+    const p = parcelasAntigas.find(x=>x.n===maiorFixa);
+    throw new Error(`Não é possível reduzir para ${novoNParc} parcela(s): a parcela ${maiorFixa} já está marcada como ${p?p.status:'Recebida/Cancelada'} — o número de parcelas não pode ficar abaixo dela.`);
   }
   const recebidoTotal = recebidas.reduce((s,p)=> s + Number(p.valorRecebido!=null && p.valorRecebido!=='' ? p.valorRecebido : p.valor), 0);
   const recebidoTotalArred = Math.round(recebidoTotal*100)/100;
@@ -14271,14 +15006,15 @@ function redistributePendingCommission(parcelasAntigas, novoNParc, novoTotalPrev
   if(novoTotalArred < recebidoTotalArred - 0.005){
     throw new Error(`O novo total previsto (${fmtMoney(novoTotalArred)}) não pode ser menor que o total já recebido (${fmtMoney(recebidoTotalArred)}).`);
   }
-  const pendentesQtd = Math.max(novoNParc - recebidas.length, 0);
-  const saldoPendente = Math.max(Math.round((novoTotalArred - recebidoTotal) * 100) / 100, 0);
+  const canceladoTotal = parcelasAntigas.filter(p=>p.status==='Cancelada'||p.status==='Estornada').reduce((s,p)=>s+Number(p.valor||0),0);
+  const pendentesQtd = Math.max(novoNParc - fixas.length, 0);
+  const saldoPendente = Math.max(Math.round((novoTotalArred - recebidoTotal - canceladoTotal) * 100) / 100, 0);
   const valoresPendentes = pendentesQtd>0 ? splitCentsExact(saldoPendente, pendentesQtd) : [];
   const novasParcelas = [];
   let pendIdx = 0;
   for(let i=1;i<=novoNParc;i++){
     const antiga = parcelasAntigas.find(p=>p.n===i);
-    if(antiga && antiga.status==='Recebida'){
+    if(antiga && (antiga.status==='Recebida'||antiga.status==='Cancelada'||antiga.status==='Estornada')){
       novasParcelas.push(Object.assign({}, antiga)); // preserva integralmente número, valor previsto, valor recebido, datas e status
     } else {
       novasParcelas.push({ n:i, dataPrevista: dateForIndex(i), valor: valoresPendentes[pendIdx]!==undefined?valoresPendentes[pendIdx]:0, status:'Pendente', dataRecebida:'', valorRecebido:0 });
@@ -14413,11 +15149,16 @@ function openCommissionForm(contractId){
       <div class="modal-sub">${displayAdmin(adminResolvida)} · ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)} = ${fmtMoney(cm.totalPrevisto)} em ${cm.parcelas.length}x${cm.ajustadaManualmente?' · <b>ajustada manualmente</b>':''}</div>
       ${cm.regraDesatualizada ? `<div class="dup-warning" style="margin-bottom:12px;">⚠ A administradora deste contrato foi alterada — o percentual/parcelas desta comissão pode não corresponder mais à regra atual. Use "Recalcular pela regra atual" (ou "Ajustar comissão") para revisar.</div>` : ''}
       ${divergente ? `<div class="dup-warning" style="margin-bottom:12px;">⚠ O valor contratado atual (${fmtMoney(contract.valorContratado)}) é diferente da base de cálculo desta comissão (${fmtMoney(cm.valorVenda)}). Nada foi recalculado automaticamente — use "Recalcular pela regra atual" abaixo (ou "Ajustar comissão") para atualizar; parcelas já recebidas são preservadas.</div>` : ''}
+      ${cm.revisaoNecessaria? `<div class="dup-warning" style="margin-bottom:12px;">⚠ ${escapeHtml(cm.revisaoNecessariaMotivo||'Esta comissão precisa de revisão manual.')}</div>` : ''}
+      ${contract && contract.cancelado ? `
+      <div class="dup-warning" style="margin-bottom:12px;">⚠ Este contrato está cancelado${contract.dataCancelamento?' desde '+fmtDate(contract.dataCancelamento):''} — as parcelas pendentes já foram canceladas automaticamente. "Ajustar comissão" e "Recalcular pela regra atual" ficam desativados para não reviver valores cancelados; você ainda pode marcar uma parcela pendente restante como Recebida/Cancelada/Estornada manualmente na tabela abaixo.</div>
+      ` : `
       <div class="toolbar" style="justify-content:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
         ${!ajustando? `<button class="pill-btn sm ghost" id="cf_ajustar">Ajustar comissão</button>` : ''}
         <button class="pill-btn sm ghost" id="cf_recalc_regra">Recalcular pela regra atual</button>
       </div>
-      ${ajustando ? `
+      `}
+      ${ajustando && !(contract && contract.cancelado) ? `
       <div class="card" style="padding:14px;margin-bottom:14px;">
         <h3 style="margin:0 0 10px;font-size:13px;">Ajustar configuração da comissão</h3>
         <div class="form-grid cols3">
@@ -14439,7 +15180,7 @@ function openCommissionForm(contractId){
         <td>${p.n}</td>
         <td><input type="date" data-parcdataprev="${i}" value="${p.dataPrevista||''}"></td>
         <td><input type="text" data-money data-parcvalorprevisto="${i}" value="${moneyStr(p.valor)}"></td>
-        <td><select data-parcstatus="${i}">${['Pendente','Recebida'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
+        <td><select data-parcstatus="${i}">${['Pendente','Recebida','Cancelada','Estornada'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
         <td><input type="text" data-money data-parcvalor="${i}" value="${moneyStr(p.valorRecebido||p.valor)}"></td>
         <td><input type="date" data-parcdata="${i}" value="${p.dataRecebida||''}"></td>
       </tr>`).join('')}
@@ -14474,7 +15215,7 @@ function openCommissionForm(contractId){
           <td>${p.n}</td>
           <td><input type="date" data-prparcdataprev="${i}" value="${p.dataPrevista||''}"></td>
           <td><input type="text" data-money data-prparcvalorprevisto="${i}" value="${moneyStr(p.valor)}"></td>
-          <td><select data-prparcstatus="${i}">${['Pendente','Recebida'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
+          <td><select data-prparcstatus="${i}">${['Pendente','Recebida','Cancelada','Estornada'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
           <td><input type="text" data-money data-prparcvalor="${i}" value="${moneyStr(p.valorRecebido||p.valor)}"></td>
           <td><input type="date" data-prparcdata="${i}" value="${p.dataRecebida||''}"></td>
         </tr>`).join('')}</tbody></table></div>
@@ -14654,6 +15395,11 @@ function openCommissionForm(contractId){
       }
       if(novasRecebidas>0 && l) addTimeline(l, `${novasRecebidas} parcela(s) de comissão marcada(s) como recebida(s)${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
       if(novasRecebidasPr>0 && l) addTimeline(l, `${novasRecebidasPr} parcela(s) de prestamista marcada(s) como recebida(s)${contract?` (contrato ${escapeHtml(contract.numero)})`:''}`);
+      // v36_38 — toda vez que a comissão do escritório é salva (parcela
+      // marcada recebida, editada ou estornada), sincroniza a(s) comissão(ões)
+      // 'proporcional25' vinculada(s) a este contrato — idempotente, nunca
+      // gera valor antes do recebimento, nunca duplica.
+      syncComissaoAssessorProporcional(contractId);
       saveDB();
       showToast('Parcelas atualizadas');
       voltar();
@@ -14955,7 +15701,11 @@ function relPorAssessor(){
     // lado a lado.
     const vendas = DB.contracts.filter(c => leadIds.has(c.leadId) && isContractActive(c, idx) && periodMatchRange(c.dataContratacao, filterBar));
     const creditoVendido = vendas.reduce((s,c)=>s+Number(c.valorContratado||0),0);
-    const clientesAtivos = clientesDoAssessor.filter(l=>!['Fechado','Perdido'].includes(l.status)).length;
+    // v36_38 — passou a usar OPEN_STAGES (em vez de uma lista de exclusão
+    // fixa) para acompanhar automaticamente 'Cancelado', o novo status
+    // canônico — um cliente cancelado não é mais "ativo" no funil, mesmo já
+    // não sendo 'Perdido'.
+    const clientesAtivos = clientesDoAssessor.filter(l=>OPEN_STAGES.includes(l.status)).length;
     const propostasAndamento = DB.proposals.filter(p=> clientesDoAssessor.some(l=>l.id===p.leadId) && !['Recusada','Aceita'].includes(p.status)).length;
     const comissoesDoAssessor = DB.assessorCommissions.filter(ac=>ac.assessorId===a.id);
     const todasParcelas = comissoesDoAssessor.flatMap(ac=>ac.parcelas);
@@ -15602,6 +16352,7 @@ function attachViewHandlers(){
   });
 
   c.querySelectorAll('[data-cmode]').forEach(btn=> btn.onclick=()=>{ contratosViewMode=btn.dataset.cmode; renderView(); });
+  c.querySelectorAll('[data-commmode]').forEach(btn=> btn.onclick=()=>{ comissoesViewMode=btn.dataset.commmode; renderView(); });
   const btnNewContractTop=document.getElementById('btnNewContractTop'); if(btnNewContractTop) btnNewContractTop.onclick=()=>openContractForm(null,null);
   if(currentView==='contratos' && contratosViewMode==='kanban'){
     attachGenericKanbanDnD((kid,newStage)=>{
@@ -15691,6 +16442,21 @@ function attachViewHandlers(){
   const commComp=document.getElementById('commFilterComp'); if(commComp) commComp.onchange=()=>{ comissoesFilters.competencia=commComp.value; commissionsPageLimit=100; renderView(); };
   c.querySelectorAll('[data-editcomm]').forEach(btn=> btn.onclick=()=>openCommissionForm(btn.dataset.editcomm));
   c.querySelectorAll('[data-manualcomm]').forEach(btn=> btn.onclick=()=>openManualCommissionForm(btn.dataset.manualcomm));
+  // v36_38 — aba "Comissões dos assessores" (tela global, fora da ficha do
+  // cliente): abre o mesmo openAssessorCommissionForm já usado dentro do
+  // cliente — nenhuma lógica duplicada. selectedClientId já está limpo neste
+  // contexto (zerado ao fechar a ficha do cliente), então voltar() cai
+  // corretamente em closeModalFn()+renderView(), sem reabrir um cliente antigo.
+  c.querySelectorAll('[data-manageassessorcommglobal]').forEach(btn=> btn.onclick=()=>openAssessorCommissionForm(btn.dataset.manageassessorcommglobal));
+  const acSearch=document.getElementById('acSearch');
+  if(acSearch) acSearch.addEventListener('input', (e)=>{
+    const val = e.target.value;
+    clearTimeout(assessorCommSearchDebounceTimer);
+    assessorCommSearchDebounceTimer = setTimeout(()=>{ assessorCommFilters.busca=val; renderView(); }, 250);
+  });
+  const acFA=document.getElementById('acFilterAssessor'); if(acFA) acFA.onchange=()=>{ assessorCommFilters.assessor=acFA.value; renderView(); };
+  const acFM=document.getElementById('acFilterModalidade'); if(acFM) acFM.onchange=()=>{ assessorCommFilters.modalidade=acFM.value; renderView(); };
+  const acFS=document.getElementById('acFilterStatus'); if(acFS) acFS.onchange=()=>{ assessorCommFilters.status=acFS.value; renderView(); };
   // v36_15 — Comissões: busca, situação (quick filter), atalho "Atrasado"
   // clicável, expandir prévia de parcelas por linha. Nenhum handler duplica
   // openCommissionForm — a prévia é só leitura, editar continua só por lá.
