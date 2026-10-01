@@ -3388,6 +3388,24 @@ function normalizeDB(){
     });
   }
   DB.assemblies.forEach(a=>{ if(a.diasAntecedencia===undefined || a.diasAntecedencia===null) a.diasAntecedencia = 7; });
+  // v36_40 — item 1: recurrenceType ('none'|'manual'|'official') separa
+  // explicitamente os 3 modelos de recorrência, sem substituir os campos
+  // antigos (recorrencia/seriesId/calendarioId/oficial continuam existindo e
+  // sendo lidos exatamente como antes — recurrenceType é só um rótulo mais
+  // claro por cima deles). Dedução não-destrutiva a partir do que o registro
+  // já tinha: série com oficial+seriesId → 'official'; recorrência manual
+  // ativa (Mensal/Bimestral/Trimestral) → 'manual'; qualquer outro caso
+  // (inclusive um registro oficial AINDA sem série ativa — exatamente o que
+  // o item 4 precisa identificar para oferecer "Ativar recorrência
+  // oficial") → 'none'. Nunca recalculado depois de definido uma vez.
+  let recurrenceTypeMigrado = false;
+  DB.assemblies.forEach(a=>{
+    if(a.recurrenceType===undefined){
+      a.recurrenceType = (a.oficial && a.seriesId) ? 'official' : ((a.recorrencia && a.recorrencia!=='Nenhuma') ? 'manual' : 'none');
+      recurrenceTypeMigrado = true;
+    }
+    if(a.seriesEncerrada===undefined) a.seriesEncerrada = false;
+  });
   // Propostas de versões anteriores (campos "chatos") viram uma cota única no novo modelo.
   DB.proposals.forEach(p=>{
     if(!p.cotas){
@@ -3509,7 +3527,7 @@ function normalizeDB(){
   // v27: normalizeDB() nunca persiste sozinha (nenhum saveDB() aqui dentro)
   // — só informa ao chamador (loadDB) se algo mudou de verdade, para que a
   // decisão de gravar seja tomada em UM único lugar.
-  return { administradorasForamCorrigidas, proximasAcoesMigradas, cancelamentosReconciliados };
+  return { administradorasForamCorrigidas, proximasAcoesMigradas, cancelamentosReconciliados, recurrenceTypeMigrado };
 }
 /** Mapeia o status ANTIGO do cliente (STATUS_LIST) para o status de proposta
  *  equivalente (PROPOSAL_STATUS) — usado só pela migração, para dar à
@@ -3614,7 +3632,7 @@ async function loadDB(){
       // "desnecessária" de antes voltaria a acontecer todo load.
       // v32 — mesma regra vale para a migração de próximas ações -> tarefas.
       // v36_39 — idem para a reconciliação de cancelamentos antigos (item 1).
-      if(resultado && (resultado.administradorasForamCorrigidas || resultado.proximasAcoesMigradas || resultado.cancelamentosReconciliados)) saveDB();
+      if(resultado && (resultado.administradorasForamCorrigidas || resultado.proximasAcoesMigradas || resultado.cancelamentosReconciliados || resultado.recurrenceTypeMigrado)) saveDB();
       return;
     }catch(parseErr){
       // A chave existe mas está corrompida — NUNCA cair silenciosamente para dados de
@@ -13279,6 +13297,18 @@ function assemblyBucket(a){
 function assemblyGroupKey(a){
   return a.quotaId ? ('q:'+a.quotaId) : ('l:'+a.leadId+'|g:'+normalizeStr(a.grupo||'')+'|c:'+normalizeStr(a.cota||''));
 }
+/** v36_40 (item 2) — "Exibir recorrência como Calendário oficial, nunca como
+ *  Nenhuma": o campo a.recorrencia de uma ocorrência oficial é sempre
+ *  'Nenhuma' por construção (a recorrência de verdade vem do calendário, não
+ *  de um valor tipo Mensal/Bimestral/Trimestral) — mostrar esse valor cru
+ *  literalmente como "Nenhuma" é enganoso. Esta função decide o rótulo
+ *  correto a partir de recurrenceType (com fallback para oficial+seriesId,
+ *  para registros legados ainda não migrados). */
+function assemblyRecorrenciaLabel(a){
+  if(a.recurrenceType==='official' || (a.oficial && a.seriesId)) return 'Calendário oficial';
+  if(a.recorrencia && a.recorrencia!=='Nenhuma') return a.recorrencia;
+  return 'Nenhuma';
+}
 function viewAssembleias(){
   const all = DB.assemblies.slice().sort((a,b)=>a.data.localeCompare(b.data));
   const tabs = [
@@ -13306,8 +13336,19 @@ function viewAssembleias(){
     return { key, items, destaque, temConflito };
   }).sort((a,b)=> a.destaque.data.localeCompare(b.destaque.data));
 
+  // v36_40 (item 4) — grupos com calendário oficial vinculado mas sem
+  // recorrência ativa: aviso + ativação individual/em massa.
+  const legados = cotasComCalendarioOficialSemRecorrencia();
   return `
-  <div class="toolbar"><button class="pill-btn" id="btnNewAssembly">+ Novo lance / assembleia</button><button class="pill-btn ghost" id="btnAtualizarCalendarioOficial">Atualizar pelo calendário oficial</button></div>
+  <div class="toolbar"><button class="pill-btn" id="btnNewAssembly">+ Novo lance / assembleia</button><button class="pill-btn ghost" id="btnAtualizarCalendarioOficial">Sincronizar calendário oficial</button></div>
+  ${legados.length ? `<div class="dup-warning" style="margin-bottom:12px;">
+    ⚠ Existem cotas com calendário oficial, mas sem recorrência ativa.
+    <button class="pill-btn sm ghost" id="btnAtivarRecorrenciaTodas" style="margin:6px 0;">Ativar recorrência para todas (${legados.length})</button>
+    <div>${legados.map(g=>`<div class="small-note" style="padding:2px 0;">${g.lead?escapeHtml(g.lead.nome):'—'} · Grupo ${escapeHtml(g.sample.grupo||'—')}/Cota ${escapeHtml(g.sample.cota||'—')} — <button class="link-btn" data-ativarrecorrencia="${escapeHtml(g.key)}">Ativar recorrência oficial</button></div>`).join('')}</div>
+  </div>` : ''}
+  ${assembliesSemCalendarioProximoAno.length ? `<div class="dup-warning" style="margin-bottom:12px;">⚠ O calendário oficial do próximo ano ainda não está cadastrado. A recorrência será continuada quando as novas datas forem incluídas em Configurações.
+    <div>${assembliesSemCalendarioProximoAno.map(s=>`<div class="small-note" style="padding:2px 0;">${escapeHtml(s.administradora)}${s.segmento?'/'+escapeHtml(s.segmento):''} ${s.ano}${s.grupo?' — Grupo '+escapeHtml(s.grupo)+'/Cota '+escapeHtml(s.cota||''):''}</div>`).join('')}</div>
+  </div>` : ''}
   <div class="tabbar">${tabs.map(t=>`<button class="${assembleiasTab===t.id?'active':''}" data-asmtab="${t.id}">${t.label}</button>`).join('')}</div>
   <div class="table-wrap"><table>
   <thead><tr><th>Próxima data</th><th>Grupo</th><th>Cota</th><th>Cliente</th><th>Tipo</th><th>Valor</th><th>Recorrência</th><th>Registros</th><th></th></tr></thead>
@@ -13319,12 +13360,12 @@ function viewAssembleias(){
       <td style="${soon?'color:var(--red);font-weight:600':''}">${fmtDate(a.data)}${soon?' ⚠':''}${g.temConflito?' <span class="badge b-perdido" title="Duas ocorrências desta cota disputavam a mesma data oficial — revise antes de confirmar.">Conflito de calendário</span>':''}</td>
       <td>${escapeHtml(a.grupo||'—')}</td><td>${escapeHtml(a.cota||'—')}</td><td>${lead?escapeHtml(lead.nome):'—'}</td>
       <td>${escapeHtml(a.tipoLance||'—')}</td><td>${fmtMoney(a.valorLance)}</td>
-      <td>${escapeHtml(a.recorrencia||'Nenhuma')}</td>
+      <td>${escapeHtml(assemblyRecorrenciaLabel(a))}</td>
       <td>${g.items.length}</td>
       <td><button class="link-btn" data-opengroup="${escapeHtml(g.key)}">${g.temConflito?'Revisar':'Abrir'}</button></td>
     </tr>`;
   }).join('') : '<tr><td colspan=9 class="empty">Nenhum registro nesta categoria</td></tr>'}</tbody></table></div>
-  <p class="small-note" style="margin-top:12px;">Cada linha reúne todas as assembleias/lances de um mesmo cliente e cota — clique em "Abrir" para ver o histórico completo. O lembrete de aviso é criado automaticamente conforme os "dias de antecedência" configurados em cada registro (padrão 7 dias antes). Cada assembleia continua sendo um registro histórico independente — nada é sobrescrito. Quando o botão "Atualizar pelo calendário oficial" encontra duas ocorrências da mesma cota disputando a mesma data, ele preserva as duas e marca a badge "Conflito de calendário" aqui — nenhuma é excluída automaticamente.</p>
+  <p class="small-note" style="margin-top:12px;">Cada linha reúne todas as assembleias/lances de um mesmo cliente e cota — clique em "Abrir" para ver o histórico completo. O lembrete de aviso é criado automaticamente conforme os "dias de antecedência" configurados em cada registro (padrão 7 dias antes). Cada assembleia continua sendo um registro histórico independente — nada é sobrescrito. Quando "Sincronizar calendário oficial" encontra duas ocorrências da mesma cota disputando a mesma data, ele preserva as duas e marca a badge "Conflito de calendário" aqui — nenhuma é excluída automaticamente.</p>
   `;
 }
 /** Mostra o histórico completo (todas as ocorrências, independente da aba/filtro
@@ -13344,7 +13385,7 @@ function openAssemblyGroupDetail(key){
       return `<tr>
         <td style="${soon?'color:var(--red);font-weight:600':''}">${fmtDate(a.data)}${soon?' ⚠':''}${a.concluida?' <span class="badge b-fechado">Concluída</span>':''}${a.conflitoCalendarioOficial?' <span class="badge b-perdido" title="Esta ocorrência ficou com uma data divergente porque outra assembleia da mesma cota já ocupava a data oficial — revise e ajuste manualmente se necessário.">Conflito de calendário</span>':''}</td>
         <td>${escapeHtml(a.tipoLance||'—')}</td><td>${fmtMoney(a.valorLance)}</td><td>${a.percentualEmbutido||0}%</td>
-        <td>${escapeHtml(a.recorrencia||'Nenhuma')}</td>
+        <td>${escapeHtml(assemblyRecorrenciaLabel(a))}</td>
         <td title="${escapeHtml(obsRaw)}">${obsResumo}</td>
         <td><button class="link-btn" data-editassembly="${a.id}">${a.conflitoCalendarioOficial?'Revisar':'Editar'}</button> <button class="link-btn" data-deleteassembly="${a.id}" style="color:var(--red);">Excluir</button></td>
       </tr>`;
@@ -13397,7 +13438,13 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
   // padrão sempre que existir calendário para a administradora/segmento
   // detectados; o usuário pode desligar e informar a data manualmente.
   let usarCalendarioOficial = true;
-  let confirmarTodasRestantes = false;
+  // v36_40 — item 2: "Todas as próximas assembleias do calendário oficial" é
+  // a opção recomendada e inicialmente selecionada (antes era um checkbox
+  // desmarcado por padrão — na prática, quase ninguém marcava, então a
+  // recorrência oficial quase nunca era criada de verdade). Continua
+  // reversível: o usuário pode escolher "Somente esta assembleia" antes de
+  // salvar.
+  let confirmarTodasRestantes = true;
 
   function clientQuotas(){ return selectedLeadId ? DB.quotas.filter(q=>q.leadId===selectedLeadId && !q.cancelada) : []; }
 
@@ -13417,11 +13464,22 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
     if(!administradora) return null;
     const contractRef = contractId ? DB.contracts.find(x=>x.id===contractId) : null;
     if(!segmento && contractRef) segmento=resolveContractSegmento(contractRef);
-    const anoRef = Number(todayISO().slice(0,4));
-    if(!segmento && contractRef && administradoraExigeSegmentoParaCalendario(administradora, anoRef)){
-      return { precisaSegmento:true, administradora, contractId, ano:anoRef };
+    const hoje = todayISO();
+    // v36_41 (item 4) — "exige segmento" é checado no primeiro ano (>= hoje)
+    // que realmente tem algum calendário cadastrado para esta administradora
+    // — nunca mais travado no ano corrente. Sem calendário cadastrado para
+    // nenhum ano futuro, não há nada a pedir (cai para manual abaixo).
+    if(!segmento && contractRef){
+      const anoCandidato = primeiroAnoComCalendario(administradora, hoje);
+      if(anoCandidato && administradoraExigeSegmentoParaCalendario(administradora, anoCandidato)){
+        return { precisaSegmento:true, administradora, contractId, ano:anoCandidato };
+      }
     }
-    return findAssemblyCalendar(administradora, segmento, anoRef);
+    // v36_41 (item 4) — nunca mais procura só o ano atual: localiza o
+    // primeiro calendário compatível (qualquer ano cadastrado) que ainda
+    // tenha alguma data futura — depois da última assembleia do ano, passa a
+    // usar o calendário do ano seguinte automaticamente, se já cadastrado.
+    return localizarCalendarioComDataFutura(administradora, segmento, hoje);
   }
 
   function render(){
@@ -13434,6 +13492,14 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
     const calendario = precisaSegmento ? null : resultadoCalendario;
     const usandoOficial = !!(calendario && usarCalendarioOficial);
     const proximaOficial = usandoOficial ? proximaDataOficial(calendario, todayISO()) : '';
+    // v36_41 (item 4) — "mostrar aviso claro e permitir cadastro manual, sem
+    // inventar datas" quando a administradora tem calendário oficial
+    // cadastrado (em algum ano) mas nenhum deles ainda tem data futura —
+    // diferente de Mapfre/administradora sem nenhum calendário, que
+    // simplesmente nunca mostra nada sobre calendário oficial.
+    const administradoraDetectada = !readOnlyCore && usaCotaCadastrada && quotaEscolhida ? (quotaEscolhida.administradora||'') : (pre ? (pre.administradora||'') : '');
+    const semCalendarioFuturo = !a && !precisaSegmento && !calendario && administradoraDetectada
+      && (DB.settings.assemblyCalendars||[]).some(c=>normalizeStr(c.administradora)===normalizeStr(administradoraDetectada));
     document.getElementById('modalBody').innerHTML = `
       <h2>${a?'Editar':'Novo'} lance / assembleia</h2>
       <div class="modal-sub">${pre? 'Dados preenchidos automaticamente a partir do contrato fechado. Falta só confirmar a data da assembleia e, se for o caso, a recorrência.' : 'Busque o cliente, escolha a cota já cadastrada e cadastre o lance — sem precisar digitar grupo/cota à mão. Cada assembleia é registrada separadamente — o histórico de lances anteriores nunca é sobrescrito.'}</div>
@@ -13477,15 +13543,45 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
         <div class="field"><label>% Embutido</label>${readOnlyCore ? `<div class="readonly-field">${(a?.percentualEmbutido||0)}%</div><input type="hidden" id="as_embutido" value="${a?.percentualEmbutido||0}">` : `<input type="number" step="0.1" id="as_embutido" value="${a?.percentualEmbutido||0}">`}</div>
         <div class="field"><label>Recorrência</label>${usandoOficial
             ? `<div class="readonly-field">Calendário oficial (${escapeHtml(calendario.administradora)}/${escapeHtml(calendario.segmento)} ${calendario.ano})</div><input type="hidden" id="as_recorrencia" value="Nenhuma">`
-            : selectHTML('as_recorrencia', ['Nenhuma','Mensal','Bimestral','Trimestral'], a?.recorrencia)}</div>
+            : a && a.oficial
+              // v36_40 (item 5) — editar uma ocorrência oficial NUNCA pode
+              // transformá-la em recorrência mensal/bimestral/trimestral — o
+              // campo fica travado também na edição (antes só travava na
+              // criação; detectarCalendario retorna null em edição, então o
+              // <select> normal ficava disponível e uma troca para "Mensal"
+              // seria gravada por cima do vínculo oficial).
+              ? `<div class="readonly-field">Calendário oficial${a.calendarioId?' ('+escapeHtml(assemblyCalendarLabel(a.calendarioId))+')':''}</div><input type="hidden" id="as_recorrencia" value="Nenhuma">`
+              : selectHTML('as_recorrencia', ['Nenhuma','Mensal','Bimestral','Trimestral'], a?.recorrencia)}</div>
         <div class="field full"><label>Observação</label><textarea id="as_obs" placeholder="Instruções específicas sobre o lance, combinados com o cliente etc.">${escapeHtml(a?.observacao||'')}</textarea></div>
       </div>
       ${!a && precisaSegmento ? `<div class="field full"><label>Segmento do contrato* (necessário para o calendário oficial de ${escapeHtml(resultadoCalendario.administradora)})</label>${selectWithBlank('as_segmento_contrato', ['Imóvel','Veículo','Serviços','Pesados'].map(s=>({value:s,label:s})), '', 'Selecione o segmento')}</div>
       <div class="small-note">Este contrato ainda não tem segmento identificado — ${escapeHtml(resultadoCalendario.administradora)} publica um calendário por segmento, então é preciso informar antes de aplicar a data oficial. Escolher aqui grava o segmento no contrato.</div>` : ''}
+      ${semCalendarioFuturo ? `<div class="dup-warning" style="margin-bottom:10px;">⚠ ${escapeHtml(administradoraDetectada)} tem calendário oficial cadastrado, mas nenhuma data futura disponível nos anos já publicados. Cadastre o próximo ano em Configurações → Calendários oficiais de assembleia, ou informe a data manualmente abaixo.</div>` : ''}
       ${!a && calendario ? `<div class="checkrow"><label><input type="checkbox" id="as_usarcalendario" ${usarCalendarioOficial?'checked':''}> Usar calendário oficial (${escapeHtml(calendario.administradora)}/${escapeHtml(calendario.segmento)} ${calendario.ano}) — desmarque para informar uma data manual</label></div>` : ''}
-      ${!a && usandoOficial ? `<div class="checkrow"><label><input type="checkbox" id="as_confirmartodas" ${confirmarTodasRestantes?'checked':''}> Confirmar a criação de TODAS as assembleias restantes de ${calendario.ano} deste calendário para esta cota (uma tarefa de aviso de lance para cada, ${a?.diasAntecedencia ?? 7} dias antes)</label></div>
+      ${!a && usandoOficial ? `
+      <div class="field full">
+        <label>Frequência do lembrete de lance</label>
+        <div class="choice-grid" role="radiogroup" aria-label="Frequência do lembrete de lance">
+          <button type="button" class="choice-card ${confirmarTodasRestantes?'selected':''}" data-asfreqpick="todas"><b>Todas as próximas assembleias do calendário oficial</b><span>Recomendado — cria todas as datas oficiais restantes de ${calendario.ano} para esta cota, com uma tarefa de aviso de lance para cada (${a?.diasAntecedencia ?? 7} dias antes).</span></button>
+          <button type="button" class="choice-card ${!confirmarTodasRestantes?'selected':''}" data-asfreqpick="uma"><b>Somente esta assembleia</b><span>Cria apenas a próxima data oficial — sem recorrência automática.</span></button>
+        </div>
+      </div>
       <div class="small-note">A recorrência oficial usa exatamente as datas publicadas pela administradora — nunca é calculada por "mesmo dia todo mês".</div>` : ''}
-      ${a && a.seriesId && !a.oficial ? `<div class="checkrow"><label><input type="checkbox" id="as_aplicarfuturas"> Aplicar essas alterações também às ocorrências futuras desta série (mantendo a data de cada uma)</label></div>` : ''}
+      ${a && a.oficial ? (function(){
+          const seriesItems = a.seriesId ? DB.assemblies.filter(x=>x.seriesId===a.seriesId).sort((x,y)=>x.data.localeCompare(y.data)) : [a];
+          // v36_41 (item 3) — uma série marcada seriesEncerrada (exclusão
+          // "esta e as futuras" já aplicada) NUNCA pode aparecer como ativa,
+          // mesmo que recurrenceType/seriesId ainda estejam presentes
+          // (preservados de propósito, como histórico).
+          const encerrada = a.seriesEncerrada === true;
+          const ativa = a.recurrenceType==='official' && !!a.seriesId && !encerrada;
+          return `<div class="card" style="padding:12px;margin-bottom:10px;">
+            <b>Calendário oficial</b> ${ativa?'<span class="badge b-fechado">Série ativa</span>':encerrada?'<span class="badge b-perdido">Série encerrada</span>':'<span class="badge b-perdido">Sem recorrência ativa</span>'}
+            <div class="small-note" style="margin:6px 0;">${seriesItems.length} ocorrência(s) nesta série: ${seriesItems.map(x=>fmtDate(x.data)+(x.concluida?' (concluída)':'')).join(', ')}.</div>
+            <button type="button" class="pill-btn sm ghost" id="as_gerarfaltantes">Gerar datas oficiais faltantes</button>
+          </div>`;
+        })() : ''}
+      ${a && a.seriesId ? `<div class="checkrow"><label><input type="checkbox" id="as_aplicarfuturas"> Aplicar essas alterações também às ocorrências futuras desta série (mantendo a data de cada uma${a.oficial?' — a recorrência oficial em si nunca muda':''})</label></div>` : ''}
       ${a ? `<div class="checkrow"><label><input type="checkbox" id="as_concluida" ${a.concluida?'checked':''}> Assembleia concluída (não sincroniza mais automaticamente com o contrato, e a data/recorrência/observação passam a ser só suas)</label></div>` : ''}
       ${a? '<div class="small-note">Por padrão, a edição afeta somente esta ocorrência.</div>': (!calendario ? '<div class="small-note">Se a recorrência não for "Nenhuma", as ocorrências são criadas automaticamente até 12 meses à frente, e o sistema continua completando o horizonte conforme o tempo passa — não há limite fixo de ocorrências.</div>' : '')}
       ${!a && !readOnlyCore && quotas.length>1 ? `<div class="small-note">Este cliente tem ${quotas.length} cotas ativas e não contempladas — depois de salvar esta, use "Salvar e cadastrar outra cota" para lançar a próxima sem sair da tela.</div>` : ''}
@@ -13525,9 +13621,17 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
       render();
     };
     const usarCalendarioChk = document.getElementById('as_usarcalendario');
-    if(usarCalendarioChk) usarCalendarioChk.onchange = ()=>{ usarCalendarioOficial = usarCalendarioChk.checked; confirmarTodasRestantes=false; render(); };
-    const confirmarTodasChk = document.getElementById('as_confirmartodas');
-    if(confirmarTodasChk) confirmarTodasChk.onchange = ()=>{ confirmarTodasRestantes = confirmarTodasChk.checked; };
+    if(usarCalendarioChk) usarCalendarioChk.onchange = ()=>{ usarCalendarioOficial = usarCalendarioChk.checked; confirmarTodasRestantes=true; render(); };
+    // v36_40 (item 2) — substitui o antigo checkbox único por dois cartões de
+    // escolha explícita ("Frequência do lembrete de lance"), mesmo padrão
+    // visual já usado no seletor de modalidade de comissão do assessor.
+    document.querySelectorAll('[data-asfreqpick]').forEach(btn=> btn.onclick = ()=>{ confirmarTodasRestantes = btn.dataset.asfreqpick==='todas'; render(); });
+    const gerarFaltantesBtn = document.getElementById('as_gerarfaltantes');
+    if(gerarFaltantesBtn) gerarFaltantesBtn.onclick = ()=>{
+      const r = gerarDatasOficiaisFaltantes(a);
+      showToast(r.ok ? (r.criadas>0 ? `${r.criadas} assembleia(s) oficial(is) criada(s).` : 'Nenhuma data faltante — a série já está completa.') : (r.motivo||'Não foi possível gerar as datas.'));
+      if(r.ok) render();
+    };
     // v30 — segmento obrigatório do contrato antes de aplicar calendário
     // oficial de administradoras que publicam por segmento (CNP, Embracon):
     // grava direto no contrato (migração não destrutiva — só preenche o que
@@ -13623,7 +13727,12 @@ function openAssemblyForm(id, presetDate, presetLeadId, prefill){
         const lastDayOfMonth = new Date(Number(data.data.slice(0,4)), Number(data.data.slice(5,7)), 0).getDate();
         const newA = Object.assign({id:uid('asm'), seriesId: isNovaSerie ? uid('series') : null, taskId:null,
           anchorDate: isNovaSerie ? data.data : null, anchorDay: isNovaSerie ? anchorDay : null, isEndOfMonth: isNovaSerie ? (anchorDay===lastDayOfMonth) : null,
-          oficial: usandoOficial, calendarioId: usandoOficial ? calendario.id : null}, data);
+          oficial: usandoOficial, calendarioId: usandoOficial ? calendario.id : null,
+          // v36_40 (item 2) — "Somente esta assembleia" com calendário oficial
+          // grava recurrenceType:'none' (nunca gera futuras), mesmo com
+          // oficial:true/calendarioId preenchidos — o vínculo com o
+          // calendário fica registrado, mas sem recorrência ativa.
+          recurrenceType: isNovaSerie ? 'manual' : 'none'}, data);
         DB.assemblies.push(newA);
         createAssemblyTask(newA);
         if(lead) addTimeline(lead, `Assembleia registrada — Grupo ${data.grupo}/Cota ${data.cota} em ${fmtDate(data.data)}`);
@@ -13731,6 +13840,14 @@ function findAssemblyCalendar(administradora, segmento, ano){
   const todos = doAno.find(c=> normalizeStr(c.segmento)==='todos');
   return todos || null;
 }
+/** v36_40 — rótulo curto "Administradora/Segmento Ano" de um calendário
+ *  oficial, a partir do seu id — usado só para exibição (edição de
+ *  assembleia, avisos). "—" quando o id não resolve a nenhum calendário
+ *  ainda cadastrado (não deve acontecer em uso normal, mas nunca quebra). */
+function assemblyCalendarLabel(calendarioId){
+  const cal = (DB.settings.assemblyCalendars||[]).find(c=>c.id===calendarioId);
+  return cal ? `${cal.administradora}/${cal.segmento} ${cal.ano}` : '—';
+}
 /** v30 — true quando a administradora tem calendário oficial cadastrado
  *  para o ano, mas SEM um calendário "Todos" (ou seja, cada segmento tem
  *  sua própria publicação — caso CNP e Embracon) — nesse caso o segmento é
@@ -13751,6 +13868,40 @@ function proximaDataOficial(calendar, apartirDe){
   const base = apartirDe || todayISO();
   const futuras = calendar.datas.filter(d=> d>=base).slice().sort();
   return futuras[0] || '';
+}
+/** v36_41 (item 4) — primeiro ano (>= o ano de apartirDe) que tem QUALQUER
+ *  calendário cadastrado para esta administradora — null se nenhum. Usada só
+ *  para decidir em qual ano verificar "exige segmento" (nunca mais travada
+ *  no ano corrente). */
+function primeiroAnoComCalendario(administradora, apartirDe){
+  const adminNorm = normalizeStr(administradora);
+  if(!adminNorm) return null;
+  const anoBase = Number((apartirDe||todayISO()).slice(0,4));
+  const anos = (DB.settings.assemblyCalendars||[]).filter(c=> normalizeStr(c.administradora)===adminNorm && Number(c.ano)>=anoBase).map(c=>Number(c.ano));
+  return anos.length ? Math.min(...anos) : null;
+}
+/** v36_41 (item 4) — localiza o PRIMEIRO calendário oficial compatível
+ *  (administradora+segmento) que ainda tenha alguma data >= apartirDe,
+ *  varrendo os anos em ordem crescente a partir do ano de apartirDe — nunca
+ *  mais limitado ao ano corrente. Depois da última assembleia do ano, passa
+ *  a usar automaticamente o calendário do ano seguinte assim que ele estiver
+ *  cadastrado (mesma regra usada por ensureFutureOfficialOccurrences, agora
+ *  também na criação de um novo acompanhamento e na reativação de série —
+ *  ver detectarCalendario/ativarRecorrenciaOficial). Retorna null quando não
+ *  há nenhum calendário com data futura — nunca inventa data nesse caso. */
+function localizarCalendarioComDataFutura(administradora, segmento, apartirDe){
+  const adminNorm = normalizeStr(administradora);
+  if(!adminNorm) return null;
+  const base = apartirDe || todayISO();
+  const anoBase = Number(base.slice(0,4));
+  const anosDisponiveis = [...new Set((DB.settings.assemblyCalendars||[])
+    .filter(c=> normalizeStr(c.administradora)===adminNorm && Number(c.ano)>=anoBase)
+    .map(c=>Number(c.ano)))].sort((x,y)=>x-y);
+  for(const ano of anosDisponiveis){
+    const cal = findAssemblyCalendar(administradora, segmento, ano);
+    if(cal && proximaDataOficial(cal, base)) return cal;
+  }
+  return null;
 }
 /** v29 — Gera todas as ocorrências OFICIAIS restantes de um calendário para
  *  um contrato/cota (a partir de hoje, ou da data informada), cada uma como
@@ -13785,7 +13936,8 @@ function gerarAssembleiasDoCalendarioOficial(calendar, campos){
       // para exibição/filtragem (ex.: "Atualizar pelo calendário oficial") e
       // para agrupar visualmente a série; NUNCA usada como base de cálculo
       // de recorrência (que é sempre lida direto de calendar.datas).
-      oficial:true, calendarioId: calendar.id, seriesId: calendarSeriesId, anchorDate:null, anchorDay:null, isEndOfMonth:null
+      oficial:true, calendarioId: calendar.id, seriesId: calendarSeriesId, anchorDate:null, anchorDay:null, isEndOfMonth:null,
+      recurrenceType:'official'
     };
     DB.assemblies.push(occ);
     createAssemblyTask(occ);
@@ -13876,11 +14028,191 @@ function generateRecurringOccurrences(seriesId, anchorDate, anchorDay, isEndOfMo
   }
   return gerados;
 }
+/** v36_40 (item 4) — identifica grupos (cliente+cota) com vínculo ao
+ *  calendário oficial (oficial:true ou calendarioId preenchido) mas AINDA
+ *  sem recorrência oficial ativa (recurrenceType!=='official' em nenhum item
+ *  do grupo) — candidatos a "Ativar recorrência oficial". Nunca gera nada
+ *  sozinha, só identifica (sem isso, não há como saber se o usuário queria
+ *  mesmo só uma assembleia ou se a recorrência simplesmente não existia
+ *  ainda quando o registro foi criado, em v36_38/v36_39). */
+function cotasComCalendarioOficialSemRecorrencia(){
+  const porGrupo = new Map();
+  DB.assemblies.forEach(a=>{
+    if(!a.oficial && !a.calendarioId) return;
+    const key = assemblyGroupKey(a);
+    if(!porGrupo.has(key)) porGrupo.set(key, []);
+    porGrupo.get(key).push(a);
+  });
+  const resultado = [];
+  porGrupo.forEach((items, key)=>{
+    if(items.some(a=>a.recurrenceType==='official' && a.seriesId)) return; // já tem série ativa
+    const sample = items.slice().sort((a,b)=>a.data.localeCompare(b.data))[items.length-1];
+    resultado.push({ key, items, sample, lead: DB.leads.find(l=>l.id===sample.leadId) });
+  });
+  return resultado;
+}
+/** v36_40 (item 4) — calendário oficial e quantidade de datas que faltam
+ *  para um grupo legado, sem criar nada (usado para o resumo de
+ *  confirmação antes de ativar a recorrência). */
+function previewRecorrenciaOficial(sample){
+  const contract = sample.contractId ? DB.contracts.find(c=>c.id===sample.contractId) : null;
+  const administradora = sample.administradora || (contract?resolveContractAdministradora(contract):'');
+  const segmento = contract ? resolveContractSegmento(contract) : '';
+  // v36_41 (item 4) — mesmo critério multi-ano de ativarRecorrenciaOficial,
+  // para o resumo de confirmação já bater com o que realmente será gerado.
+  const cal = localizarCalendarioComDataFutura(administradora, segmento, todayISO());
+  if(!cal) return {possivel:false};
+  const datas = cal.datas.filter(d=>d>=todayISO());
+  const faltantes = datas.filter(data=> sample.quotaId
+    ? !DB.assemblies.some(x=> x.quotaId===sample.quotaId && x.data===data)
+    : sample.contractId
+      ? !DB.assemblies.some(x=> x.contractId===sample.contractId && normalizeStr(x.cota)===normalizeStr(sample.cota) && x.data===data)
+      : !DB.assemblies.some(x=> x.leadId===sample.leadId && normalizeStr(x.grupo)===normalizeStr(sample.grupo) && normalizeStr(x.cota)===normalizeStr(sample.cota) && x.data===data));
+  return {possivel:true, faltantes:faltantes.length, calendario:cal};
+}
+/** v36_40 (item 4) — "ativa" a recorrência oficial de um grupo legado:
+ *  vincula os registros oficiais já existentes desse grupo ao seriesId
+ *  estável (mesma fórmula usada em gerarAssembleiasDoCalendarioOficial, para
+ *  que as novas ocorrências entrem na MESMA série) e gera as datas oficiais
+ *  restantes que ainda faltam. Idempotente: rodar de novo sobre um grupo já
+ *  ativado é um no-op na vinculação e devolve criadas:0 na geração (dedup
+ *  por quotaId+data). Nunca roda sozinha — sempre exige confirmação
+ *  explícita do usuário antes (ver UI em viewAssembleias/openAssemblyForm).
+ *  Retorna {ok, motivo?, criadas, seriesId}. */
+function ativarRecorrenciaOficial(groupKey){
+  const items = DB.assemblies.filter(a=> assemblyGroupKey(a)===groupKey);
+  if(!items.length) return {ok:false, motivo:'Nenhum registro encontrado.'};
+  const sample = items.slice().sort((a,b)=>a.data.localeCompare(b.data))[items.length-1];
+  const contract = sample.contractId ? DB.contracts.find(c=>c.id===sample.contractId) : null;
+  const administradora = sample.administradora || (contract?resolveContractAdministradora(contract):'');
+  const segmento = contract ? resolveContractSegmento(contract) : '';
+  // v36_41 (item 4) — não procura só no ano da última ocorrência: localiza o
+  // primeiro calendário compatível (qualquer ano) que ainda tenha alguma
+  // data futura — a reativação funciona mesmo quando o calendário do ano da
+  // última ocorrência já não tem mais datas.
+  const cal = localizarCalendarioComDataFutura(administradora, segmento, todayISO());
+  if(!cal) return {ok:false, motivo:'Nenhum calendário oficial com data futura encontrado para esta administradora/segmento.'};
+  const seriesId = 'oficial_'+cal.id+'_'+(sample.quotaId||sample.contractId||sample.leadId);
+  // v36_41 (item 3) — "Gerar datas oficiais faltantes"/"Ativar recorrência
+  // oficial" é sempre uma decisão explícita do usuário: limpa
+  // seriesEncerrada em TODOS os registros do grupo antes de sincronizar,
+  // mesmo numa série que tinha sido encerrada de propósito (exclusão "esta e
+  // as futuras") — só a sincronização AUTOMÁTICA nunca revive sozinha.
+  items.forEach(a=>{ if(a.oficial){ a.seriesId = seriesId; a.recurrenceType = 'official'; a.seriesEncerrada = false; } });
+  const campos = { leadId:sample.leadId, contractId:sample.contractId||null, quotaId:sample.quotaId||null,
+    proposalId:sample.proposalId||null, administradora, grupo:sample.grupo||'', cota:sample.cota||'',
+    diasAntecedencia:sample.diasAntecedencia ?? 7, tipoLance:sample.tipoLance||'', valorLance:sample.valorLance||0,
+    percentualEmbutido:sample.percentualEmbutido||0, observacao:sample.observacao||'' };
+  const resultado = gerarAssembleiasDoCalendarioOficial(cal, campos);
+  saveDB();
+  return {ok:true, criadas:resultado.criadas, seriesId};
+}
+/** v36_40 (item 4) — ativa a recorrência oficial de TODOS os grupos legados
+ *  de uma vez (botão "Ativar recorrência para todas"). Idempotente pelos
+ *  mesmos motivos de ativarRecorrenciaOficial — reaproveitada, nunca
+ *  duplicada aqui. */
+function ativarRecorrenciaOficialEmMassa(){
+  const grupos = cotasComCalendarioOficialSemRecorrencia();
+  let totalGrupos = 0, totalCriadas = 0, falhas = 0;
+  grupos.forEach(g=>{
+    const r = ativarRecorrenciaOficial(g.key);
+    if(r.ok){ totalGrupos++; totalCriadas += r.criadas; } else falhas++;
+  });
+  return { totalGrupos, totalCriadas, falhas };
+}
+/** v36_40 (item 5) — "Gerar datas oficiais faltantes" na edição de uma
+ *  assembleia oficial: se o registro ainda não tinha série ativa, ativa
+ *  agora (mesma lógica do item 4, restrita a este grupo); sempre gera as
+ *  datas oficiais restantes que ainda faltam. */
+function gerarDatasOficiaisFaltantes(a){
+  if(!a || !a.oficial) return {ok:false, motivo:'Esta assembleia não pertence a um calendário oficial.'};
+  return ativarRecorrenciaOficial(assemblyGroupKey(a));
+}
+/** v36_40 (item 3) — sincroniza séries OFICIAIS (recurrenceType==='official')
+ *  consultando diretamente DB.settings.assemblyCalendars — NUNCA addMonths.
+ *  Para cada série, descobre administradora/segmento (via contrato, com
+ *  fallback para a.administradora) e varre TODOS os calendários cadastrados
+ *  dessa administradora/segmento dentro do horizonte de 12 meses (aceita
+ *  calendários de anos diferentes — não só o ano corrente), criando as
+ *  ocorrências que ainda faltam (nunca datas passadas, dedup por
+ *  quotaId+data, mesma regra do resto do módulo). Quando o horizonte
+ *  alcança um ano sem calendário cadastrado, a série entra em
+ *  `semCalendarioProximoAno` (consumida pela UI para o aviso — nunca inventa
+ *  data nesse caso). Retorna {criadas, semCalendarioProximoAno}. */
+function ensureFutureOfficialOccurrences(){
+  const hoje = todayISO(), horizonte = addMonths(hoje, 12);
+  // seriesEncerrada: série oficial cujas ocorrências futuras foram excluídas
+  // de propósito ("excluir esta e as futuras") — nunca recriada sozinha pela
+  // sincronização automática (ver deleteAssembly).
+  const seriesIds = [...new Set(DB.assemblies.filter(a=>a.recurrenceType==='official' && a.seriesId && !a.seriesEncerrada).map(a=>a.seriesId))];
+  let criadas = 0;
+  const semCalendarioProximoAno = [];
+  seriesIds.forEach(sid=>{
+    const ocorrencias = DB.assemblies.filter(a=>a.seriesId===sid);
+    if(!ocorrencias.length) return;
+    const sample = ocorrencias[0];
+    const contract = sample.contractId ? DB.contracts.find(c=>c.id===sample.contractId) : null;
+    const administradora = sample.administradora || (contract?resolveContractAdministradora(contract):'');
+    const segmento = contract ? resolveContractSegmento(contract) : '';
+    if(!administradora) return;
+    const anoInicial = Number(hoje.slice(0,4)), anoFinal = Number(horizonte.slice(0,4));
+    let faltaAno = null;
+    for(let ano=anoInicial; ano<=anoFinal; ano++){
+      const cal = findAssemblyCalendar(administradora, segmento, ano);
+      if(!cal){ if(ano>anoInicial) faltaAno = faltaAno || ano; continue; }
+      const campos = { leadId:sample.leadId, contractId:sample.contractId||null, quotaId:sample.quotaId||null,
+        proposalId:sample.proposalId||null, administradora, grupo:sample.grupo||'', cota:sample.cota||'',
+        diasAntecedencia:sample.diasAntecedencia ?? 7, tipoLance:sample.tipoLance||'', valorLance:sample.valorLance||0,
+        percentualEmbutido:sample.percentualEmbutido||0, observacao:sample.observacao||'' };
+      const datas = cal.datas.filter(d=> d>=hoje && d<=horizonte);
+      datas.forEach(data=>{
+        const duplicada = campos.quotaId
+          ? DB.assemblies.some(x=> x.quotaId===campos.quotaId && x.data===data)
+          : campos.contractId
+            ? DB.assemblies.some(x=> x.contractId===campos.contractId && normalizeStr(x.cota)===normalizeStr(campos.cota) && x.data===data)
+            : DB.assemblies.some(x=> x.leadId===campos.leadId && normalizeStr(x.grupo)===normalizeStr(campos.grupo) && normalizeStr(x.cota)===normalizeStr(campos.cota) && x.data===data);
+        if(duplicada) return;
+        const occ = Object.assign({}, campos, {
+          id: uid('asm'), data, recorrencia:'Nenhuma', recurrenceType:'official', concluida:false, taskId:null,
+          oficial:true, calendarioId:cal.id, seriesId:sid, anchorDate:null, anchorDay:null, isEndOfMonth:null
+        });
+        DB.assemblies.push(occ);
+        createAssemblyTask(occ);
+        criadas++;
+      });
+    }
+    if(faltaAno) semCalendarioProximoAno.push({ seriesId:sid, administradora, segmento, ano:faltaAno, leadId:sample.leadId, grupo:sample.grupo, cota:sample.cota });
+  });
+  return { criadas, semCalendarioProximoAno };
+}
+/** v36_40 (item 5) — recria a tarefa de aviso de qualquer assembleia ainda
+ *  aberta (não concluída) cujo taskId esteja ausente ou aponte para uma
+ *  tarefa que não existe mais — nunca duplica (createAssemblyTask já é
+ *  idempotente por construção). Usada pelo botão "Sincronizar calendário
+ *  oficial". Retorna a quantidade reparada. */
+function repararTarefasAusentes(){
+  let reparadas = 0;
+  DB.assemblies.forEach(a=>{
+    if(a.concluida) return;
+    const existe = a.taskId && DB.tasks.some(t=>t.id===a.taskId);
+    if(!existe){ a.taskId = null; createAssemblyTask(a); reparadas++; }
+  });
+  return reparadas;
+}
+/** Último resultado de ensureFutureOfficialOccurrences — séries oficiais
+ *  cujo próximo ano ainda não tem calendário cadastrado, para o aviso em
+ *  viewAssembleias. Estado puramente derivado (nunca persistido) —
+ *  recalculado a cada ensureFutureAssemblyOccurrences()/sincronização. */
+let assembliesSemCalendarioProximoAno = [];
 /** Roda no carregamento do app: para cada série recorrente ainda ativa, garante que existam
  *  ocorrências cadastradas até 12 meses à frente — gera progressivamente conforme o tempo
- *  passa, sempre a partir da âncora original de cada série (nunca da última ocorrência). */
+ *  passa, sempre a partir da âncora original de cada série (nunca da última ocorrência).
+ *  v36_40 (item 3) — séries MANUAIS continuam usando exatamente a lógica acima
+ *  (generateRecurringOccurrences/addMonths); séries OFICIAIS são sincronizadas
+ *  à parte por ensureFutureOfficialOccurrences(), que lê direto de
+ *  DB.settings.assemblyCalendars (nunca addMonths). */
 function ensureFutureAssemblyOccurrences(){
-  const seriesIds = [...new Set(DB.assemblies.filter(a=>a.seriesId).map(a=>a.seriesId))];
+  const seriesIds = [...new Set(DB.assemblies.filter(a=>a.seriesId && a.recurrenceType!=='official').map(a=>a.seriesId))];
   const horizonte = addMonths(todayISO(), 12);
   let totalGerado = 0;
   seriesIds.forEach(sid=>{
@@ -13893,6 +14225,9 @@ function ensureFutureAssemblyOccurrences(){
     const isEndOfMonth = !!primeira.isEndOfMonth;
     if(maisRecente.data < horizonte) totalGerado += generateRecurringOccurrences(sid, anchorDate, anchorDay, isEndOfMonth, maisRecente.recorrencia, horizonte, maisRecente);
   });
+  const oficiais = ensureFutureOfficialOccurrences();
+  totalGerado += oficiais.criadas;
+  assembliesSemCalendarioProximoAno = oficiais.semCalendarioProximoAno;
   if(totalGerado>0) saveDB();
 }
 /** Vínculo persistente entre assembleia e tarefa — uma única tarefa por ocorrência, nunca
@@ -13902,6 +14237,12 @@ function ensureFutureAssemblyOccurrences(){
  *  valor" e trocado silenciosamente por 7. */
 function createAssemblyTask(a){
   if(a.taskId && DB.tasks.some(t=>t.id===a.taskId)) return; // já existe — nunca duplica
+  // v36_41 (item 2) — antes de criar, procura uma tarefa existente vinculada
+  // por assemblyId (o outro lado do vínculo): cobre o caso de a.taskId estar
+  // ausente/quebrado mas a tarefa ainda existir — restaura em vez de
+  // duplicar. Só cria uma tarefa nova quando NENHUM dos dois vínculos existe.
+  const existente = DB.tasks.find(t=>t.assemblyId===a.id);
+  if(existente){ a.taskId = existente.id; return; }
   const antecedencia = a.diasAntecedencia ?? 7;
   const remDate = addDays(a.data, -antecedencia);
   const lead = DB.leads.find(l=>l.id===a.leadId);
@@ -13949,7 +14290,21 @@ function deleteAssembly(a, onDone){
   const lead = DB.leads.find(l=>l.id===leadIdUsed);
   if(excluirFuturas){
     DB.assemblies.filter(x=>x.seriesId===a.seriesId && x.data>=a.data).forEach(x=> deleteAssemblyTask(x));
+    const eraOficial = a.oficial;
     DB.assemblies = DB.assemblies.filter(x=> !(x.seriesId===a.seriesId && x.data>=a.data));
+    // v36_40 — se a série era oficial, marca o encerramento nas ocorrências
+    // que restaram (passadas/concluídas, preservadas como histórico): sem
+    // isso, a PRÓXIMA sincronização automática (ensureFutureAssemblyOccurrences,
+    // que roda sozinha a cada carregamento) encontraria a mesma seriesId
+    // ainda "viva" por essas ocorrências antigas e recriaria exatamente as
+    // datas futuras que o usuário acabou de excluir de propósito — uma
+    // ressurreição silenciosa que violaria a exclusão explícita. Só afeta a
+    // sincronização AUTOMÁTICA; "Gerar datas oficiais faltantes"/"Ativar
+    // recorrência oficial" continuam disponíveis como decisão deliberada do
+    // usuário, se ele quiser mesmo assim retomar a série depois.
+    if(eraOficial){
+      DB.assemblies.filter(x=>x.seriesId===a.seriesId).forEach(x=>{ x.seriesEncerrada = true; });
+    }
     if(lead) addTimeline(lead, `Assembleia e ocorrências futuras excluídas — Grupo ${a.grupo||'—'}/Cota ${a.cota||'—'} a partir de ${fmtDate(a.data)}`);
   } else {
     deleteAssemblyTask(a);
@@ -16045,15 +16400,19 @@ function viewConfig(){
   <div class="card settings-block">
     <h3>Calendários oficiais de assembleia</h3>
     <div class="small-note" style="margin-bottom:10px;">Datas exatas publicadas por cada administradora — usadas para preencher automaticamente a próxima data ao cadastrar uma assembleia, e para a recorrência oficial (nunca "mesmo dia todo mês"). "Todos" em segmento vale para qualquer segmento dessa administradora. Editar aqui não altera assembleias já cadastradas — use "Atualizar pelo calendário oficial" na ficha do cliente/contrato para isso.</div>
-    <div class="table-wrap"><table><thead><tr><th>Ano</th><th>Administradora</th><th>Segmento</th><th>Horário</th><th>Datas (dd/mm, separadas por vírgula)</th></tr></thead>
+    <div class="table-wrap"><table><thead><tr><th>Ano</th><th>Administradora</th><th>Segmento</th><th>Horário</th><th>Datas (dd/mm, separadas por vírgula)</th><th></th></tr></thead>
     <tbody>${(st.assemblyCalendars||[]).map((c,i)=>`<tr>
       <td><input type="number" style="width:70px;" data-cal-ano="${i}" value="${c.ano}"></td>
       <td><input style="width:130px;" data-cal-admin="${i}" value="${escapeHtml(c.administradora)}"></td>
       <td><input style="width:100px;" data-cal-seg="${i}" value="${escapeHtml(c.segmento)}"></td>
       <td><input style="width:70px;" data-cal-horario="${i}" value="${escapeHtml(c.horario||'')}"></td>
       <td><input style="width:100%;min-width:280px;" data-cal-datas="${i}" value="${(c.datas||[]).map(d=>d.slice(8,10)+'/'+d.slice(5,7)).join(', ')}"></td>
+      <td><button type="button" class="link-btn" data-cal-remover="${i}" style="color:var(--red);">Remover</button></td>
     </tr>`).join('')}</tbody></table></div>
-    <button class="pill-btn sm" id="saveAssemblyCalendarsBtn" style="margin-top:10px;">Salvar calendários</button>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="pill-btn sm ghost" id="addAssemblyCalendarBtn">+ Adicionar calendário</button>
+      <button class="pill-btn sm" id="saveAssemblyCalendarsBtn">Salvar calendários</button>
+    </div>
   </div>
   <div class="card settings-block">
     <h3>Follow-up automático</h3>
@@ -16421,18 +16780,53 @@ function attachViewHandlers(){
   });
 
   const bnAsm=document.getElementById('btnNewAssembly'); if(bnAsm) bnAsm.onclick=()=>openAssemblyForm(null,null,null);
+  // v36_40 (item 5) — renomeado de "Atualizar pelo calendário oficial" para
+  // "Sincronizar calendário oficial": além de corrigir datas divergentes
+  // (comportamento anterior, intocado), agora também gera as datas faltantes
+  // das séries oficiais ATIVAS (ensureFutureOfficialOccurrences) e recria
+  // tarefas de aviso ausentes (repararTarefasAusentes) — relatando quantas
+  // ocorrências foram atualizadas, criadas, ignoradas (sem calendário) ou
+  // ficaram em conflito.
   const bnAsmCal=document.getElementById('btnAtualizarCalendarioOficial'); if(bnAsmCal) bnAsmCal.onclick=()=>{
-    if(!window.confirm('Atualizar todas as assembleias FUTURAS e ainda ABERTAS (não concluídas) para as datas do calendário oficial, quando houver um cadastrado para a administradora/segmento? Assembleias passadas ou já concluídas nunca são alteradas.')) return;
-    const resultado = atualizarAssembleiasParaCalendarioOficial(null);
+    if(!window.confirm('Sincronizar calendário oficial — corrige datas divergentes, gera as datas faltantes das séries oficiais ativas e recria tarefas de aviso ausentes. Assembleias passadas ou já concluídas nunca são alteradas. Continuar?')) return;
+    const movidas = atualizarAssembleiasParaCalendarioOficial(null);
+    const oficiais = ensureFutureOfficialOccurrences();
+    const tarefas = repararTarefasAusentes();
+    assembliesSemCalendarioProximoAno = oficiais.semCalendarioProximoAno;
     // v31 — a sinalização de conflito (conflitoCalendarioOficial:true) TAMBÉM
     // precisa ser persistida, senão desaparece ao recarregar a página.
-    if(resultado.atualizadas>0 || resultado.conflitos>0) saveDB();
+    if(movidas.atualizadas>0 || movidas.conflitos>0 || oficiais.criadas>0 || tarefas>0) saveDB();
     const partes = [];
-    if(resultado.atualizadas>0) partes.push(`${resultado.atualizadas} assembleia(s) atualizada(s)`);
-    if(resultado.conflitos>0) partes.push(`${resultado.conflitos} conflito(s) sinalizado(s) para revisão (mesma cota disputando a mesma data — nada foi excluído)`);
-    showToast(partes.length ? partes.join(' · ')+'.' : 'Nenhuma assembleia precisava de atualização.');
+    if(movidas.atualizadas>0) partes.push(`${movidas.atualizadas} data(s) corrigida(s)`);
+    if(oficiais.criadas>0) partes.push(`${oficiais.criadas} assembleia(s) oficial(is) criada(s)`);
+    if(tarefas>0) partes.push(`${tarefas} tarefa(s) recriada(s)`);
+    if(movidas.conflitos>0) partes.push(`${movidas.conflitos} conflito(s) sinalizado(s) para revisão (mesma cota disputando a mesma data — nada foi excluído)`);
+    showToast(partes.length ? partes.join(' · ')+'.' : 'Nada para sincronizar — tudo já está em dia.');
     renderView();
   };
+  // v36_40 (item 4) — ativação individual/em massa da recorrência oficial
+  // para registros legados (oficial sem série ativa). Sempre com resumo +
+  // confirmação explícita antes de gerar; idempotente por construção.
+  const bnAsmAtivarTodas=document.getElementById('btnAtivarRecorrenciaTodas'); if(bnAsmAtivarTodas) bnAsmAtivarTodas.onclick=()=>{
+    const grupos = cotasComCalendarioOficialSemRecorrencia();
+    const totalPrevisto = grupos.reduce((s,g)=>{ const p=previewRecorrenciaOficial(g.sample); return s+(p.possivel?p.faltantes:0); }, 0);
+    if(!window.confirm(`Ativar recorrência oficial para ${grupos.length} cota(s)?\n\nIsso criará até ${totalPrevisto} assembleia(s) e tarefa(s) de aviso restantes, uma por data oficial ainda não cadastrada.`)) return;
+    const r = ativarRecorrenciaOficialEmMassa();
+    showToast(`${r.totalGrupos} cota(s) ativada(s), ${r.totalCriadas} assembleia(s) criada(s)${r.falhas?`, ${r.falhas} sem calendário encontrado`:''}.`);
+    renderView();
+  };
+  c.querySelectorAll('[data-ativarrecorrencia]').forEach(btn=> btn.onclick=()=>{
+    const key = btn.dataset.ativarrecorrencia;
+    const grupo = cotasComCalendarioOficialSemRecorrencia().find(g=>g.key===key);
+    if(!grupo) return;
+    const preview = previewRecorrenciaOficial(grupo.sample);
+    if(!preview.possivel){ showToast('Nenhum calendário oficial encontrado para esta cota.'); return; }
+    const nome = grupo.lead?grupo.lead.nome:'este cliente';
+    if(!window.confirm(`Ativar recorrência oficial para ${nome} (Grupo ${grupo.sample.grupo||'—'}/Cota ${grupo.sample.cota||'—'})?\n\nIsso criará ${preview.faltantes} assembleia(s) e tarefa(s) restantes do calendário ${preview.calendario.administradora}/${preview.calendario.segmento} ${preview.calendario.ano}.`)) return;
+    const r = ativarRecorrenciaOficial(key);
+    showToast(r.ok ? `${r.criadas} assembleia(s) criada(s).` : (r.motivo||'Não foi possível ativar a recorrência.'));
+    renderView();
+  });
   c.querySelectorAll('[data-asmtab]').forEach(btn=> btn.onclick=()=>{ assembleiasTab=btn.dataset.asmtab; renderView(); });
   c.querySelectorAll('[data-editassembly]').forEach(btn=> btn.onclick=()=>openAssemblyForm(btn.dataset.editassembly));
   c.querySelectorAll('[data-opengroup]').forEach(btn=> btn.onclick=()=>openAssemblyGroupDetail(btn.dataset.opengroup));
@@ -16686,24 +17080,74 @@ function wireConfigHandlers(c){
       const anoEl=document.querySelector(`[data-cal-ano="${i}"]`), adminEl=document.querySelector(`[data-cal-admin="${i}"]`),
             segEl=document.querySelector(`[data-cal-seg="${i}"]`), horEl=document.querySelector(`[data-cal-horario="${i}"]`), datasEl=document.querySelector(`[data-cal-datas="${i}"]`);
       const ano = Number(anoEl?anoEl.value:c.ano) || c.ano;
+      const administradora = (adminEl?adminEl.value:c.administradora||'').trim();
+      const segmento = (segEl?segEl.value:c.segmento||'').trim();
+      const rotulo = `${administradora||'(sem administradora)'}/${segmento||'—'}${ano?' '+ano:''}`;
+      // v36_41 (item 1) — administradora, segmento, ano válido e ao menos uma
+      // data passam a ser obrigatórios (antes só o FORMATO dd/mm das datas
+      // era checado — um calendário sem administradora, por exemplo, nunca
+      // seria encontrado por findAssemblyCalendar, silenciosamente inútil).
+      if(!administradora){ showToast('Informe a administradora em todos os calendários.'); return null; }
+      if(!segmento){ showToast(`Informe o segmento do calendário de ${administradora} (use "Todos" se a data valer para qualquer segmento).`); return null; }
+      if(!ano || !Number.isInteger(ano) || ano < 2000 || ano > 2100){ showToast(`Ano inválido no calendário de ${rotulo} — use um ano entre 2000 e 2100.`); return null; }
       const datasTexto = (datasEl?datasEl.value:'').split(',').map(s=>s.trim()).filter(Boolean);
+      if(!datasTexto.length){ showToast(`Informe ao menos uma data no calendário de ${rotulo}.`); return null; }
       const datas = [];
       for(const item of datasTexto){
         const m = item.match(/^(\d{1,2})\/(\d{1,2})$/);
-        if(!m){ datas.push(null); continue; }
-        const dd = m[1].padStart(2,'0'), mm = m[2].padStart(2,'0');
-        datas.push(`${ano}-${mm}-${dd}`);
+        // v36_41 (item 1) — valida a data de verdade, não só o formato:
+        // 31/02, 00/10 e 15/13 passavam na regex antiga mas não existem no
+        // calendário. new Date(ano, mm, 0).getDate() dá o último dia real do
+        // mês `mm` (1-based) nesse ano específico — respeita anos bissextos.
+        const dd = m ? Number(m[1]) : NaN, mm = m ? Number(m[2]) : NaN;
+        const valido = m && mm>=1 && mm<=12 && dd>=1 && dd<=new Date(ano, mm, 0).getDate();
+        if(!valido){ showToast(`Data inválida ("${item}") no calendário de ${rotulo} — use dd/mm com um dia real do mês.`); return null; }
+        datas.push(`${ano}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`);
       }
-      if(datas.some(d=>d===null)){ showToast(`Data inválida no calendário de ${c.administradora}/${c.segmento} — use o formato dd/mm.`); return null; }
-      return Object.assign({}, c, {
-        ano, administradora: (adminEl?adminEl.value:c.administradora).trim(), segmento: (segEl?segEl.value:c.segmento).trim(),
-        horario: (horEl?horEl.value:c.horario||'').trim(), datas: datas.sort()
-      });
+      // v36_41 (item 1) — remove/rejeita datas repetidas: rejeita (em vez de
+      // descartar em silêncio) para o usuário perceber o erro de digitação,
+      // mesmo padrão de "nunca altera dado silenciosamente" do resto do app.
+      if(new Set(datas).size !== datas.length){ showToast(`Datas repetidas no calendário de ${rotulo} — remova as duplicatas.`); return null; }
+      return Object.assign({}, c, { ano, administradora, segmento, horario: (horEl?horEl.value:c.horario||'').trim(), datas: datas.sort() });
     });
     if(novos.some(x=>x===null)) return; // erro de validação já mostrado — nada salvo
+    // v36_41 (item 1) — impede dois calendários para a MESMA combinação
+    // administradora+segmento+ano (findAssemblyCalendar só enxergaria um
+    // deles, silenciosamente ignorando o outro).
+    const chaves = novos.map(c=> normalizeStr(c.administradora)+'|'+normalizeStr(c.segmento)+'|'+c.ano);
+    const idxDuplicado = chaves.findIndex((k,i)=> chaves.indexOf(k)!==i);
+    if(idxDuplicado!==-1){ showToast(`Já existe outro calendário cadastrado para ${novos[idxDuplicado].administradora}/${novos[idxDuplicado].segmento} ${novos[idxDuplicado].ano} — combine as datas num único calendário.`); return; }
     DB.settings.assemblyCalendars = novos;
-    saveDB(); showToast('Calendários oficiais salvos'); renderView();
+    // v36_40 (item 3) — ao salvar um calendário novo (ex.: o ano seguinte de
+    // uma série oficial já ativa), sincroniza na hora — sem isso, o usuário
+    // só veria as datas faltantes completadas no próximo carregamento da
+    // página (ensureFutureAssemblyOccurrences também roda sozinha ali, mas
+    // não há motivo para esperar).
+    const oficiais = ensureFutureOfficialOccurrences();
+    assembliesSemCalendarioProximoAno = oficiais.semCalendarioProximoAno;
+    saveDB();
+    showToast('Calendários oficiais salvos' + (oficiais.criadas>0 ? ` — ${oficiais.criadas} assembleia(s) de série(s) oficiais ativas completada(s).` : '.'));
+    renderView();
   };
+  // v36_40 — "+ Adicionar calendário": acrescenta uma linha em branco (ano
+  // seguinte ao mais recente já cadastrado, como sugestão) para o usuário
+  // preencher — nada é persistido até "Salvar calendários". Preserva
+  // integralmente os calendários já existentes (só acrescenta ao array).
+  const addAssemblyCalendarBtn=document.getElementById('addAssemblyCalendarBtn'); if(addAssemblyCalendarBtn) addAssemblyCalendarBtn.onclick=()=>{
+    const atual = DB.settings.assemblyCalendars||[];
+    const ultimoAno = atual.reduce((max,c)=>Math.max(max,Number(c.ano)||0), Number(todayISO().slice(0,4)));
+    DB.settings.assemblyCalendars = atual.concat([{ id: uid('calasm'), ano: ultimoAno+1, administradora:'', segmento:'', horario:'', datas:[] }]);
+    renderView();
+  };
+  document.querySelectorAll('[data-cal-remover]').forEach(btn=> btn.onclick=()=>{
+    const i = Number(btn.dataset.calRemover);
+    const atual = DB.settings.assemblyCalendars||[];
+    const alvo = atual[i];
+    if(!alvo) return;
+    if(!window.confirm(`Remover o calendário ${alvo.administradora||'(sem administradora)'}/${alvo.segmento||'—'} ${alvo.ano}? Assembleias já cadastradas não são alteradas, mas a recorrência oficial deixa de encontrar este calendário.`)) return;
+    DB.settings.assemblyCalendars = atual.filter((c,idx)=>idx!==i);
+    saveDB(); showToast('Calendário removido'); renderView();
+  });
   const saveFollowupBtn=document.getElementById('saveFollowupBtn'); if(saveFollowupBtn) saveFollowupBtn.onclick=()=>{
     DB.settings.followupDays = {propostaEnviada:Number(document.getElementById('cfg_fu1').value||2), semResposta:Number(document.getElementById('cfg_fu2').value||5)};
     saveDB(); showToast('Follow-up salvo'); renderView();
