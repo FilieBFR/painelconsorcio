@@ -293,6 +293,13 @@ td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
 .small-note{font-size:11.5px;color:var(--ink-soft);margin-top:6px;}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--navy-950);color:#fff;padding:11px 17px;border-radius:8px;font-size:12.5px;box-shadow:var(--shadow);z-index:200;opacity:0;transform:translateY(10px);transition:all .25s;max-width:340px;display:flex;align-items:center;gap:12px;}
 .toast.show{opacity:1;transform:translateY(0);}
+/* v36_45 — o aviso "escondido" (opacity:0) continuava ocupando o canto inferior direito e CAPTURAVA os
+   cliques: depois do 1º aviso (ex.: "Parcelas atualizadas") ele ficava invisível sobre botões como o
+   "Ver parcelas" da gaveta de Comissões. Só recebe cliques enquanto visível (botão "Desfazer"), e,
+   com a gaveta aberta, sobe para não cobrir a barra de ações dela. */
+.toast{pointer-events:none;transition:opacity .25s, transform .25s;} /* sem animar "bottom": não desliza por cima da barra da gaveta */
+.toast.show{pointer-events:auto;}
+body:has(.comm-drawer) .toast{bottom:84px;}
 .toast-action{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:4px 10px;font-size:11.5px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;}
 .toast-action:hover{background:rgba(255,255,255,.12);}
 .parcel-table td, .parcel-table th{padding:6px 8px;font-size:11.5px;}
