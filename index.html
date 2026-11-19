@@ -484,6 +484,139 @@ td.num,th.num,.num-inline,.pipe-val{font-variant-numeric:tabular-nums;white-spac
 .comm-table td[data-label="Cliente / contrato"]{min-width:160px;}
 .comm-repasse-cell{min-width:210px;}
 .comm-repasse-cell .badge{margin:3px 0;}
+/* ===== v36_45 — Comissões redesenhada (esboço aprovado): só apresentação, escopo .comm2 =====
+   Valor monetário nunca quebra; tabela de 6 colunas cabe sem rolagem lateral; urgência agrupa as linhas;
+   detalhe do contrato abre em gaveta; no celular cada contrato vira um cartão compacto. */
+.comm2 .comm-help{margin:0 0 12px;}
+.comm2 .comm-help>summary{list-style:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--border);background:#fff;border-radius:20px;height:30px;padding:0 13px;font-size:12px;font-weight:600;color:var(--brand-blue);}
+.comm2 .comm-help>summary::-webkit-details-marker{display:none;}
+.comm2 .comm-help[open]>summary{background:var(--brand-blue-soft);border-color:var(--brand-blue);}
+.comm2 .comm-help-body{margin-top:10px;padding:14px 18px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);font-size:12.5px;line-height:1.6;color:var(--text-primary);max-width:860px;}
+.comm2 .comm-help-body dt{font-weight:700;color:var(--brand-navy);margin-top:8px;}
+.comm2 .comm-help-body dd{margin:2px 0 0;color:var(--text-secondary);}
+.comm2 .comm-help-body p{margin:10px 0 0;color:var(--text-secondary);}
+/* indicadores: o número cabe sempre em UMA linha */
+.comm2 .comm-hero-strip{margin-bottom:6px;}
+.comm2 .comm-hero-item{min-width:0;padding:13px 18px 12px;}
+.comm2 .comm-hero-value{font-size:clamp(16px,1.75vw,23px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;letter-spacing:-.02em;}
+.comm2 .comm-hero-main .comm-hero-value{font-size:clamp(18px,2vw,26px);}
+.comm2 .comm-hero-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.comm2 .comm-hero-label{white-space:nowrap;}
+.comm2 .comm-more{margin:6px 2px 0;font-size:12px;color:var(--text-secondary);}
+.comm2 .comm-more>summary{cursor:pointer;color:var(--brand-blue);font-weight:600;list-style:none;display:inline;}
+.comm2 .comm-more>summary::-webkit-details-marker{display:none;}
+.comm2 .comm-more>summary::before{content:"▸ ";}
+.comm2 .comm-more[open]>summary::before{content:"▾ ";}
+.comm2 .comm-more .comm-secondary-line{margin:6px 0 0;}
+/* avisos acionáveis */
+.comm2 .comm-alerts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0;}
+.comm2 .comm-alert{display:inline-flex;align-items:center;gap:8px;background:#FDF1DA;border:1px solid #F3D9A3;color:#8A5A17;border-radius:9px;padding:5px 6px 5px 11px;font-size:12px;font-weight:600;}
+.comm2 .comm-alert button{background:#fff;border:1px solid #F3D9A3;border-radius:6px;padding:3px 9px;color:var(--brand-navy);font-weight:700;font-size:11.5px;cursor:pointer;font-family:inherit;}
+/* barra de filtros em uma linha */
+.comm2 .comm-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:16px 0 10px;}
+.comm2 .comm-toolbar input[type=text],.comm2 .comm-toolbar input[type=month],.comm2 .comm-toolbar select,.comm2 .comm-field{height:36px;border:1px solid var(--border);border-radius:10px;background:#fff;padding:0 12px;font-size:12.5px;font-family:inherit;color:var(--text-primary);}
+.comm2 .comm-toolbar input[type=text]{flex:1 1 200px;min-width:170px;}
+.comm2 .comm-toolbar select,.comm2 .comm-toolbar input[type=month]{flex:0 1 auto;max-width:210px;}
+.comm2 .comm-toolbar .is-active{border-color:var(--brand-blue);background:var(--brand-blue-soft);color:var(--brand-navy);font-weight:600;}
+.comm2 .comm-count{margin-left:auto;font-size:12px;color:var(--text-secondary);white-space:nowrap;}
+.comm2 .comm-menu{position:relative;}
+.comm2 .comm-menu>summary{list-style:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;}
+.comm2 .comm-menu>summary::-webkit-details-marker{display:none;}
+.comm2 .comm-menu-pop{position:absolute;z-index:30;top:42px;left:0;min-width:210px;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);padding:6px;display:flex;flex-direction:column;gap:2px;}
+.comm2 .comm-menu-pop button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:7px;font-size:12.5px;font-family:inherit;color:var(--text-primary);cursor:pointer;}
+.comm2 .comm-menu-pop button:hover{background:var(--background);}
+.comm2 .comm-menu-pop button.active{background:var(--brand-navy);color:#fff;font-weight:600;}
+/* abas de situação com contagem */
+.comm2 .comm-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin:0 0 14px;overflow-x:auto;scrollbar-width:none;}
+.comm2 .comm-tabs::-webkit-scrollbar{display:none;}
+.comm2 .comm-tabs button{border:0;background:none;padding:9px 12px 10px;font-size:12.5px;font-weight:600;color:var(--text-secondary);position:relative;white-space:nowrap;cursor:pointer;font-family:inherit;}
+.comm2 .comm-tabs button i{font-style:normal;margin-left:6px;background:var(--brand-blue-soft);color:var(--brand-navy);border-radius:10px;padding:1px 7px;font-size:11px;font-variant-numeric:tabular-nums;}
+.comm2 .comm-tabs button.active{color:var(--brand-navy);}
+.comm2 .comm-tabs button.active::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--brand-orange);}
+.comm2 .comm-tabs button.active i{background:var(--brand-navy);color:#fff;}
+.comm2 .comm-tabs button.warn i{background:var(--red-soft);color:var(--red);}
+.comm2 .comm-tabs button.warn.active i{background:var(--red);color:#fff;}
+/* tabela principal: 6 colunas, sem rolagem lateral, linhas compactas */
+.comm2 .comm-table{table-layout:fixed;font-size:12.5px;}
+.comm2 .comm-table td{vertical-align:middle;padding:11px 14px;overflow:hidden;}
+.comm2 .comm-table th{white-space:nowrap;}
+.comm2 .comm-row{cursor:pointer;}
+.comm2 .comm-row:hover td{background:#FAFAFD;}
+.comm2 .comm-row.is-open td{background:var(--brand-blue-soft);}
+.comm2 .comm-grp td{background:#F7F7FB;font-size:11.5px;font-weight:700;color:var(--brand-navy);padding:8px 14px;border-bottom:1px solid var(--border);}
+.comm2 .comm-grp.late td{background:var(--red-soft);color:var(--red);}
+.comm2 .comm-grp td span{font-weight:500;color:var(--text-secondary);margin-left:8px;}
+.comm2 .comm-grp.late td span{color:var(--red);}
+.comm2 .comm-who b{font-size:13px;}
+.comm2 .comm-adm{display:inline-block;white-space:nowrap;background:var(--brand-blue-soft);color:var(--brand-navy);border-radius:6px;padding:3px 8px;font-size:11.5px;font-weight:600;}
+.comm2 .comm-money{font-weight:700;white-space:nowrap;}
+.comm2 .comm-sub{display:block;color:var(--text-secondary);font-size:11.5px;font-weight:500;margin-top:2px;white-space:normal;}
+.comm2 .comm-sub.red{color:var(--red);font-weight:600;}
+.comm2 .comm-bar{position:relative;height:8px;border-radius:8px;background:#E7E8F3;margin:6px 0 4px;width:100%;}
+.comm2 .comm-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:8px;background:linear-gradient(90deg,var(--brand-navy),var(--brand-blue));}
+.comm2 .comm-bar em{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:var(--brand-orange);border:2px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 0 1px rgba(39,43,89,.14);}
+.comm2 .comm-bar.done i{background:var(--green);}
+.comm2 .comm-bar.cancel{background:repeating-linear-gradient(45deg,#E4E5EE,#E4E5EE 4px,#F1F1F7 4px,#F1F1F7 8px);}
+.comm2 .comm-pc{font-size:11.5px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
+.comm2 .comm-pc b{color:var(--text-primary);}
+.comm2 .comm-table td .badge{white-space:normal;line-height:1.25;}
+.comm2 .comm-repasse-cell{min-width:0;}
+.comm2 .comm-repasse-cell .clientes-td-sub{margin-top:3px;}
+.comm2 .comm-repasse-cell .badge{white-space:normal;line-height:1.25;margin:0 0 2px;}
+.comm2 .comm-open-btn{white-space:nowrap;font-weight:600;}
+.comm2 .comm-analises{margin-top:20px;}
+.comm2 .comm-analises-hd{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;padding:10px 16px 0;border-bottom:1px solid var(--border);}
+.comm2 .comm-analises-hd .comm-section-title{margin:0 0 8px;}
+.comm2 .comm-analises-hd .comm-tabs{border:0;margin:0;}
+.comm2 .comm-analises-body{padding:14px 18px 18px;}
+.comm2 .comm-analises-body .comm-chart-card{border:0;box-shadow:none;padding:0;margin:0;}
+.comm2 .comm-payers{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin:14px 0 0;}
+.comm2 .comm-payer{text-align:left;font:inherit;color:inherit;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);cursor:pointer;min-width:0;}
+.comm2 .comm-payer.late{border-color:#EBB4AE;background:#FFF8F7;}
+.comm2 .comm-payer.is-active{outline:2px solid var(--brand-blue);outline-offset:1px;}
+.comm2 .comm-payer h6{margin:0;font-size:13px;color:var(--brand-navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.comm2 .comm-payer b{display:block;font-size:19px;margin:6px 0 2px;color:var(--brand-navy);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.comm2 .comm-payer.late b{color:var(--red);}
+.comm2 .comm-payer small{color:var(--text-secondary);font-size:11.5px;}
+/* gaveta de detalhe do contrato */
+.comm-drawer-scrim{position:fixed;inset:0;background:rgba(39,43,89,.35);z-index:90;}
+.comm-drawer{position:fixed;top:0;right:0;bottom:0;width:min(480px,100vw);background:#fff;z-index:91;box-shadow:-10px 0 34px rgba(39,43,89,.22);padding:22px 24px 90px;overflow-y:auto;}
+.comm-drawer h3{margin:0 40px 0 0;font-size:18px;color:var(--brand-navy);}
+.comm-drawer-x{position:absolute;right:16px;top:16px;border:0;background:var(--background);width:30px;height:30px;border-radius:8px;color:var(--text-secondary);font-size:15px;cursor:pointer;}
+.comm-drawer-meta{color:var(--text-secondary);font-size:12px;margin:4px 0 14px;}
+.comm-drawer-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.comm-drawer-kpis div{background:var(--background);border-radius:10px;padding:9px 12px;min-width:0;}
+.comm-drawer-kpis span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);font-weight:700;}
+.comm-drawer-kpis b{font-size:15px;color:var(--brand-navy);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.comm-drawer section{margin-top:16px;}
+.comm-drawer h5{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);}
+.comm-drawer .comm-mini-parcel-table{font-size:12px;}
+.comm-repcard{border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+.comm-drawer-foot{position:fixed;right:0;bottom:0;width:min(480px,100vw);background:#fff;border-top:1px solid var(--border);padding:12px 24px;display:flex;gap:8px;z-index:92;}
+.comm-drawer-foot .pill-btn{flex:1;}
+/* celular: cada contrato é um cartão compacto */
+@media (max-width:760px){
+  .comm2 .comm-hero-item{flex:1 1 46%;min-width:0;}
+  .comm2 .comm-table td[data-label]::before{display:none;}
+  .comm2 .comm-table td[data-label="Repasse ao assessor"]::before{display:block;margin-bottom:2px;}
+  .comm2 .comm-table td{padding:3px 0;overflow:visible;}
+  .comm2 .comm-table tr.comm-row{display:grid;grid-template-columns:1fr auto;grid-template-areas:"who adm" "bar bar" "rec rec" "rep act";gap:2px 10px;align-items:start;background:#fff;}
+  .comm2 .comm-table tr.comm-row>td:nth-child(1){grid-area:who;}
+  .comm2 .comm-table tr.comm-row>td:nth-child(2){grid-area:adm;text-align:right;}
+  .comm2 .comm-table tr.comm-row>td:nth-child(3){grid-area:bar;}
+  .comm2 .comm-table tr.comm-row>td:nth-child(4){grid-area:rec;display:flex;flex-wrap:wrap;align-items:baseline;gap:0 8px;}
+  .comm2 .comm-table tr.comm-row>td:nth-child(4) .comm-sub{margin-top:0;}
+  .comm2 .comm-table tr.comm-row>td:nth-child(5){grid-area:rep;}
+  .comm2 .comm-table tr.comm-row>td:nth-child(6){grid-area:act;align-self:end;}
+  .comm2 .comm-table tr.comm-grp{display:block;border:0;padding:0;margin:6px 0 6px;}
+  .comm2 .comm-table tr.comm-grp td{border-radius:8px;}
+  .comm2 .comm-table td.num{text-align:left;}
+  .comm2 .comm-open-btn{padding:6px 0;}
+  .comm-drawer{width:100vw;padding:20px 16px 90px;}
+  .comm-drawer-foot{padding:12px 16px;}
+  .comm2 .comm-toolbar select,.comm2 .comm-toolbar input[type=month]{flex:1 1 45%;max-width:none;}
+  .comm2 .comm-count{margin-left:0;width:100%;}
+}
 /* Foco por teclado visível em todos os controles interativos */
 button:focus-visible,.link-btn:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px;}
 /* Quadro "Pipeline por status" (propostas): abertas por status + canceladas separadas */
@@ -6002,6 +6135,7 @@ function renderNav(){
 function closeMobileSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('overlayBg').classList.remove('show'); }
 
 function renderView(){
+  if(currentView!=='comissoes') comissoesDrawerId = ''; // v36_45 — a gaveta de Comissões não sobrevive à troca de tela
   document.getElementById('pageTitle').textContent = NAV.find(n=>n.id===currentView).label;
   const c = document.getElementById('content');
   const routes = {
@@ -14924,7 +15058,7 @@ let comissoesViewMode = 'escritorio';
 function viewComissoes(){
   return `
   <div class="toolbar">
-    <div class="view-toggle"><button data-commmode="escritorio" class="${comissoesViewMode==='escritorio'?'active':''}">Comissões do escritório</button><button data-commmode="assessores" class="${comissoesViewMode==='assessores'?'active':''}">Comissões dos assessores</button></div>
+    <div class="view-toggle"><button data-commmode="escritorio" class="${comissoesViewMode==='escritorio'?'active':''}" title="Comissões do escritório: o que entra, vindo das administradoras">Recebimentos da administradora</button><button data-commmode="assessores" class="${comissoesViewMode==='assessores'?'active':''}" title="Comissões dos assessores: o que sai, repasses pagos aos assessores">Repasses aos assessores</button></div>
   </div>
   ${comissoesViewMode==='escritorio' ? viewComissoesEscritorio() : viewComissoesAssessores()}
   `;
@@ -15007,10 +15141,159 @@ function repasseCellHtml(c, lead){
   const acao = r.multiplos
     ? `<button class="link-btn" data-repassemany="${c.id}">Gerenciar repasses</button>`
     : `<button class="link-btn" data-repassemanage="${(r.registros[0]||r.canceladas[0]).id}" data-lead="${lead?lead.id:''}">Gerenciar repasse</button>`;
-  return `${r.multiplos?`<div><b>${r.qtd} repasses</b> <span class="badge b-perdido" title="Mais de um repasse ativo no mesmo contrato — revise.">⚠ Revisar</span></div>`:''}
-    <div><b>${escapeHtml(r.assessorNomes.join(', ')||'—')}</b> · ${escapeHtml(modTxt)}</div>
-    <div class="clientes-td-sub">Pago <span class="num-inline">${fmtMoney(r.pago)}</span> · Pendente <span class="num-inline">${fmtMoney(r.pendente)}</span>${r.proximaData?` · próx. ${fmtDate(r.proximaData)}`:''}</div>
-    <span class="badge ${classe}">${rotulo}</span><div>${acao}</div>`;
+  // v36_45 — mesma informação de antes, em ordem de leitura mais rápida: estado (texto + cor)
+  // primeiro, depois quem recebe e a modalidade, valores e a ação.
+  return `<span class="badge ${classe}">${rotulo}</span>${r.multiplos?` <b>${r.qtd} repasses</b> <span class="badge b-perdido" title="Mais de um repasse ativo no mesmo contrato — revise.">⚠ Revisar</span>`:''}
+    <div class="clientes-td-sub"><b>${escapeHtml(r.assessorNomes.join(', ')||'—')}</b> · ${escapeHtml(modTxt)}</div>
+    <div class="clientes-td-sub">${[r.pago>0?`Pago <span class="num-inline">${fmtMoney(r.pago)}</span>`:'', r.pendente>0?`Pendente <span class="num-inline">${fmtMoney(r.pendente)}</span>`:'', r.proximaData?`próx. ${fmtDate(r.proximaData)}`:''].filter(Boolean).join(' · ') || 'Nenhuma parcela gerada ainda'}</div>
+    <div>${acao}</div>`;
+}
+/* ================= v36_45 — COMISSÕES REDESENHADAS (apresentação) =================
+   Nada aqui altera cálculo, regra ou dado: são leituras das mesmas parcelas/
+   registros (commissionMeta, assessorCommissions) já usadas pela tela, só
+   reorganizadas — agrupamento por urgência, resumo por contrato, gaveta de
+   detalhe e abas de contagem. Os handlers e data-attributes pré-existentes
+   (data-opencliente, data-opencontrato, data-editcomm, data-repasse*, ids
+   commSearch/commFilter*, etc.) foram preservados. */
+let comissoesDrawerId = '';          // contrato aberto na gaveta (só apresentação)
+let comissoesAnaliseTab = 'cronograma'; // cronograma | proximos | assessor | admin
+let assessorCommEstado = 'todos';    // aba de estado da tela de repasses
+const COMM_GRUPOS = [
+  { id:'atrasada',     titulo:'Atrasadas',             late:true },
+  { id:'proximos30',   titulo:'Próximos 30 dias' },
+  { id:'depois',       titulo:'Depois de 30 dias' },
+  { id:'semPendencia', titulo:'Sem parcela pendente' }
+];
+/** Mesmas fórmulas já usadas por linha da tabela (recebido, a receber,
+ *  cancelado, total vigente e % recebido) — extraídas para servir também à gaveta. */
+function comissaoResumoContrato(cm){
+  const recebido = cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
+  const aReceber = cm.parcelas.filter(p=>p.status==='Pendente').reduce((s,p)=>s+p.valor,0);
+  const cancelado = cm.parcelas.filter(p=>p.status==='Cancelada'||p.status==='Estornada').reduce((s,p)=>s+p.valor,0);
+  const totalVigente = recebido + aReceber;
+  const pct = totalVigente>0 ? Math.min(100, Math.round((recebido/totalVigente)*100)) : null;
+  return { recebido, aReceber, cancelado, totalVigente, pct };
+}
+/** Grupo de urgência do contrato (só ordenação/agrupamento visual). */
+function comissaoGrupoUrgencia(cm){
+  const prox = commissaoProximaParcela(cm);
+  if(!prox) return 'semPendencia';
+  const hoje = todayISO();
+  if(cm.parcelas.some(p=>p.status==='Pendente' && p.dataPrevista<hoje)) return 'atrasada';
+  return prox.dataPrevista <= addDays(hoje, 30) ? 'proximos30' : 'depois';
+}
+function comissaoDiasEntre(aISO, bISO){
+  return Math.round((new Date(bISO+'T00:00:00') - new Date(aISO+'T00:00:00'))/86400000);
+}
+/** Texto da coluna "A receber" sob o valor: sempre com palavras, nunca só cor. */
+function comissaoProximaTexto(cm, grupo){
+  const hoje = todayISO();
+  if(grupo==='semPendencia') return commissaoSituacao(cm)==='Cancelada' ? 'cancelada' : 'quitada';
+  if(grupo==='atrasada'){
+    const venc = cm.parcelas.filter(p=>p.status==='Pendente' && p.dataPrevista<hoje).map(p=>p.dataPrevista).sort()[0];
+    const d = comissaoDiasEntre(venc, hoje);
+    return `venceu ${fmtDate(venc)} · ${d} dia${d===1?'':'s'} de atraso`;
+  }
+  const prox = commissaoProximaParcela(cm);
+  const d = comissaoDiasEntre(hoje, prox.dataPrevista);
+  return d===0 ? `vence hoje (${fmtDate(prox.dataPrevista)})` : `vence ${fmtDate(prox.dataPrevista)} · em ${d} dia${d===1?'':'s'}`;
+}
+/** Contagem de contratos de cada aba de situação, respeitando os DEMAIS filtros
+ *  (administradora/assessor/busca/repasse) — usa o mesmo getComissoesContratosFiltrados. */
+function comissoesContagemPorSituacao(){
+  const salvo = comissoesFilters.situacao;
+  const res = {};
+  try{
+    ['Todos','aReceber','esteMes','atrasadas','recebidas','cancelado'].forEach(s=>{
+      comissoesFilters.situacao = s;
+      res[s] = getComissoesContratosFiltrados().length;
+    });
+  } finally { comissoesFilters.situacao = salvo; }
+  return res;
+}
+/** Uma linha da tabela "Comissões por contrato" (6 células). */
+function comissaoLinhaHtml(c, cm, lead, grupo){
+  const r = comissaoResumoContrato(cm);
+  const situacao = commissaoSituacao(cm);
+  const divergente = Math.abs(Number(c.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
+  const barCls = (grupo==='semPendencia' && situacao==='Cancelada') ? 'cancel' : (r.pct===100 ? 'done' : '');
+  const proxima = commissaoProximaParcela(cm);
+  const pos = r.pct===null ? 0 : r.pct;
+  const barra = barCls==='cancel'
+    ? `<div class="comm-bar cancel" title="Contrato cancelado"></div>`
+    : `<div class="comm-bar ${barCls}" title="${r.pct===null?'sem parcelas vigentes':r.pct+'% recebido'}"><i style="width:${pos}%;"></i>${proxima && r.pct!==100 ? `<em style="left:${pos}%;"></em>` : ''}</div>`;
+  const texto = barCls==='cancel'
+    ? `Contrato cancelado · <span class="num-inline">${fmtMoney(r.cancelado)}</span> cancelado`
+    : `<b class="num-inline">${fmtMoney(r.recebido)}</b> de <span class="num-inline">${fmtMoney(r.totalVigente)}</span>${r.pct!==null?` · ${r.pct}%`:''}`;
+  const sub = comissaoProximaTexto(cm, grupo);
+  return `<tr class="comm-row${comissoesDrawerId===c.id?' is-open':''}" data-commrow="${c.id}">
+    <td data-label="Cliente / contrato" class="comm-who">${lead?`<button class="link-btn comm-link-cliente" data-opencliente="${lead.id}" data-tab="comissoes" title="Abrir ficha do cliente (aba Comissões)"><b>${escapeHtml(lead.nome)}</b></button>`:'<b>—</b>'}<div class="clientes-td-sub"><button class="link-btn comm-link-contrato" data-opencontrato="${c.id}" data-lead="${lead?lead.id:''}" title="Abrir contrato">${escapeHtml(c.numero)}</button>${lead&&lead.responsavel?' · '+escapeHtml(lead.responsavel):''}</div><div class="clientes-td-sub" title="Valor vendido registrado na comissão (base do cálculo)">Crédito <span class="num-inline">${fmtMoney(cm.valorVenda)}</span></div></td>
+    <td data-label="Administradora"><span class="comm-adm">${displayAdmin(resolveCommissionAdministradora(cm, c))}</span></td>
+    <td data-label="Comissão recebida">${barra}<span class="comm-pc" title="Comissão de ${cm.percentual}% sobre ${fmtMoney(cm.valorVenda)}">${texto}</span>${(divergente||cm.revisaoNecessaria)?`<div>${divergente?'<span class="badge b-perdido" title="Valor vendido registrado na comissão diverge do valor contratado do contrato">⚠ valor diverge</span> ':''}${cm.revisaoNecessaria?`<span class="badge b-perdido" title="${escapeHtml(cm.revisaoNecessariaMotivo||'')}">⚠ Revisão necessária</span>`:''}</div>`:''}</td>
+    <td class="num" data-label="A receber"><span class="comm-money">${r.aReceber>0?fmtMoney(r.aReceber):'—'}</span><span class="comm-sub${grupo==='atrasada'?' red':''}">${sub}</span></td>
+    <td data-label="Repasse ao assessor" class="comm-repasse-cell">${repasseCellHtml(c, lead)}</td>
+    <td data-label="Ações"><button class="link-btn comm-open-btn" data-commexpand="${c.id}" aria-label="Abrir detalhes do contrato ${escapeHtml(c.numero)}">Detalhes ›</button></td>
+  </tr>`;
+}
+/** Gaveta lateral de detalhe do contrato: parcelas da administradora + repasse.
+ *  Todos os botões reaproveitam handlers existentes (data-editcomm abre
+ *  openCommissionForm, data-repasse* abrem openAssessorCommissionForm, etc.). */
+function comissaoDrawerHtml(c){
+  const cm = DB.commissionMeta[c.id];
+  if(!cm) return '';
+  const lead = DB.leads.find(l=>l.id===c.leadId);
+  const r = comissaoResumoContrato(cm);
+  const hoje = todayISO();
+  const parcelas = cm.parcelas.map(p=>{
+    const rot = p.status==='Recebida'?'Recebida':p.status==='Cancelada'?'Cancelada':p.status==='Estornada'?'Estornada':(p.dataPrevista<hoje?'Atrasada':'Futura');
+    const cls = p.status==='Recebida'?'b-fechado':(p.status==='Cancelada'||p.status==='Estornada')?'b-cancel':(p.dataPrevista<hoje?'b-perdido':'b-novo');
+    return `<tr><td>${p.n}</td><td>${fmtDate(p.dataPrevista)}</td><td class="num">${fmtMoney(p.valor)}</td><td><span class="badge ${cls}">${rot}</span></td><td>${p.dataRecebida?fmtDate(p.dataRecebida):'—'}</td></tr>`;
+  }).join('');
+  const pos = r.pct===null ? 0 : r.pct;
+  const prest = (cm.prestamista && cm.prestamista.ativo)
+    ? `<section><h5>Seguro prestamista</h5><div class="small-note">Vigente ${fmtMoney(cm.prestamista.parcelas.reduce((s,p)=>(p.status==='Cancelada'||p.status==='Estornada')?s:s+p.valor,0))} · recebido ${fmtMoney(cm.prestamista.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0))} — separado da comissão principal; edite em "Ver parcelas".</div></section>` : '';
+  return `<div class="comm-drawer-scrim" data-commdrawerclose="1"></div>
+  <aside class="comm-drawer" id="commDrawer" role="dialog" aria-modal="true" aria-label="Detalhes da comissão do contrato ${escapeHtml(c.numero)}">
+    <button class="comm-drawer-x" data-commdrawerclose="1" id="commDrawerClose" aria-label="Fechar detalhes">✕</button>
+    <h3>${lead?escapeHtml(lead.nome):'—'}</h3>
+    <div class="comm-drawer-meta">Contrato ${escapeHtml(c.numero)} · ${displayAdmin(resolveCommissionAdministradora(cm, c))}${lead&&lead.responsavel?' · Assessor '+escapeHtml(lead.responsavel):''} · ${commissaoSituacao(cm)} · Crédito ${fmtMoney(cm.valorVenda)} (${cm.percentual}%)</div>
+    <div class="comm-drawer-kpis"><div><span>Comissão total</span><b>${fmtMoney(r.totalVigente)}</b></div><div><span>Recebido</span><b style="color:var(--green);">${fmtMoney(r.recebido)}</b></div><div><span>A receber</span><b>${fmtMoney(r.aReceber)}</b></div></div>
+    <div class="comm2"><div class="comm-bar ${r.pct===100?'done':''}"><i style="width:${pos}%;"></i></div></div>
+    <section><h5>Recebimentos da administradora</h5>
+      <table class="parcel-table comm-mini-parcel-table"><thead><tr><th>Nº</th><th>Vencimento</th><th class="num">Valor</th><th>Situação</th><th>Recebido em</th></tr></thead><tbody>${parcelas}</tbody></table>
+      ${cm.ajustadaManualmente? '<p class="small-note" style="padding:8px 2px;">⚠ Comissão deste contrato foi ajustada manualmente — os valores acima refletem o ajuste, não a regra padrão original.</p>' : ''}
+      ${cm.revisaoNecessaria? `<p class="small-note" style="padding:4px 2px;color:var(--red);">⚠ ${escapeHtml(cm.revisaoNecessariaMotivo||'Revisão necessária.')}</p>` : ''}
+      <p class="small-note" style="padding:4px 2px 0;">Para marcar parcelas como recebidas ou editar valores/datas, use "Ver parcelas".</p>
+    </section>
+    ${prest}
+    <section><h5>Repasse ao assessor</h5><div class="comm-repcard comm-repasse-cell">${repasseCellHtml(c, lead)}</div></section>
+    <div class="comm-drawer-foot">
+      <button class="pill-btn ghost sm" data-opencontrato="${c.id}" data-lead="${lead?lead.id:''}">Abrir contrato</button>
+      ${lead?`<button class="pill-btn ghost sm" data-opencliente="${lead.id}" data-tab="comissoes">Abrir cliente</button>`:''}
+      <button class="pill-btn sm" data-editcomm="${c.id}">Ver parcelas</button>
+    </div>
+  </aside>`;
+}
+/** Estado do repasse de UM registro (mesmas regras de repasseAssessorResumo,
+ *  que agrega por contrato) — para a tela "Repasses aos assessores". */
+function repasseEstadoRegistro(ac){
+  if(ac.status==='Cancelada') return 'cancelado';
+  const hoje = todayISO();
+  let pago=0, pendente=0, vencido=false;
+  ac.parcelas.forEach(p=>{
+    if(p.status==='Paga'){ pago += Number(p.valorPago||p.valor)||0; return; }
+    if(p.status==='Cancelada' || p.status==='Estornada') return;
+    pendente += Number(p.valor)||0;
+    const v = p.vencimento||'';
+    if(p.status==='Vencida' || (p.status!=='Suspensa' && v && v<hoje)) vencido = true;
+  });
+  const cm = DB.commissionMeta[ac.contractId];
+  const prestPendente = !!cm && !!cm.prestamista && !!cm.prestamista.ativo && (cm.prestamista.parcelas||[]).some(p=>p.status==='Pendente');
+  const aguardando = ac.modalidade==='proporcional25' && !!cm && (cm.parcelas.some(p=>p.status==='Pendente') || (ac.incluiPrestamista && prestPendente));
+  if(vencido) return 'vencido';
+  if(pendente>0) return 'pendente';
+  if(pago>0 && !aguardando) return 'pago';
+  return 'ativo';
 }
 function viewComissoesEscritorio(){
   // Comissão agora é por CONTRATO (item 3) — um cliente pode ter vários
@@ -15112,140 +15395,154 @@ function viewComissoesEscritorio(){
     : 'Parcelas não recebidas com vencimento anterior à data atual.';
   const tooltipRecebidoMes = 'Parcelas efetivamente recebidas com data de recebimento no mês atual. Representa caixa (dataRecebida) — não é afetado pelo filtro de competência. Uma parcela cuja competência (dataPrevista) é de um mês anterior aparece aqui se foi recebida agora — identificado no detalhamento. Clique para ver os recebimentos.';
 
+  // ---- v36_45 — apresentação redesenhada. Tudo acima (totais, tooltips, filtros) é
+  // o mesmo cálculo de antes; abaixo só se reorganiza o que já foi apurado. ----
+  const contagem = comissoesContagemPorSituacao();
+  const ordemGrupo = { atrasada:0, proximos30:1, depois:2, semPendencia:3 };
+  const itens = contratosComComissao.map(c=>{ const cm = DB.commissionMeta[c.id]; return { c, cm, lead:leadsById.get(c.leadId), g:comissaoGrupoUrgencia(cm), prox:commissaoProximaParcela(cm) }; })
+    .sort((a,b)=> (ordemGrupo[a.g]-ordemGrupo[b.g])
+      || String(a.prox?a.prox.dataPrevista:'9999-99-99').localeCompare(String(b.prox?b.prox.dataPrevista:'9999-99-99'))
+      || String(a.lead?a.lead.nome:'').localeCompare(String(b.lead?b.lead.nome:''),'pt-BR'));
+  const resumoGrupo = {};
+  itens.forEach(it=>{ const g = resumoGrupo[it.g] || (resumoGrupo[it.g] = {n:0, aReceber:0}); g.n++; g.aReceber += comissaoResumoContrato(it.cm).aReceber; });
+  let grupoAtual = '';
+  const linhasHtml = itens.slice(0, commissionsPageLimit).map(it=>{
+    let cab = '';
+    if(it.g!==grupoAtual){
+      grupoAtual = it.g;
+      const def = COMM_GRUPOS.find(x=>x.id===it.g), rg = resumoGrupo[it.g];
+      cab = `<tr class="comm-grp${def.late?' late':''}"><td colspan="6">${def.titulo}<span>${rg.n} contrato${rg.n===1?'':'s'}${rg.aReceber>0?' · '+fmtMoney(rg.aReceber):''}</span></td></tr>`;
+    }
+    return cab + comissaoLinhaHtml(it.c, it.cm, it.lead, it.g);
+  }).join('');
+  const nPendentes = contratosComComissao.reduce((s,c)=> s + DB.commissionMeta[c.id].parcelas.filter(p=>p.status==='Pendente' && (!comissoesFilters.competencia || p.dataPrevista.slice(0,7)===comissoesFilters.competencia)).length, 0);
+  const filtrosAtivos = !!(comissoesFilters.situacao!=='Todos'||comissoesFilters.repasse||comissoesFilters.busca||comissoesFilters.administradora!=='Todas'||comissoesFilters.assessor!=='Todos'||comissoesFilters.competencia);
+  const REPASSE_OPCOES = [{id:'',label:'Todos'},{id:'vista',label:'À vista'},{id:'parcelado',label:'Parcelado'},{id:'nao',label:'Não configurado'},{id:'pago',label:'Pago'},{id:'pendente',label:'Pendente'},{id:'vencido',label:'Vencido'}];
+  const repasseAtual = REPASSE_OPCOES.find(o=>o.id===(comissoesFilters.repasse||'')) || REPASSE_OPCOES[0];
+  const nSemRepasse = contratosComComissao.filter(c=>repasseAssessorResumo(c.id).estado==='naoConfigurado').length;
+  const abasSituacao = [{id:'Todos',label:'Todos'},{id:'aReceber',label:'A receber'},{id:'esteMes',label:'Previsto no mês'},{id:'atrasadas',label:'Atrasadas',warn:true},{id:'recebidas',label:'Com recebimentos'},{id:'cancelado',label:'Canceladas'}];
+  const abasAnalise = [{id:'cronograma',label:'Cronograma 12 meses'},{id:'proximos',label:'Próximos recebimentos'},{id:'assessor',label:'Por assessor'},{id:'admin',label:'Por administradora'}];
+  const analiseAtiva = abasAnalise.some(a=>a.id===comissoesAnaliseTab) ? comissoesAnaliseTab : 'cronograma';
+  const drawerContrato = comissoesDrawerId ? DB.contracts.find(x=>x.id===comissoesDrawerId && DB.commissionMeta[x.id]) : null;
+
   return `
-  <div class="comm-header">
-    <div>
-      <div class="comm-title">Comissões</div>
-      <div class="comm-subtitle">Central financeira de acompanhamento das comissões geradas pelos contratos</div>
+  <div class="comm2">
+  <details class="comm-help">
+    <summary>ⓘ Como ler estes números</summary>
+    <div class="comm-help-body">
+      <dl>
+        <dt>A receber</dt><dd>${escapeHtml(tooltipAReceber)}</dd>
+        <dt>Previsto no mês</dt><dd>${escapeHtml(tooltipEsteMes)}</dd>
+        <dt>Atrasado</dt><dd>${escapeHtml(tooltipAtrasado)}</dd>
+        <dt>Recebido no mês</dt><dd>${escapeHtml(tooltipRecebidoMes)}</dd>
+        <dt>Cancelado</dt><dd>Parcelas canceladas por cancelamento de cota/contrato — nunca contam mais como a receber. Parcelas já recebidas antes do cancelamento não entram aqui (continuam em "Recebido").</dd>
+      </dl>
+      <p>Central financeira de acompanhamento das comissões geradas pelos contratos. As regras de comissão (percentual, parcelas, início) são definidas em Configurações → Comissões e ficam registradas no contrato no momento do fechamento — alterações futuras na regra não afetam comissões já geradas. Cada contrato gera sua própria comissão — um cliente com vários contratos aparece várias vezes aqui, uma por contrato. A comissão de seguro prestamista (quando houver) é sempre separada da comissão principal — nunca somada nos valores acima. Ela só entra no repasse ao assessor quando a opção "Incluir prestamista" estiver ativada na modalidade 25% parcelado.</p>
+      <p>As linhas são agrupadas por urgência (Atrasadas → Próximos 30 dias → Depois de 30 dias → Sem parcela pendente) e ordenadas pela data da próxima parcela. A barra mostra quanto da comissão vigente já foi recebido; o ponto laranja marca a posição atual, antes da próxima parcela.</p>
     </div>
-  </div>
+  </details>
 
   <div class="comm-hero-strip">
     <div class="comm-hero-item comm-hero-main" title="${escapeHtml(tooltipAReceber)}">
       <div class="comm-hero-label">A receber ⓘ</div>
-      <div class="comm-hero-value">${fmtMoney(totPendente)}</div>
+      <div class="comm-hero-value" title="${fmtMoney(totPendente)}">${fmtMoney(totPendente)}</div>
+      <div class="comm-hero-sub">${nPendentes} parcela${nPendentes===1?'':'s'} pendente${nPendentes===1?'':'s'}</div>
     </div>
     <div class="comm-hero-item clickable" id="commHeroPrevistoMes" tabindex="0" title="${escapeHtml(tooltipEsteMes)}">
       <div class="comm-hero-label">Previsto no mês ⓘ</div>
-      <div class="comm-hero-value">${fmtMoney(totMes)}</div>
+      <div class="comm-hero-value" title="${fmtMoney(totMes)}">${fmtMoney(totMes)}</div>
       <div class="comm-hero-sub">${parcelasPrevistasMes.length} parcela${parcelasPrevistasMes.length===1?'':'s'}</div>
     </div>
     <div class="comm-hero-item ${totAtrasadasCount?'clickable crit':''}" ${totAtrasadasCount?'id="commHeroAtrasado" tabindex="0"':''} title="${escapeHtml(tooltipAtrasado)}">
       <div class="comm-hero-label">Atrasado ⓘ</div>
-      <div class="comm-hero-value">${fmtMoney(totAtrasadas)}</div>
-      ${totAtrasadasCount? `<div class="comm-hero-sub">${totAtrasadasCount} parcela${totAtrasadasCount===1?'':'s'}</div>` : ''}
+      <div class="comm-hero-value" title="${fmtMoney(totAtrasadas)}">${fmtMoney(totAtrasadas)}</div>
+      ${totAtrasadasCount? `<div class="comm-hero-sub">${totAtrasadasCount} parcela${totAtrasadasCount===1?'':'s'} · ver</div>` : ''}
     </div>
     <div class="comm-hero-item clickable" id="commHeroRecebidoMes" tabindex="0" title="${escapeHtml(tooltipRecebidoMes)}">
       <div class="comm-hero-label">Recebido no mês ⓘ</div>
-      <div class="comm-hero-value" style="color:var(--green);">${fmtMoney(totRecebidoNoMes)}</div>
+      <div class="comm-hero-value" style="color:var(--green);" title="${fmtMoney(totRecebidoNoMes)}">${fmtMoney(totRecebidoNoMes)}</div>
       <div class="comm-hero-sub">${parcelasRecebidasMes.length} recebimento${parcelasRecebidasMes.length===1?'':'s'}</div>
     </div>
     <div class="comm-hero-item ${totCanceladoCount?'clickable':''}" ${totCanceladoCount?'data-commsituacao="cancelado" tabindex="0"':''} title="Parcelas canceladas por cancelamento de cota/contrato — nunca contam mais como a receber. Parcelas já recebidas antes do cancelamento não entram aqui (continuam em 'Recebido').">
       <div class="comm-hero-label">Cancelado ⓘ</div>
-      <div class="comm-hero-value" style="color:var(--ink-soft);">${fmtMoney(totCancelado)}</div>
+      <div class="comm-hero-value" style="color:var(--ink-soft);" title="${fmtMoney(totCancelado)}">${fmtMoney(totCancelado)}</div>
       ${totCanceladoCount? `<div class="comm-hero-sub">${totCanceladoCount} parcela${totCanceladoCount===1?'':'s'}</div>` : ''}
     </div>
   </div>
-  <p class="small-note comm-secondary-line">Futuras ${fmtMoney(totFuturas)} · Recebido${comissoesFilters.competencia?' (competência selecionada)':' (total, todas as competências)'} ${fmtMoney(totRecebido)} · Cancelado ${fmtMoney(totCancelado)} · Ajustadas manualmente ${totAjustadas} · Prestamista vigente ${fmtMoney(totPrestamistaPrevisto)} · Total consolidado vigente (principal + prestamista, exclui cancelado/estornado) ${fmtMoney(totPrincipalPrevisto+totPrestamistaPrevisto)}</p>
-  <p class="small-note" style="margin-bottom:14px;">As regras de comissão (percentual, parcelas, início) são definidas em Configurações → Comissões e ficam registradas no contrato no momento do fechamento — alterações futuras na regra não afetam comissões já geradas. Cada contrato gera sua própria comissão — um cliente com vários contratos aparece várias vezes aqui, uma por contrato. A comissão de seguro prestamista (quando houver) é sempre separada da comissão principal — nunca somada nos valores acima. Ela só entra no repasse ao assessor quando a opção "Incluir prestamista" estiver ativada na modalidade 25% parcelado.</p>
+  <details class="comm-more">
+    <summary>Mais totais</summary>
+    <p class="small-note comm-secondary-line">Futuras ${fmtMoney(totFuturas)} · Recebido${comissoesFilters.competencia?' (competência selecionada)':' (total, todas as competências)'} ${fmtMoney(totRecebido)} · Cancelado ${fmtMoney(totCancelado)} · Ajustadas manualmente ${totAjustadas} · Prestamista vigente ${fmtMoney(totPrestamistaPrevisto)} · Total consolidado vigente (principal + prestamista, exclui cancelado/estornado) ${fmtMoney(totPrincipalPrevisto+totPrestamistaPrevisto)}</p>
+  </details>
 
-  <div class="filter-bar comm-filter-bar">
-    <input type="text" id="commSearch" placeholder="Buscar por cliente ou contrato" value="${escapeHtml(comissoesFilters.busca)}" style="min-width:220px;">
-    <select id="commFilterAdmin"><option value="Todas">Todas as administradoras</option>${DB.settings.administradoras.map(a=>`<option ${comissoesFilters.administradora===a?'selected':''}>${escapeHtml(a)}</option>`).join('')}</select>
-    <select id="commFilterAssessor"><option value="Todos">Todos os assessores</option>${DB.settings.assessores.map(a=>`<option ${comissoesFilters.assessor===a?'selected':''}>${escapeHtml(a)}</option>`).join('')}</select>
-    <input type="month" id="commFilterComp" value="${comissoesFilters.competencia}" title="Competência: filtra A receber, Atrasado e Recebido pela data PREVISTA da parcela. Não afeta Previsto no mês, Recebido no mês, Próximos recebimentos nem o Cronograma.">
-    <span class="small-note" style="margin-left:auto;white-space:nowrap;">${contratosComComissao.length} contrato${contratosComComissao.length===1?'':'s'}</span>
-  </div>
-  <div class="comm-quickviews">
-    ${[{id:'Todos',label:'Todos'},{id:'aReceber',label:'A receber'},{id:'esteMes',label:'Previsto no mês'},{id:'atrasadas',label:'Atrasadas'},{id:'recebidas',label:'Com recebimentos'},{id:'cancelado',label:'Canceladas'}].map(q=>`<button class="pill-btn ghost sm ${comissoesFilters.situacao===q.id?'active':''}" data-commsituacao="${q.id}">${q.label}</button>`).join('')}
-  </div>
-  <div class="comm-quickviews" role="group" aria-label="Filtrar por repasse ao assessor">
-    <span class="small-note" style="align-self:center;">Repasse ao assessor:</span>
-    ${[{id:'',label:'Todos'},{id:'vista',label:'À vista'},{id:'parcelado',label:'Parcelado'},{id:'nao',label:'Não configurado'},{id:'pago',label:'Pago'},{id:'pendente',label:'Pendente'},{id:'vencido',label:'Vencido'}].map(q=>`<button class="pill-btn ghost sm ${(comissoesFilters.repasse||'')===q.id?'active':''}" data-commrepasse="${q.id}" aria-pressed="${(comissoesFilters.repasse||'')===q.id}">${q.label}</button>`).join('')}
-  </div>
-
-  ${proximosRecebimentos.length? `<div class="comm-section-title">Próximos recebimentos</div>
-  <p class="small-note" style="margin-top:-6px;margin-bottom:8px;">Segue o mesmo escopo de administradora/assessor/busca/situação da tabela abaixo. Continua cronológico mesmo com uma competência específica selecionada — não some por o filtro apontar para outro mês.</p>
-  <div class="card comm-proximos" style="padding:0;">
-    ${proximosRecebimentos.map(p=>`<div class="comm-proximo-row ${p.atrasada?'crit':''}">
-      <div class="comm-proximo-data">${fmtDate(p.data)}</div>
-      <div class="comm-proximo-main"><b>${fmtMoney(p.valor)}</b> <span class="clientes-td-sub">${escapeHtml(p.cliente)} · ${displayAdmin(p.administradora)} · ${escapeHtml(p.contrato)}</span></div>
-    </div>`).join('')}
-    <div style="padding:10px 16px;"><a href="#comm-cronograma" class="link-btn">Ver cronograma completo</a></div>
+  ${(contratosSemComissao.length || nSemRepasse) ? `<div class="comm-alerts">
+    ${contratosSemComissao.length ? `<div class="comm-alert">⚠ ${contratosSemComissao.length} contrato${contratosSemComissao.length===1?'':'s'} sem comissão configurada <button type="button" data-commscroll="comm-semcomissao">Configurar</button></div>` : ''}
+    ${nSemRepasse ? `<div class="comm-alert">⚠ ${nSemRepasse} contrato${nSemRepasse===1?'':'s'} sem repasse ao assessor <button type="button" data-commrepasse="nao">Ver</button></div>` : ''}
   </div>` : ''}
 
-  <div class="comm-section-title">Comissões por contrato</div>
+  <div class="comm-toolbar comm-filter-bar">
+    <input type="text" id="commSearch" placeholder="Buscar por cliente ou contrato" value="${escapeHtml(comissoesFilters.busca)}" aria-label="Buscar por cliente ou contrato">
+    <select id="commFilterAdmin" aria-label="Administradora" class="${comissoesFilters.administradora!=='Todas'?'is-active':''}"><option value="Todas">Todas as administradoras</option>${DB.settings.administradoras.map(a=>`<option ${comissoesFilters.administradora===a?'selected':''}>${escapeHtml(a)}</option>`).join('')}</select>
+    <select id="commFilterAssessor" aria-label="Assessor" class="${comissoesFilters.assessor!=='Todos'?'is-active':''}"><option value="Todos">Todos os assessores</option>${DB.settings.assessores.map(a=>`<option ${comissoesFilters.assessor===a?'selected':''}>${escapeHtml(a)}</option>`).join('')}</select>
+    <input type="month" id="commFilterComp" value="${comissoesFilters.competencia}" aria-label="Competência" class="${comissoesFilters.competencia?'is-active':''}" title="Competência: filtra A receber, Atrasado e Recebido pela data PREVISTA da parcela. Não afeta Previsto no mês, Recebido no mês, Próximos recebimentos nem o Cronograma.">
+    <details class="comm-menu">
+      <summary class="comm-field ${comissoesFilters.repasse?'is-active':''}" aria-label="Filtrar por repasse ao assessor">Repasse ao assessor${comissoesFilters.repasse?': '+repasseAtual.label:''} ▾</summary>
+      <div class="comm-menu-pop" role="group" aria-label="Filtrar por repasse ao assessor">
+        ${REPASSE_OPCOES.map(q=>`<button type="button" class="${(comissoesFilters.repasse||'')===q.id?'active':''}" data-commrepasse="${q.id}" aria-pressed="${(comissoesFilters.repasse||'')===q.id}">${q.label}</button>`).join('')}
+      </div>
+    </details>
+    ${filtrosAtivos ? '<button type="button" class="link-btn" id="commClearFilters">Limpar filtros</button>' : ''}
+    <span class="comm-count">${contratosComComissao.length} contrato${contratosComComissao.length===1?'':'s'}</span>
+  </div>
+  <div class="comm-tabs comm-quickviews" role="group" aria-label="Filtrar por situação">
+    ${abasSituacao.map(q=>`<button type="button" class="${comissoesFilters.situacao===q.id?'active':''}${q.warn&&contagem[q.id]?' warn':''}" data-commsituacao="${q.id}" aria-pressed="${comissoesFilters.situacao===q.id}">${q.label}<i>${contagem[q.id]}</i></button>`).join('')}
+  </div>
+
+  <div class="comm-section-title" style="margin-top:0;">Comissões por contrato</div>
   <div class="small-note" style="margin-bottom:8px;">${Math.min(contratosComComissao.length, commissionsPageLimit)} de ${contratosComComissao.length} contrato${contratosComComissao.length===1?'':'s'}</div>
   <div class="table-wrap"><table class="comm-table">
-  <thead><tr><th></th><th>Cliente / contrato</th><th>Administradora</th><th class="num">Crédito contratado</th><th class="num">Comissão total</th><th class="num">Recebido</th><th class="num">A receber</th><th>Próxima parcela</th><th>Situação</th><th>Repasse ao assessor</th><th></th></tr></thead>
-  <tbody>${contratosComComissao.length? contratosComComissao.slice(0, commissionsPageLimit).map(c=>{
-    const cm = DB.commissionMeta[c.id];
-    const lead = leadsById.get(c.leadId);
-    const recebido = cm.parcelas.filter(p=>p.status==='Recebida').reduce((s,p)=>s+(p.valorRecebido||p.valor),0);
-    // v36_38 — "A receber" soma direto as parcelas 'Pendente' (nunca mais
-    // totalPrevisto-recebido, que incluía silenciosamente o que foi cancelado).
-    const aReceber = cm.parcelas.filter(p=>p.status==='Pendente').reduce((s,p)=>s+p.valor,0);
-    const cancelado = cm.parcelas.filter(p=>p.status==='Cancelada'||p.status==='Estornada').reduce((s,p)=>s+p.valor,0);
-    // v36_39 (item 5) — "Comissão total" e o % da barra de progresso usam o
-    // valor VIGENTE (recebido+pendente), nunca cm.totalPrevisto puro (não é
-    // decrementado no cancelamento — inflaria a coluna e sub-avaliaria o %
-    // recebido em qualquer contrato com cancelamento parcial ou total).
-    const totalVigente = recebido + aReceber;
-    const proxima = commissaoProximaParcela(cm);
-    const divergente = Math.abs(Number(c.valorContratado||0) - Number(cm.valorVenda||0)) > 0.01;
-    const situacao = commissaoSituacao(cm);
-    const situacaoBadge = situacao==='Quitada'?'b-fechado':situacao==='Atrasada'?'b-perdido':situacao==='Cancelada'?'b-cancel':'b-novo';
-    const pct = totalVigente>0 ? Math.min(100, Math.round((recebido/totalVigente)*100)) : null;
-    const expanded = comissoesExpandedRows.has(c.id);
-    return `<tr>
-      <td><button class="link-btn comm-expand-btn" data-commexpand="${c.id}" aria-expanded="${expanded}" aria-label="${expanded?'Recolher':'Expandir'} parcelas do contrato ${escapeHtml(c.numero)}">${expanded?'▾':'▸'}</button></td>
-      <td data-label="Cliente / contrato">${lead?`<button class="link-btn comm-link-cliente" data-opencliente="${lead.id}" data-tab="comissoes" title="Abrir ficha do cliente (aba Comissões)"><b>${escapeHtml(lead.nome)}</b></button>`:'<b>—</b>'}<div class="clientes-td-sub"><button class="link-btn comm-link-contrato" data-opencontrato="${c.id}" data-lead="${lead?lead.id:''}" title="Abrir contrato">${escapeHtml(c.numero)}</button>${lead&&lead.responsavel?' · '+escapeHtml(lead.responsavel):''}</div></td>
-      <td data-label="Administradora">${displayAdmin(resolveCommissionAdministradora(cm, c))}</td>
-      <td class="num" data-label="Crédito contratado">${fmtMoney(cm.valorVenda)}${divergente?' <span class="badge b-perdido" title="Valor vendido registrado na comissão diverge do valor contratado do contrato">⚠</span>':''}</td>
-      <td class="num" data-label="Comissão total">${fmtMoney(totalVigente)}<div class="clientes-td-sub">${cm.percentual}%${cancelado?' · '+fmtMoney(cancelado)+' cancelado':''}</div></td>
-      <td class="num" data-label="Recebido">${fmtMoney(recebido)}${pct!==null?`<div class="comm-progress" title="${pct}% recebido"><div class="comm-progress-fill" style="width:${pct}%;"></div></div>`:''}</td>
-      <td class="num" data-label="A receber">${fmtMoney(aReceber)}</td>
-      <td data-label="Próxima parcela">${proxima?`${fmtDate(proxima.dataPrevista)}<div class="clientes-td-sub">${fmtMoney(proxima.valor)}</div>`:(cancelado?'Cancelada':'Todas recebidas')}</td>
-      <td data-label="Situação"><span class="badge ${situacaoBadge}">${situacao}</span>${cm.revisaoNecessaria?` <span class="badge b-perdido" title="${escapeHtml(cm.revisaoNecessariaMotivo||'')}">⚠ Revisão necessária</span>`:''}</td>
-      <td data-label="Repasse ao assessor" class="comm-repasse-cell">${repasseCellHtml(c, lead)}</td>
-      <td data-label="Ações"><button class="link-btn" data-editcomm="${c.id}">Ver parcelas</button></td>
-    </tr>
-    ${expanded? `<tr class="comm-expand-row"><td></td><td colspan="10">
-      <table class="parcel-table comm-mini-parcel-table"><thead><tr><th>Nº</th><th>Vencimento</th><th class="num">Valor</th><th>Situação</th><th>Recebido em</th></tr></thead>
-      <tbody>${cm.parcelas.map(p=>{ const rot = p.status==='Recebida'?'Recebida':p.status==='Cancelada'?'Cancelada':p.status==='Estornada'?'Estornada':(p.dataPrevista<todayISO()?'Atrasada':'Futura'); const cls = p.status==='Recebida'?'b-fechado':(p.status==='Cancelada'||p.status==='Estornada')?'b-cancel':(p.dataPrevista<todayISO()?'b-perdido':'b-novo'); return `<tr><td>${p.n}</td><td>${fmtDate(p.dataPrevista)}</td><td class="num">${fmtMoney(p.valor)}</td><td><span class="badge ${cls}">${rot}</span></td><td>${p.dataRecebida?fmtDate(p.dataRecebida):'—'}</td></tr>`; }).join('')}</tbody></table>
-      ${cm.ajustadaManualmente? '<p class="small-note" style="padding:8px 2px;">⚠ Comissão deste contrato foi ajustada manualmente — os valores acima refletem o ajuste, não a regra padrão original.</p>' : ''}
-      ${cm.revisaoNecessaria? `<p class="small-note" style="padding:4px 2px;color:var(--red);">⚠ ${escapeHtml(cm.revisaoNecessariaMotivo||'Revisão necessária.')}</p>` : ''}
-      <p class="small-note" style="padding:4px 2px 10px;">Para marcar parcelas como recebidas ou editar valores/datas, use "Ver parcelas".</p>
-    </td></tr>` : ''}
-    `;
-  }).join('') : `<tr><td colspan=11 class="empty">Nenhuma comissão encontrada com os filtros atuais.${(comissoesFilters.situacao!=='Todos'||comissoesFilters.repasse||comissoesFilters.busca||comissoesFilters.administradora!=='Todas'||comissoesFilters.assessor!=='Todos'||comissoesFilters.competencia)?' <button class="link-btn" id="commClearFilters">Limpar filtros</button>':' Comissões aparecem aqui assim que um contrato é gerado e a comissão é configurada.'}</td></tr>`}</tbody></table></div>
+  <colgroup><col style="width:21%"><col style="width:12%"><col style="width:21%"><col style="width:15%"><col><col style="width:84px"></colgroup>
+  <thead><tr><th>Cliente / contrato</th><th>Administradora</th><th>Comissão recebida</th><th class="num">A receber</th><th>Repasse ao assessor</th><th></th></tr></thead>
+  <tbody>${contratosComComissao.length ? linhasHtml : `<tr><td colspan="6" class="empty">Nenhuma comissão encontrada com os filtros atuais.${filtrosAtivos?' <button class="link-btn" data-commclear="1">Limpar filtros</button>':' Comissões aparecem aqui assim que um contrato é gerado e a comissão é configurada.'}</td></tr>`}</tbody></table></div>
   ${contratosComComissao.length>commissionsPageLimit ? `<div style="text-align:center;padding:14px;"><button class="pill-btn ghost sm" id="btnLoadMoreCommissions">Carregar mais (${contratosComComissao.length-commissionsPageLimit} restante(s))</button></div>` : ''}
 
-  <div class="comm-section-title" id="comm-cronograma">Cronograma de comissões (próximos 12 meses)</div>
-  <p class="small-note" style="margin-top:-6px;margin-bottom:10px;">Mesmo escopo de administradora/assessor/busca/situação da tabela acima. Não é filtrado por competência — o gráfico existe justamente para mostrar a distribuição ao longo dos 12 meses; reduzi-lo a um único mês eliminaria esse propósito.</p>
-  <div class="comm-chart-card"><div class="comm-chart-body"><canvas id="commSchedChart"></canvas></div></div>
-
-  <div class="comm-grid-2">
-    <div>
-      <div class="comm-section-title">Comissão do escritório por carteira do assessor</div>
-      <p class="small-note" style="margin-top:-6px;margin-bottom:8px;">Soma da comissão que o escritório recebe da administradora dos clientes de cada assessor — não é o valor efetivamente pago ao assessor (esse está na coluna "Repasse ao assessor" e na aba "Comissões dos assessores").</p>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Assessor</th><th class="num">Comissão total</th><th class="num">Recebido</th><th class="num">A receber</th></tr></thead>
-        <tbody>${(function(){ const rows=comissaoPorAssessor(contratosComComissao); return rows.length? rows.map(r=>`<tr><td>${escapeHtml(r.nome)}</td><td class="num">${fmtMoney(r.total)}</td><td class="num">${fmtMoney(r.recebido)}</td><td class="num">${fmtMoney(r.aReceber)}</td></tr>`).join('') : '<tr><td colspan=4 class="empty">Sem dados</td></tr>'; })()}</tbody>
-      </table></div>
+  <div class="card comm-analises" id="comm-cronograma">
+    <div class="comm-analises-hd">
+      <h3 class="comm-section-title">Análises</h3>
+      <div class="comm-tabs" role="tablist" aria-label="Análises">${abasAnalise.map(a=>`<button type="button" role="tab" class="${analiseAtiva===a.id?'active':''}" aria-selected="${analiseAtiva===a.id}" data-commanalise="${a.id}">${a.label}</button>`).join('')}</div>
     </div>
-    <div>
-      <div class="comm-section-title">Comissões por administradora</div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Administradora</th><th class="num">A receber</th><th class="num">Este mês</th><th class="num">Atrasado</th></tr></thead>
-        <tbody>${(function(){ const rows=comissaoPorAdministradora(contratosComComissao); return rows.length? rows.map(r=>`<tr><td>${displayAdmin(r.nome)}</td><td class="num">${fmtMoney(r.aReceber)}</td><td class="num">${fmtMoney(r.esteMes)}</td><td class="num">${fmtMoney(r.atrasado)}</td></tr>`).join('') : '<tr><td colspan=4 class="empty">Sem dados</td></tr>'; })()}</tbody>
-      </table></div>
+    <div class="comm-analises-body">
+      <div ${analiseAtiva==='cronograma'?'':'hidden'}>
+        <p class="small-note" style="margin:0 0 10px;">Mesmo escopo de administradora/assessor/busca/situação da tabela acima. Não é filtrado por competência — o gráfico existe justamente para mostrar a distribuição ao longo dos 12 meses; reduzi-lo a um único mês eliminaria esse propósito.</p>
+        ${analiseAtiva==='cronograma' ? `<div class="comm-chart-card"><div class="comm-chart-body"><canvas id="commSchedChart"></canvas></div></div>` : ''}
+      </div>
+      <div ${analiseAtiva==='proximos'?'':'hidden'}>
+        <p class="small-note" style="margin:0 0 8px;">Segue o mesmo escopo de administradora/assessor/busca/situação da tabela. Continua cronológico mesmo com uma competência específica selecionada — não some por o filtro apontar para outro mês.</p>
+        ${proximosRecebimentos.length ? `<div class="comm-proximos">${proximosRecebimentos.map(p=>`<div class="comm-proximo-row ${p.atrasada?'crit':''}">
+          <div class="comm-proximo-data">${fmtDate(p.data)}</div>
+          <div class="comm-proximo-main"><b>${fmtMoney(p.valor)}</b> <span class="clientes-td-sub">${escapeHtml(p.cliente)} · ${displayAdmin(p.administradora)} · ${escapeHtml(p.contrato)}</span></div>
+        </div>`).join('')}</div>` : '<div class="empty" style="padding:10px 0;">Nenhum recebimento pendente com os filtros atuais.</div>'}
+      </div>
+      <div ${analiseAtiva==='assessor'?'':'hidden'}>
+        <p class="small-note" style="margin:0 0 8px;"><b>Comissão do escritório por carteira do assessor</b> — soma da comissão que o escritório recebe da administradora dos clientes de cada assessor — não é o valor efetivamente pago ao assessor (esse está na coluna "Repasse ao assessor" e na aba "Repasses aos assessores").</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Assessor</th><th class="num">Comissão total</th><th class="num">Recebido</th><th class="num">A receber</th></tr></thead>
+          <tbody>${(function(){ const rows=comissaoPorAssessor(contratosComComissao); return rows.length? rows.map(r=>`<tr><td>${escapeHtml(r.nome)}</td><td class="num">${fmtMoney(r.total)}</td><td class="num">${fmtMoney(r.recebido)}</td><td class="num">${fmtMoney(r.aReceber)}</td></tr>`).join('') : '<tr><td colspan=4 class="empty">Sem dados</td></tr>'; })()}</tbody>
+        </table></div>
+      </div>
+      <div ${analiseAtiva==='admin'?'':'hidden'}>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Administradora</th><th class="num">A receber</th><th class="num">Este mês</th><th class="num">Atrasado</th></tr></thead>
+          <tbody>${(function(){ const rows=comissaoPorAdministradora(contratosComComissao); return rows.length? rows.map(r=>`<tr><td>${displayAdmin(r.nome)}</td><td class="num">${fmtMoney(r.aReceber)}</td><td class="num">${fmtMoney(r.esteMes)}</td><td class="num">${fmtMoney(r.atrasado)}</td></tr>`).join('') : '<tr><td colspan=4 class="empty">Sem dados</td></tr>'; })()}</tbody>
+        </table></div>
+      </div>
     </div>
   </div>
 
-  ${contratosSemComissao.length? `<div class="comm-section-title">Contratos sem comissão configurada</div>
+  ${contratosSemComissao.length? `<div class="comm-section-title" id="comm-semcomissao">Contratos sem comissão configurada</div>
   <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Contrato</th><th>Administradora</th><th></th></tr></thead>
   <tbody>${contratosSemComissao.map(c=>{ const lead=leadsById.get(c.leadId); return `<tr><td data-label="Cliente">${lead?`<button class="link-btn" data-opencliente="${lead.id}" data-tab="comissoes"><b>${escapeHtml(lead.nome)}</b></button>`:'—'}</td><td data-label="Contrato"><button class="link-btn" data-opencontrato="${c.id}" data-lead="${lead?lead.id:''}">${escapeHtml(c.numero)}</button>${c.cancelado?' <span class="badge b-cancel">Cancelado</span>':''}</td><td data-label="Administradora">${displayAdmin(resolveContractAdministradora(c))}</td><td data-label="Ações"><button class="link-btn" data-manualcomm="${c.id}">Configurar comissão</button></td></tr>`; }).join('')}</tbody></table></div>` : ''}
+  ${drawerContrato ? comissaoDrawerHtml(drawerContrato) : ''}
+  </div>
   `;
 }
 /* ================= COMISSÕES DOS ASSESSORES (aba própria, v36_38) =================
@@ -15271,69 +15568,111 @@ function viewComissoesAssessores(){
   const leadsById = new Map(DB.leads.map(l=>[l.id,l]));
   const assessoresById = new Map(DB.assessores.map(a=>[a.id,a]));
   const MODALIDADE_LABEL = {vista20:'20% à vista', proporcional25:'25% parcelado', legado:'Legado'};
-  const rows = DB.assessorCommissions
+  const hoje = todayISO();
+  // linhas conforme os filtros de busca/assessor/modalidade/status (mesmos de antes)
+  const linhasFiltradas = DB.assessorCommissions
     .map(ac=>({ac, lead:leadsById.get(ac.leadId), assessor:assessoresById.get(ac.assessorId), contract: ac.contractId?DB.contracts.find(c=>c.id===ac.contractId):null}))
     .filter(r=> assessorCommMatchesFilters(r.ac, r.lead, r.assessor));
 
   // v36_39 (item 5) — "Previsto" é o valor VIGENTE (pago + ainda pendente) —
   // parcelas Cancelada/Estornada saem inteiramente daqui e só contam no
   // card "Cancelado" separado (antes somava tudo, qualquer status).
-  let totPrevisto=0, totPago=0, totPendente=0, totCancelado=0;
-  rows.forEach(({ac})=>{
+  let totPrevisto=0, totPago=0, totPendente=0, totCancelado=0, totVencido=0, nVencidas=0;
+  linhasFiltradas.forEach(({ac})=>{
     ac.parcelas.forEach(p=>{
       const v = Number(p.valor)||0;
       if(p.status==='Paga'){ totPago += Number(p.valorPago||p.valor)||0; totPrevisto += v; }
       else if(p.status==='Cancelada'||p.status==='Estornada'){ totCancelado += v; }
-      else { totPendente += v; totPrevisto += v; }
+      else {
+        totPendente += v; totPrevisto += v;
+        if(p.status==='Vencida' || (p.status!=='Suspensa' && p.vencimento && p.vencimento<hoje)){ totVencido += v; nVencidas++; }
+      }
     });
   });
 
+  // v36_45 — abas por estado (os 5 rótulos de REPASSE_ESTADO_ROTULO), com contagem
+  const estadoDe = r=> repasseEstadoRegistro(r.ac);
+  const contagem = { todos: linhasFiltradas.length, vencido:0, pendente:0, ativo:0, pago:0, cancelado:0 };
+  linhasFiltradas.forEach(r=>{ contagem[estadoDe(r)]++; });
+  const abas = [{id:'todos',label:'Todos'},{id:'vencido',label:'Vencidos',warn:true},{id:'pendente',label:'Pendentes de pagamento'},{id:'ativo',label:'Aguardando administradora'},{id:'pago',label:'Pagos'},{id:'cancelado',label:'Cancelados'}];
+  const estadoAtivo = abas.some(a=>a.id===assessorCommEstado) ? assessorCommEstado : 'todos';
+  const rows = estadoAtivo==='todos' ? linhasFiltradas : linhasFiltradas.filter(r=>estadoDe(r)===estadoAtivo);
+  const CLASSE_ESTADO = { vencido:'b-perdido', pendente:'b-contato', pago:'b-fechado', ativo:'b-prop', cancelado:'b-cancel' };
+
+  // cartões "quanto falta pagar a cada assessor" (só repasses ativos)
+  const porAssessor = new Map();
+  linhasFiltradas.filter(r=>r.ac.status!=='Cancelada').forEach(r=>{
+    const nome = r.assessor ? r.assessor.nome : '—';
+    const g = porAssessor.get(nome) || { nome, pendente:0, qtd:0, vencidos:0, proxima:'' };
+    g.qtd++;
+    if(repasseEstadoRegistro(r.ac)==='vencido') g.vencidos++;
+    r.ac.parcelas.forEach(p=>{
+      if(['Paga','Cancelada','Estornada'].includes(p.status)) return;
+      g.pendente += Number(p.valor)||0;
+      if(p.vencimento && (!g.proxima || p.vencimento<g.proxima)) g.proxima = p.vencimento;
+    });
+    porAssessor.set(nome, g);
+  });
+  const cartoes = [...porAssessor.values()].sort((a,b)=> (b.vencidos-a.vencidos) || (b.pendente-a.pendente) || a.nome.localeCompare(b.nome,'pt-BR'));
+  const filtrosAtivos = !!(assessorCommFilters.assessor!=='Todos'||assessorCommFilters.modalidade!=='Todas'||assessorCommFilters.status!=='Todos'||assessorCommFilters.busca);
+
   const nomesAssessores = new Set(DB.assessores.map(a=>a.nome));
   return `
-  <div class="comm-header">
-    <div>
-      <div class="comm-title">Comissões dos assessores</div>
-      <div class="comm-subtitle">O que a BFR destina a cada assessor — calculado sobre a comissão que o escritório recebe da administradora, nunca sobre o crédito do cliente.</div>
+  <div class="comm2">
+  <details class="comm-help">
+    <summary>ⓘ Como ler estes números</summary>
+    <div class="comm-help-body">
+      <p style="margin-top:0;">O que a BFR destina a cada assessor — calculado sobre a comissão que o escritório recebe da administradora, nunca sobre o crédito do cliente.</p>
+      <p>"Previsto" é o valor vigente (pago + ainda pendente) — parcelas canceladas/estornadas saem daqui e aparecem só no card "Cancelado". Modalidade "25% parcelado" só gera parcela quando o escritório efetivamente recebe da administradora — não confundir com o previsto da comissão do escritório, que pode ser maior.</p>
+      <p>Estados: ${Object.keys(REPASSE_ESTADO_ROTULO).map(k=>REPASSE_ESTADO_ROTULO[k]).join('; ')}.</p>
     </div>
-  </div>
+  </details>
   <div class="comm-hero-strip">
-    <div class="comm-hero-item comm-hero-main"><div class="comm-hero-label">Previsto</div><div class="comm-hero-value">${fmtMoney(totPrevisto)}</div></div>
-    <div class="comm-hero-item"><div class="comm-hero-label">Pago</div><div class="comm-hero-value" style="color:var(--green);">${fmtMoney(totPago)}</div></div>
-    <div class="comm-hero-item"><div class="comm-hero-label">Pendente</div><div class="comm-hero-value">${fmtMoney(totPendente)}</div></div>
-    <div class="comm-hero-item"><div class="comm-hero-label">Cancelado</div><div class="comm-hero-value" style="color:var(--ink-soft);">${fmtMoney(totCancelado)}</div></div>
+    <div class="comm-hero-item comm-hero-main"><div class="comm-hero-label">Previsto</div><div class="comm-hero-value" title="${fmtMoney(totPrevisto)}">${fmtMoney(totPrevisto)}</div></div>
+    <div class="comm-hero-item"><div class="comm-hero-label">Pago</div><div class="comm-hero-value" style="color:var(--green);" title="${fmtMoney(totPago)}">${fmtMoney(totPago)}</div></div>
+    <div class="comm-hero-item"><div class="comm-hero-label">Pendente</div><div class="comm-hero-value" title="${fmtMoney(totPendente)}">${fmtMoney(totPendente)}</div>${nVencidas?`<div class="comm-hero-sub" style="color:var(--red);font-weight:600;">${fmtMoney(totVencido)} vencido · ${nVencidas} parcela${nVencidas===1?'':'s'}</div>`:''}</div>
+    <div class="comm-hero-item"><div class="comm-hero-label">Cancelado</div><div class="comm-hero-value" style="color:var(--ink-soft);" title="${fmtMoney(totCancelado)}">${fmtMoney(totCancelado)}</div></div>
   </div>
-  <p class="small-note" style="margin:10px 0 14px;">"Previsto" é o valor vigente (pago + ainda pendente) — parcelas canceladas/estornadas saem daqui e aparecem só no card "Cancelado". Modalidade "25% parcelado" só gera parcela quando o escritório efetivamente recebe da administradora — não confundir com o previsto da comissão do escritório, que pode ser maior.</p>
-  <div class="filter-bar comm-filter-bar">
-    <input type="text" id="acSearch" placeholder="Buscar por cliente, contrato ou assessor" value="${escapeHtml(assessorCommFilters.busca)}" style="min-width:240px;">
-    <select id="acFilterAssessor"><option value="Todos">Todos os assessores</option>${[...nomesAssessores].sort().map(n=>`<option ${assessorCommFilters.assessor===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}</select>
-    <select id="acFilterModalidade"><option value="Todas">Todas as modalidades</option>${Object.keys(MODALIDADE_LABEL).map(m=>`<option value="${m}" ${assessorCommFilters.modalidade===m?'selected':''}>${MODALIDADE_LABEL[m]}</option>`).join('')}</select>
-    <select id="acFilterStatus"><option value="Todos">Todos os status</option>${['Ativa','Cancelada'].map(s=>`<option ${assessorCommFilters.status===s?'selected':''}>${s}</option>`).join('')}</select>
-    <span class="small-note" style="margin-left:auto;white-space:nowrap;">${rows.length} registro${rows.length===1?'':'s'}</span>
+  ${cartoes.length ? `<div class="comm-payers" aria-label="Quanto falta pagar a cada assessor">${cartoes.map(g=>`<button type="button" class="comm-payer${g.vencidos?' late':''}${assessorCommFilters.assessor===g.nome?' is-active':''}" data-acassessor="${escapeHtml(g.nome)}" aria-pressed="${assessorCommFilters.assessor===g.nome}" title="Filtrar por ${escapeHtml(g.nome)}">
+      <h6>${escapeHtml(g.nome)}</h6><b>${fmtMoney(g.pendente)}</b>
+      <small>${g.qtd} repasse${g.qtd===1?'':'s'}${g.vencidos?` · <span style="color:var(--red);font-weight:700;">${g.vencidos} vencido${g.vencidos===1?'':'s'}</span>`:''}${g.proxima?` · próx. ${fmtDate(g.proxima)}`:''}</small></button>`).join('')}</div>` : ''}
+  <div class="comm-toolbar comm-filter-bar">
+    <input type="text" id="acSearch" placeholder="Buscar por cliente, contrato ou assessor" value="${escapeHtml(assessorCommFilters.busca)}" aria-label="Buscar por cliente, contrato ou assessor">
+    <select id="acFilterAssessor" aria-label="Assessor" class="${assessorCommFilters.assessor!=='Todos'?'is-active':''}"><option value="Todos">Todos os assessores</option>${[...nomesAssessores].sort().map(n=>`<option ${assessorCommFilters.assessor===n?'selected':''}>${escapeHtml(n)}</option>`).join('')}</select>
+    <select id="acFilterModalidade" aria-label="Modalidade" class="${assessorCommFilters.modalidade!=='Todas'?'is-active':''}"><option value="Todas">Todas as modalidades</option>${Object.keys(MODALIDADE_LABEL).map(m=>`<option value="${m}" ${assessorCommFilters.modalidade===m?'selected':''}>${MODALIDADE_LABEL[m]}</option>`).join('')}</select>
+    <select id="acFilterStatus" aria-label="Status do registro" class="${assessorCommFilters.status!=='Todos'?'is-active':''}"><option value="Todos">Todos os status</option>${['Ativa','Cancelada'].map(s=>`<option ${assessorCommFilters.status===s?'selected':''}>${s}</option>`).join('')}</select>
+    ${filtrosAtivos ? '<button type="button" class="link-btn" data-acclear="1">Limpar filtros</button>' : ''}
+    <span class="comm-count">${rows.length} registro${rows.length===1?'':'s'}</span>
   </div>
+  <div class="comm-tabs" role="group" aria-label="Filtrar por estado do repasse">${abas.map(a=>`<button type="button" class="${estadoAtivo===a.id?'active':''}${a.warn&&contagem[a.id]?' warn':''}" data-acestado="${a.id}" aria-pressed="${estadoAtivo===a.id}">${a.label}<i>${contagem[a.id]}</i></button>`).join('')}</div>
   <div class="table-wrap"><table class="comm-table">
-    <thead><tr><th>Cliente / contrato</th><th>Assessor</th><th>Modalidade</th><th class="num">Base (comissão do escritório)</th><th class="num">Previsto</th><th class="num">Pago</th><th class="num">Pendente</th><th>Status</th><th></th></tr></thead>
+    <colgroup><col style="width:21%"><col style="width:13%"><col style="width:14%"><col style="width:17%"><col style="width:13%"><col><col style="width:92px"></colgroup>
+    <thead><tr><th>Cliente / contrato</th><th>Assessor</th><th>Modalidade</th><th>Pago</th><th class="num">Pendente</th><th>Estado</th><th></th></tr></thead>
     <tbody>${rows.length? rows.map(({ac,lead,assessor,contract})=>{
       const pago = ac.parcelas.filter(p=>p.status==='Paga').reduce((s,p)=>s+(p.valorPago||p.valor),0);
-      const pendente = ac.parcelas.filter(p=>!['Paga','Cancelada','Estornada'].includes(p.status)).reduce((s,p)=>s+p.valor,0);
+      const abertas = ac.parcelas.filter(p=>!['Paga','Cancelada','Estornada'].includes(p.status));
+      const pendente = abertas.reduce((s,p)=>s+p.valor,0);
       // v36_39 (item 5) — vigente, nunca ac.valorTotal puro: esse campo não
       // é decrementado quando uma parcela é cancelada (20% à vista) e, na
       // modalidade proporcional, só é recalculado por syncComissaoAssessor-
       // Proporcional — que não roda de novo quando cancelQuota cancela a
       // parcela diretamente.
       const previstoVigente = pago + pendente;
+      const estado = repasseEstadoRegistro(ac);
+      const pct = previstoVigente>0 ? Math.min(100, Math.round(pago/previstoVigente*100)) : 0;
+      const proxV = abertas.map(p=>p.vencimento).filter(Boolean).sort()[0];
       return `<tr>
-        <td data-label="Cliente / contrato">${lead?`<button class="link-btn" data-opencliente="${lead.id}" data-tab="comissoes" title="Abrir ficha do cliente"><b>${escapeHtml(lead.nome)}</b></button>`:'<b>—</b>'}<div class="clientes-td-sub">${contract?`<button class="link-btn" data-opencontrato="${contract.id}" data-lead="${lead?lead.id:''}" title="Abrir contrato">${escapeHtml(contract.numero)}</button>`:'—'}</div></td>
+        <td data-label="Cliente / contrato" class="comm-who">${lead?`<button class="link-btn" data-opencliente="${lead.id}" data-tab="comissoes" title="Abrir ficha do cliente"><b>${escapeHtml(lead.nome)}</b></button>`:'<b>—</b>'}<div class="clientes-td-sub">${contract?`<button class="link-btn" data-opencontrato="${contract.id}" data-lead="${lead?lead.id:''}" title="Abrir contrato">${escapeHtml(contract.numero)}</button>`:'—'}</div></td>
         <td data-label="Assessor">${assessor?escapeHtml(assessor.nome):'—'}</td>
-        <td>${MODALIDADE_LABEL[ac.modalidade]||ac.modalidade}</td>
-        <td class="num">${fmtMoney(ac.baseCalculo)}</td>
-        <td class="num">${fmtMoney(previstoVigente)}</td>
-        <td class="num">${fmtMoney(pago)}</td>
-        <td class="num">${fmtMoney(pendente)}</td>
-        <td><span class="badge ${ac.status==='Cancelada'?'b-cancel':'b-fechado'}">${escapeHtml(ac.status)}</span></td>
-        <td><button class="link-btn" data-manageassessorcommglobal="${ac.id}">Gerenciar</button></td>
+        <td data-label="Modalidade"><span class="comm-adm">${MODALIDADE_LABEL[ac.modalidade]||ac.modalidade}</span><span class="comm-sub" title="Base de cálculo: comissão do escritório">base ${fmtMoney(ac.baseCalculo)}</span></td>
+        <td data-label="Pago"><div class="comm-bar${pct===100?' done':''}"><i style="width:${pct}%;"></i></div><span class="comm-pc"><b class="num-inline">${fmtMoney(pago)}</b> de <span class="num-inline">${fmtMoney(previstoVigente)}</span></span></td>
+        <td class="num" data-label="Pendente"><span class="comm-money">${pendente>0?fmtMoney(pendente):'—'}</span>${proxV?`<span class="comm-sub${estado==='vencido'?' red':''}">${estado==='vencido'?'venceu':'vence'} ${fmtDate(proxV)}</span>`:''}</td>
+        <td data-label="Estado"><span class="badge ${CLASSE_ESTADO[estado]}">${REPASSE_ESTADO_ROTULO[estado]}</span></td>
+        <td data-label="Ações"><button class="link-btn comm-open-btn" data-manageassessorcommglobal="${ac.id}">Gerenciar</button></td>
       </tr>`;
-    }).join('') : `<tr><td colspan="9" class="empty">${(assessorCommFilters.assessor!=='Todos'||assessorCommFilters.modalidade!=='Todas'||assessorCommFilters.status!=='Todos'||assessorCommFilters.busca)?'Nenhum repasse encontrado com os filtros atuais. Limpe a busca/filtros acima para ver todos.':'Nenhum repasse ao assessor gerado ainda. Gere pela coluna "Repasse ao assessor" na aba "Comissões do escritório" ou pela aba Comissões da ficha do cliente.'}</td></tr>`}</tbody>
+    }).join('') : `<tr><td colspan="7" class="empty">${(filtrosAtivos||estadoAtivo!=='todos')?'Nenhum repasse encontrado com os filtros atuais. Limpe a busca/filtros acima para ver todos.':'Nenhum repasse ao assessor gerado ainda. Gere pela coluna "Repasse ao assessor" na aba "Recebimentos da administradora" ou pela aba Comissões da ficha do cliente.'}</td></tr>`}</tbody>
   </table></div>
+  </div>
   `;
 }
 
@@ -17214,7 +17553,7 @@ function attachViewHandlers(){
   });
 
   c.querySelectorAll('[data-cmode]').forEach(btn=> btn.onclick=()=>{ contratosViewMode=btn.dataset.cmode; renderView(); });
-  c.querySelectorAll('[data-commmode]').forEach(btn=> btn.onclick=()=>{ comissoesViewMode=btn.dataset.commmode; renderView(); });
+  c.querySelectorAll('[data-commmode]').forEach(btn=> btn.onclick=()=>{ comissoesViewMode=btn.dataset.commmode; comissoesDrawerId=''; renderView(); });
   const btnNewContractTop=document.getElementById('btnNewContractTop'); if(btnNewContractTop) btnNewContractTop.onclick=()=>openContractForm(null,null);
   if(currentView==='contratos' && contratosViewMode==='kanban'){
     attachGenericKanbanDnD((kid,newStage)=>{
@@ -17410,11 +17749,27 @@ function attachViewHandlers(){
     commHeroRecebido.onclick=()=> openCommissionReceivedModal();
     commHeroRecebido.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); commHeroRecebido.click(); } });
   }
-  c.querySelectorAll('[data-commexpand]').forEach(btn=> btn.onclick=()=>{
-    const id = btn.dataset.commexpand;
-    if(comissoesExpandedRows.has(id)) comissoesExpandedRows.delete(id); else comissoesExpandedRows.add(id);
-    renderView();
-  });
+  // v36_45 — "Detalhes" (e clique na linha) abre a gaveta lateral do contrato, em
+  // vez de expandir a linha: o estado é só apresentação (comissoesDrawerId).
+  const abrirGavetaComissao = (id)=>{ comissoesDrawerId = id; renderView(); const x = document.getElementById('commDrawerClose'); if(x) x.focus(); };
+  const fecharGavetaComissao = ()=>{
+    const id = comissoesDrawerId; comissoesDrawerId = ''; renderView();
+    const volta = id ? document.querySelector(`[data-commexpand="${id}"]`) : null; if(volta) volta.focus();
+  };
+  c.querySelectorAll('[data-commexpand]').forEach(btn=> btn.onclick=()=> abrirGavetaComissao(btn.dataset.commexpand));
+  c.querySelectorAll('tr[data-commrow]').forEach(tr=> tr.addEventListener('click', (e)=>{
+    if(e.target.closest('button,a,input,select,label,summary')) return;
+    abrirGavetaComissao(tr.dataset.commrow);
+  }));
+  c.querySelectorAll('[data-commdrawerclose]').forEach(el=> el.onclick=fecharGavetaComissao);
+  window.__fecharGavetaComissao = fecharGavetaComissao;
+  c.querySelectorAll('[data-commscroll]').forEach(btn=> btn.onclick=()=>{ const alvo=document.getElementById(btn.dataset.commscroll); if(alvo) alvo.scrollIntoView({behavior:'smooth', block:'start'}); });
+  c.querySelectorAll('[data-commanalise]').forEach(btn=> btn.onclick=()=>{ comissoesAnaliseTab=btn.dataset.commanalise; renderView(); });
+  c.querySelectorAll('[data-commclear]').forEach(btn=> btn.onclick=()=>{ comissoesFilters={ administradora:'Todas', assessor:'Todos', competencia:'', situacao:'Todos', busca:'', repasse:'' }; commissionsPageLimit=100; renderView(); });
+  // v36_45 — tela "Repasses aos assessores": cartão do assessor filtra, abas de estado, limpar filtros.
+  c.querySelectorAll('[data-acassessor]').forEach(btn=> btn.onclick=()=>{ assessorCommFilters.assessor = (assessorCommFilters.assessor===btn.dataset.acassessor) ? 'Todos' : btn.dataset.acassessor; renderView(); });
+  c.querySelectorAll('[data-acestado]').forEach(btn=> btn.onclick=()=>{ assessorCommEstado=btn.dataset.acestado; renderView(); });
+  c.querySelectorAll('[data-acclear]').forEach(btn=> btn.onclick=()=>{ assessorCommFilters={ assessor:'Todos', modalidade:'Todas', status:'Todos', busca:'' }; assessorCommEstado='todos'; renderView(); });
   const btnLoadMoreCommissions=document.getElementById('btnLoadMoreCommissions'); if(btnLoadMoreCommissions) btnLoadMoreCommissions.onclick = ()=>{ commissionsPageLimit += 100; renderView(); };
 
   const bnImportDelinq=document.getElementById('btnImportDelinq'); if(bnImportDelinq) bnImportDelinq.onclick=()=>triggerImport('delinquents');
@@ -17691,6 +18046,21 @@ function wireConfigHandlers(c){
 /* ================= LISTENERS GLOBAIS + INICIALIZAÇÃO ================= */
 function wireGlobalListeners(){
   document.getElementById('btnNewLead').onclick = ()=>openLeadForm(null);
+  // v36_45 — Esc fecha a gaveta de detalhe das Comissões (se nenhum modal estiver aberto por cima)
+  document.addEventListener('keydown', (e)=>{
+    if(currentView!=='comissoes' || !comissoesDrawerId) return;
+    const bg = document.getElementById('modalBg'); if(bg && bg.classList.contains('open')) return;
+    if(e.key==='Escape'){ if(typeof window.__fecharGavetaComissao==='function') window.__fecharGavetaComissao(); return; }
+    if(e.key==='Tab'){ // mantém o foco dentro da gaveta (diálogo modal)
+      const d = document.getElementById('commDrawer'); if(!d) return;
+      const foc = [...d.querySelectorAll('button,a[href],input,select,[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled && x.offsetParent!==null);
+      if(!foc.length) return;
+      const primeiro = foc[0], ultimo = foc[foc.length-1];
+      if(e.shiftKey && document.activeElement===primeiro){ e.preventDefault(); ultimo.focus(); }
+      else if(!e.shiftKey && document.activeElement===ultimo){ e.preventDefault(); primeiro.focus(); }
+      else if(!d.contains(document.activeElement)){ e.preventDefault(); primeiro.focus(); }
+    }
+  });
   let searchDebounceTimer = null;
   document.getElementById('globalSearch').addEventListener('input', (e)=>{
     const val = e.target.value;
